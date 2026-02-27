@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { BadgeProgressCard, getBadgeTier, BadgeChip } from "@/components/BadgeSystem";
+import { ReputationCard } from "@/components/ReputationScore";
 
 type Profile = {
   id: string;
@@ -13,60 +15,95 @@ type Profile = {
 };
 
 const quickActions = [
-  { icon: "🔍", label: "Browse Skills", desc: "Find a teacher", href: "/listings", color: "#e8f4e8", accent: "#2d6a4f" },
-  { icon: "🎯", label: "Post Bounty", desc: "Get help fast", href: "/bounties", color: "#fff8e7", accent: "#b45309" },
-  { icon: "🎓", label: "Create Listing", desc: "Start teaching", href: "/listings/create", color: "#f0ebff", accent: "#7c3aed" },
-  { icon: "💬", label: "Community", desc: "Join discussions", href: "/community", color: "#fdf0f8", accent: "#9d174d" },
-  { icon: "📅", label: "My Sessions", desc: "Manage bookings", href: "/sessions", color: "#e0f2fe", accent: "#0369a1" },
-  { icon: "✉️", label: "Messages", desc: "Chat with users", href: "/messages", color: "#fce7f3", accent: "#be185d" },
-  { icon: "✅", label: "Get Verified", desc: "Earn skill badges", href: "/verify", color: "#dcfce7", accent: "#166534" },
-  { icon: "🏆", label: "Leaderboard", desc: "See top users", href: "/leaderboard", color: "#fef3c7", accent: "#d97706" },
+  { icon: "🔍", label: "Browse Skills",    desc: "Find a teacher",    href: "/listings",       color: "bg-emerald-50",  accent: "text-emerald-700",  border: "border-emerald-100" },
+  { icon: "🎯", label: "Post Bounty",      desc: "Get help fast",     href: "/bounties",       color: "bg-amber-50",    accent: "text-amber-700",    border: "border-amber-100" },
+  { icon: "🎓", label: "Create Listing",   desc: "Start teaching",    href: "/listings/create",color: "bg-violet-50",   accent: "text-violet-700",   border: "border-violet-100" },
+  { icon: "💬", label: "Community",        desc: "Join discussions",  href: "/community",      color: "bg-pink-50",     accent: "text-pink-700",     border: "border-pink-100" },
+  { icon: "📅", label: "My Sessions",      desc: "Manage bookings",   href: "/sessions",       color: "bg-sky-50",      accent: "text-sky-700",      border: "border-sky-100" },
+  { icon: "✉️", label: "Messages",         desc: "Chat with users",   href: "/messages",       color: "bg-rose-50",     accent: "text-rose-700",     border: "border-rose-100" },
+  { icon: "✅", label: "Get Verified",     desc: "Earn skill badges", href: "/verify",         color: "bg-green-50",    accent: "text-green-700",    border: "border-green-100" },
+  { icon: "🏆", label: "Leaderboard",      desc: "See top users",     href: "/leaderboard",    color: "bg-yellow-50",   accent: "text-yellow-700",   border: "border-yellow-100" },
 ];
 
 const dailyChallenges = [
-  { icon: "📚", text: "Complete a learning session today", credits: 5, xp: 10 },
-  { icon: "💬", text: "Answer 2 forum questions", credits: 3, xp: 10 },
-  { icon: "🎯", text: "Submit a bounty answer", credits: 3, xp: 10 },
+  { icon: "📚", text: "Complete a learning session today", credits: 5,  xp: 10, href: "/sessions" },
+  { icon: "💬", text: "Answer 2 forum questions",          credits: 3,  xp: 10, href: "/community" },
+  { icon: "🎯", text: "Submit a bounty answer",            credits: 3,  xp: 10, href: "/bounties" },
 ];
 
-const levelConfig: Record<string, { color: string; bg: string; icon: string; next: number }> = {
-  Seedling:    { color: "#2d6a4f", bg: "#e8f4e8", icon: "🌱", next: 100 },
-  Learner:     { color: "#0369a1", bg: "#e0f2fe", icon: "📚", next: 300 },
-  Contributor: { color: "#7c3aed", bg: "#f0ebff", icon: "⚡", next: 600 },
-  Skilled:     { color: "#b45309", bg: "#fff8e7", icon: "🔥", next: 1000 },
-  Expert:      { color: "#dc2626", bg: "#fef2f2", icon: "💡", next: 2000 },
-  Master:      { color: "#059669", bg: "#ecfdf5", icon: "🏆", next: 4000 },
-  Legend:      { color: "#d97706", bg: "#fffbeb", icon: "💎", next: 9999 },
+const XP_TO_NEXT: Record<string, number> = {
+  Seedling: 100, Learner: 300, Contributor: 600,
+  Skilled: 1000, Expert: 2000, Master: 4000, Legend: 9999,
 };
 
 export default function Dashboard() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [greeting, setGreeting] = useState("Good day");
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [profile, setProfile]             = useState<Profile | null>(null);
+  const [loading, setLoading]             = useState(true);
+  const [greeting, setGreeting]           = useState("Good day");
+  const [showMenu, setShowMenu]           = useState(false);
+  const [unread, setUnread]               = useState(0);
+  const [sessions, setSessions]           = useState(0);
+  const [bountiesWon, setBountiesWon]     = useState(0);
+  const [avgRating, setAvgRating]         = useState(0);
+  const [repeatClients, setRepeatClients] = useState(0);
+  const [disputes, setDisputes]           = useState(0);
 
   useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) setGreeting("Good morning");
-    else if (hour < 18) setGreeting("Good afternoon");
-    else setGreeting("Good evening");
+    const h = new Date().getHours();
+    setGreeting(h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening");
 
-    const getProfile = async () => {
+    const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = "/login"; return; }
-      const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-      if (data) setProfile(data);
 
-      // Unread notifications
-      const { count } = await supabase.from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("is_read", false);
-      setUnreadCount(count || 0);
+      const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      if (p) setProfile(p);
+
+      const { count: nCount } = await supabase
+        .from("notifications").select("*", { count: "exact", head: true })
+        .eq("user_id", user.id).eq("is_read", false);
+      setUnread(nCount || 0);
+
+      const { count: sCount } = await supabase
+        .from("sessions").select("*", { count: "exact", head: true })
+        .or(`teacher_id.eq.${user.id},learner_id.eq.${user.id}`)
+        .eq("status", "completed");
+      setSessions(sCount || 0);
+
+      const { count: bCount } = await supabase
+        .from("bounty_answers").select("*", { count: "exact", head: true })
+        .eq("answerer_id", user.id)
+        .not("placement", "is", null);
+      setBountiesWon(bCount || 0);
+
+      const { data: ratingData } = await supabase
+        .from("ratings").select("overall").eq("rated_id", user.id);
+      if (ratingData && ratingData.length > 0) {
+        const avg = ratingData.reduce((s: number, r: { overall: number }) => s + r.overall, 0) / ratingData.length;
+        setAvgRating(parseFloat(avg.toFixed(1)));
+      }
+
+      // Repeat clients — learners who booked more than once
+      const { data: sessionData } = await supabase
+        .from("sessions").select("learner_id")
+        .eq("teacher_id", user.id).eq("status", "completed");
+      if (sessionData) {
+        const counts: Record<string, number> = {};
+        sessionData.forEach((s: { learner_id: string }) => {
+          counts[s.learner_id] = (counts[s.learner_id] || 0) + 1;
+        });
+        setRepeatClients(Object.values(counts).filter(c => c > 1).length);
+      }
+
+      // Disputes (sessions marked disputed)
+      const { count: dCount } = await supabase
+        .from("sessions").select("*", { count: "exact", head: true })
+        .eq("teacher_id", user.id).eq("status", "disputed");
+      setDisputes(dCount || 0);
+
       setLoading(false);
     };
-    getProfile();
+    load();
   }, []);
 
   const handleLogout = async () => {
@@ -76,10 +113,10 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: "#faf8f4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🌱</div>
-          <p style={{ color: "#888", fontSize: 15 }}>Loading your dashboard...</p>
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-4">🌱</div>
+          <p className="text-stone-400 text-sm font-medium">Loading your dashboard...</p>
         </div>
       </div>
     );
@@ -87,101 +124,70 @@ export default function Dashboard() {
 
   if (!profile) return null;
 
-  const lvl = levelConfig[profile.level] || levelConfig["Seedling"];
-  const xpProgress = Math.min((profile.xp / lvl.next) * 100, 100);
+  const badge    = getBadgeTier(profile.xp, sessions, avgRating);
   const initials = profile.full_name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "??";
+  const xpNext   = XP_TO_NEXT[profile.level] || 100;
+  const xpPct    = Math.min((profile.xp / xpNext) * 100, 100);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#faf8f4", fontFamily: "'DM Sans', sans-serif" }} onClick={() => setShowUserMenu(false)}>
+    <div className="min-h-screen bg-stone-50 font-sans" onClick={() => setShowMenu(false)}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        a { text-decoration: none; }
-        .nav-link:hover { background: #f5f0e8 !important; }
-        .action-card { transition: transform 0.18s, box-shadow 0.18s; }
-        .action-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.10) !important; }
-        .challenge-card { transition: border-color 0.15s, background 0.15s; }
-        .challenge-card:hover { border-color: #2d6a4f !important; background: #fafdf8 !important; }
-        .dropdown-item:hover { background: #f5f0e8 !important; }
+        .font-fraunces { font-family: 'Fraunces', serif; }
+        .font-sans { font-family: 'DM Sans', sans-serif; }
       `}</style>
 
-      {/* ── NAVBAR ── */}
-      <nav style={{ background: "#fff", borderBottom: "1.5px solid #e8e2d9", padding: "0 32px", height: 60, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        {/* Logo */}
-        <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
+      {/* NAVBAR */}
+      <nav className="bg-white border-b border-stone-200 sticky top-0 z-50 px-8 h-14 flex items-center justify-between">
+        <a href="/dashboard" className="flex items-center no-underline">
+          <span className="font-fraunces text-xl font-black text-emerald-700">Skill</span>
+          <span className="font-fraunces text-xl font-black text-stone-900">Credit</span>
         </a>
-
-        {/* Nav links */}
-        <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
-          {[
-            { label: "Browse", href: "/listings" },
-            { label: "Bounties", href: "/bounties" },
-            { label: "Community", href: "/community" },
-            { label: "Sessions", href: "/sessions" },
-            { label: "Messages", href: "/messages" },
-          ].map((nav) => (
-            <a key={nav.label} href={nav.href} className="nav-link"
-              style={{ padding: "7px 13px", borderRadius: 8, color: "#555", fontSize: 13, fontWeight: 600, transition: "background 0.15s" }}>
-              {nav.label}
-            </a>
+        <div className="flex items-center gap-1">
+          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([label, href]) => (
+            <a key={label} href={href} className="px-3 py-1.5 rounded-lg text-stone-500 text-sm font-semibold hover:bg-stone-100 transition-colors no-underline">{label}</a>
           ))}
         </div>
-
-        {/* Right side */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Credits badge */}
-          <a href="/wallet" style={{ background: "#e8f4e8", borderRadius: 20, padding: "6px 14px", display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
-            <span style={{ fontSize: 14 }}>💰</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#2d6a4f" }}>{profile.credits} cr</span>
+        <div className="flex items-center gap-2">
+          <a href="/wallet" className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-sm font-bold px-3 py-1.5 rounded-full no-underline hover:bg-emerald-100 transition-colors">
+            💰 {profile.credits} cr
           </a>
-
-          {/* Notifications bell */}
-          <a href="/notifications" style={{ position: "relative", width: 36, height: 36, borderRadius: 10, background: "#f5f0e8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, textDecoration: "none" }}>
+          <a href="/notifications" className="relative w-9 h-9 rounded-xl bg-stone-100 flex items-center justify-center text-base no-underline hover:bg-stone-200 transition-colors">
             🔔
-            {unreadCount > 0 && (
-              <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: 8, background: "#dc2626", color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>
-                {unreadCount}
-              </span>
+            {unread > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">{unread}</span>
             )}
           </a>
-
-          {/* Avatar + dropdown */}
-          <div style={{ position: "relative" }} onClick={e => { e.stopPropagation(); setShowUserMenu(p => !p); }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: lvl.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff", cursor: "pointer", border: `2px solid ${lvl.color}44` }}>
-              {initials}
-            </div>
-            {showUserMenu && (
-              <div style={{ position: "absolute", right: 0, top: 46, background: "#fff", border: "1.5px solid #e8e2d9", borderRadius: 16, padding: 8, minWidth: 200, boxShadow: "0 12px 40px rgba(0,0,0,0.12)", zIndex: 200 }}>
-                {/* User info */}
-                <div style={{ padding: "10px 14px 12px", borderBottom: "1px solid #f0ece4", marginBottom: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: lvl.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff" }}>{initials}</div>
+          <div className="relative" onClick={e => { e.stopPropagation(); setShowMenu(p => !p); }}>
+            <div className="w-9 h-9 rounded-full bg-emerald-600 text-white text-sm font-black flex items-center justify-center cursor-pointer ring-2 ring-emerald-200">{initials}</div>
+            {showMenu && (
+              <div className="absolute right-0 top-11 bg-white border border-stone-200 rounded-2xl p-2 w-52 shadow-xl z-50">
+                <div className="px-3 py-2.5 border-b border-stone-100 mb-1">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-emerald-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">{initials}</div>
                     <div>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a" }}>{profile.full_name}</p>
-                      <p style={{ fontSize: 11, color: "#888" }}>@{profile.username} · {lvl.icon} {profile.level}</p>
+                      <p className="text-sm font-bold text-stone-800 leading-tight">{profile.full_name}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <p className="text-[11px] text-stone-400">@{profile.username}</p>
+                        <BadgeChip tier={badge} size="xs" />
+                      </div>
                     </div>
                   </div>
                 </div>
                 {[
-                  { icon: "👤", label: "My Profile", href: "/profile" },
+                  { icon: "👤", label: "My Profile",     href: "/profile" },
                   { icon: "📋", label: "Create Listing", href: "/listings/create" },
-                  { icon: "✅", label: "Get Verified", href: "/verify" },
-                  { icon: "💰", label: "Wallet", href: "/wallet" },
-                  { icon: "🏆", label: "Leaderboard", href: "/leaderboard" },
-                  { icon: "🔔", label: "Notifications", href: "/notifications" },
+                  { icon: "✅", label: "Get Verified",   href: "/verify" },
+                  { icon: "💰", label: "Wallet",         href: "/wallet" },
+                  { icon: "🏆", label: "Leaderboard",    href: "/leaderboard" },
+                  { icon: "🔔", label: "Notifications",  href: "/notifications" },
                 ].map(item => (
-                  <a key={item.label} href={item.href} className="dropdown-item"
-                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderRadius: 10, color: "#333", fontSize: 13, fontWeight: 600, transition: "background 0.12s" }}>
+                  <a key={item.label} href={item.href} className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-stone-700 text-sm font-semibold hover:bg-stone-50 transition-colors no-underline">
                     <span>{item.icon}</span> {item.label}
                   </a>
                 ))}
-                <div style={{ borderTop: "1px solid #f0ece4", marginTop: 4, paddingTop: 4 }}>
-                  <button onClick={handleLogout}
-                    style={{ width: "100%", textAlign: "left", padding: "9px 14px", borderRadius: 10, background: "none", border: "none", color: "#dc2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#fef2f2"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <div className="border-t border-stone-100 mt-1 pt-1">
+                  <button onClick={handleLogout} className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl text-red-500 text-sm font-semibold hover:bg-red-50 transition-colors cursor-pointer bg-transparent border-0">
                     🚪 Log out
                   </button>
                 </div>
@@ -191,182 +197,133 @@ export default function Dashboard() {
         </div>
       </nav>
 
-      {/* ── MAIN CONTENT ── */}
-      <div style={{ maxWidth: 1140, margin: "0 auto", padding: "32px 24px" }}>
+      {/* PAGE BODY */}
+      <div className="max-w-6xl mx-auto px-6 py-8">
 
-        {/* ── WELCOME CARD ── */}
-        <div style={{ background: "#fff", borderRadius: 24, padding: "28px 32px", marginBottom: 24, border: "1.5px solid #e8e2d9", position: "relative", overflow: "hidden" }}>
-          {/* Top accent bar */}
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, background: `linear-gradient(90deg, ${lvl.color}, ${lvl.color}55)` }} />
-          {/* Background decoration */}
-          <div style={{ position: "absolute", top: -40, right: -40, width: 160, height: 160, borderRadius: "50%", background: `${lvl.color}08` }} />
-          <div style={{ position: "absolute", bottom: -20, right: 80, width: 100, height: 100, borderRadius: "50%", background: `${lvl.color}05` }} />
-
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 20, position: "relative" }}>
-            {/* Left — user info */}
-            <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-              <div style={{ width: 60, height: 60, borderRadius: "50%", background: lvl.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 900, color: lvl.color, border: `2.5px solid ${lvl.color}33`, flexShrink: 0 }}>
-                {initials}
-              </div>
+        {/* WELCOME CARD */}
+        <div className="bg-white rounded-3xl border border-stone-200 p-7 mb-6 relative overflow-hidden shadow-sm">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-600 to-emerald-300 rounded-t-3xl" />
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-emerald-50 opacity-60" />
+          <div className="absolute -bottom-6 right-20 w-24 h-24 rounded-full bg-emerald-50 opacity-40" />
+          <div className="flex items-center justify-between flex-wrap gap-5 relative">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 text-xl font-black flex items-center justify-center flex-shrink-0 ring-4 ring-emerald-50">{initials}</div>
               <div>
-                <p style={{ fontSize: 13, color: "#999", marginBottom: 4 }}>{greeting} {lvl.icon}</p>
-                <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 900, color: "#1a1a1a", marginBottom: 6 }}>
-                  {profile.full_name}
-                </h1>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, color: "#999" }}>@{profile.username}</span>
-                  <span style={{ background: lvl.bg, color: lvl.color, fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>
-                    {lvl.icon} {profile.level}
-                  </span>
+                <p className="text-xs text-stone-400 font-medium mb-1">{greeting} {badge.emoji}</p>
+                <h1 className="font-fraunces text-2xl font-black text-stone-900 leading-tight mb-1.5">{profile.full_name}</h1>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-stone-400">@{profile.username}</span>
+                  <BadgeChip tier={badge} size="sm" />
                 </div>
               </div>
             </div>
-
-            {/* Right — XP bar */}
-            <div style={{ minWidth: 240 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, color: "#999", fontWeight: 600 }}>XP Progress</span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: lvl.color }}>{profile.xp} / {lvl.next} XP</span>
+            <div className="min-w-[220px]">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-semibold text-stone-400">XP Progress</span>
+                <span className="text-xs font-black text-emerald-700">{profile.xp} / {xpNext} XP</span>
               </div>
-              <div style={{ background: "#f0ece4", borderRadius: 999, height: 10, overflow: "hidden" }}>
-                <div style={{ width: `${xpProgress}%`, height: "100%", background: `linear-gradient(90deg, ${lvl.color}, ${lvl.color}bb)`, borderRadius: 999, transition: "width 0.6s ease" }} />
+              <div className="h-2.5 bg-stone-100 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full transition-all duration-700" style={{ width: `${xpPct}%` }} />
               </div>
-              <p style={{ fontSize: 11, color: "#bbb", marginTop: 5, textAlign: "right" }}>
-                {lvl.next - profile.xp} XP to next level
-              </p>
+              <p className="text-[11px] text-stone-300 mt-1.5 text-right font-medium">{xpNext - profile.xp} XP to next level</p>
             </div>
           </div>
         </div>
 
-        {/* ── STATS ROW ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+        {/* STATS ROW */}
+        <div className="grid grid-cols-4 gap-3 mb-6">
           {[
-            { icon: "💰", label: "Credits", value: profile.credits, color: "#2d6a4f", bg: "#e8f4e8", href: "/wallet" },
-            { icon: "⚡", label: "XP Earned", value: profile.xp, color: "#7c3aed", bg: "#f0ebff", href: "/leaderboard" },
-            { icon: "📅", label: "Sessions", value: 0, color: "#0369a1", bg: "#e0f2fe", href: "/sessions" },
-            { icon: "🏆", label: "Bounties Won", value: 0, color: "#b45309", bg: "#fff8e7", href: "/bounties" },
-          ].map((stat) => (
-            <a key={stat.label} href={stat.href} style={{ background: "#fff", borderRadius: 18, padding: "20px", border: "1.5px solid #e8e2d9", textDecoration: "none", display: "block", transition: "transform 0.15s, box-shadow 0.15s" }}
-              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.07)"; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 12, background: stat.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-                  {stat.icon}
-                </div>
-                <span style={{ fontSize: 12, color: "#999", fontWeight: 700 }}>{stat.label}</span>
+            { icon: "💰", label: "Credits",      value: profile.credits, color: "text-emerald-700", bg: "bg-emerald-50", href: "/wallet" },
+            { icon: "⚡", label: "XP Earned",    value: profile.xp,      color: "text-violet-700",  bg: "bg-violet-50",  href: "/leaderboard" },
+            { icon: "📅", label: "Sessions",     value: sessions,         color: "text-sky-700",     bg: "bg-sky-50",     href: "/sessions" },
+            { icon: "🏆", label: "Bounties Won", value: bountiesWon,      color: "text-amber-700",   bg: "bg-amber-50",   href: "/bounties" },
+          ].map(stat => (
+            <a key={stat.label} href={stat.href} className="bg-white rounded-2xl p-5 border border-stone-200 no-underline block hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className={`w-9 h-9 rounded-xl ${stat.bg} flex items-center justify-center text-lg`}>{stat.icon}</div>
+                <span className="text-xs text-stone-400 font-bold">{stat.label}</span>
               </div>
-              <p style={{ fontFamily: "'Fraunces', serif", fontSize: 30, fontWeight: 900, color: stat.color }}>{stat.value}</p>
+              <p className={`font-fraunces text-3xl font-black ${stat.color}`}>{stat.value}</p>
             </a>
           ))}
         </div>
 
-        {/* ── MAIN GRID ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20 }}>
+        {/* MAIN GRID */}
+        <div className="grid grid-cols-[1fr_320px] gap-5">
 
-          {/* LEFT COLUMN */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-            {/* Quick Actions */}
-            <div style={{ background: "#fff", borderRadius: 22, padding: "24px 26px", border: "1.5px solid #e8e2d9" }}>
-              <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 900, color: "#1a1a1a", marginBottom: 16 }}>Quick Actions</h2>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-                {quickActions.map((action) => (
-                  <a key={action.label} href={action.href} className="action-card"
-                    style={{ background: action.color, borderRadius: 14, padding: "16px 14px", textDecoration: "none", display: "block", border: `1.5px solid ${action.accent}18` }}>
-                    <span style={{ fontSize: 22 }}>{action.icon}</span>
-                    <p style={{ fontWeight: 800, color: action.accent, fontSize: 13, margin: "8px 0 3px" }}>{action.label}</p>
-                    <p style={{ fontSize: 11, color: "#999", margin: 0, lineHeight: 1.4 }}>{action.desc}</p>
+          {/* LEFT */}
+          <div className="flex flex-col gap-5">
+            <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm">
+              <h2 className="font-fraunces text-lg font-black text-stone-900 mb-4">Quick Actions</h2>
+              <div className="grid grid-cols-4 gap-2.5">
+                {quickActions.map(action => (
+                  <a key={action.label} href={action.href} className={`${action.color} ${action.border} border rounded-2xl p-4 no-underline block hover:-translate-y-1 hover:shadow-md transition-all duration-150`}>
+                    <span className="text-2xl">{action.icon}</span>
+                    <p className={`font-black text-sm mt-2 mb-1 ${action.accent}`}>{action.label}</p>
+                    <p className="text-[11px] text-stone-400 leading-snug">{action.desc}</p>
                   </a>
                 ))}
               </div>
             </div>
 
-            {/* Recent Activity */}
-            <div style={{ background: "#fff", borderRadius: 22, padding: "24px 26px", border: "1.5px solid #e8e2d9" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 900, color: "#1a1a1a" }}>Recent Activity</h2>
-                <a href="/notifications" style={{ fontSize: 12, color: "#2d6a4f", fontWeight: 700 }}>View all →</a>
+            <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-fraunces text-lg font-black text-stone-900">Recent Activity</h2>
+                <a href="/notifications" className="text-xs text-emerald-600 font-bold no-underline hover:underline">View all →</a>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px", background: "#e8f4e8", borderRadius: 14, marginBottom: 16 }}>
-                <span style={{ fontSize: 22 }}>🎁</span>
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: "#2d6a4f" }}>Welcome bonus credited</p>
-                  <p style={{ fontSize: 12, color: "#888" }}>20 credits added to your wallet</p>
+              <div className="flex items-center gap-3 p-3.5 bg-emerald-50 rounded-2xl border border-emerald-100 mb-3">
+                <span className="text-2xl">🎁</span>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-emerald-700">Welcome bonus credited</p>
+                  <p className="text-xs text-stone-400">20 credits added to your wallet</p>
                 </div>
-                <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>Just now</span>
+                <span className="text-xs text-stone-300 whitespace-nowrap">Just now</span>
               </div>
-              <div style={{ textAlign: "center", padding: "16px 0 4px" }}>
-                <p style={{ color: "#bbb", fontSize: 13, marginBottom: 12 }}>Complete activities to see more here!</p>
-                <a href="/listings" style={{ display: "inline-block", padding: "10px 22px", background: "#2d6a4f", color: "#fff", borderRadius: 12, fontSize: 13, fontWeight: 700 }}>
-                  Browse Skills →
-                </a>
+              <div className="text-center py-4">
+                <p className="text-stone-300 text-sm mb-3">Complete activities to see more here!</p>
+                <a href="/listings" className="inline-block px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold no-underline hover:bg-emerald-700 transition-colors">Browse Skills →</a>
               </div>
             </div>
           </div>
 
-          {/* RIGHT COLUMN */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* RIGHT */}
+          <div className="flex flex-col gap-5">
 
-            {/* Daily Challenges */}
-            <div style={{ background: "#fff", borderRadius: 22, padding: "22px", border: "1.5px solid #e8e2d9" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 900, color: "#1a1a1a" }}>Daily Challenges 🎯</h2>
-                <span style={{ fontSize: 10, color: "#aaa", background: "#f5f0e8", padding: "3px 9px", borderRadius: 20, fontWeight: 700 }}>Resets midnight</span>
+            <BadgeProgressCard xp={profile.xp} sessions={sessions} avgRating={avgRating} />
+
+            <ReputationCard data={{ avgRating, completedSessions: sessions, repeatClients, disputes }} />
+
+            <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-fraunces text-base font-black text-stone-900">Daily Challenges 🎯</h2>
+                <span className="text-[10px] text-stone-400 bg-stone-100 px-2.5 py-1 rounded-full font-bold">Resets midnight</span>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div className="flex flex-col gap-2">
                 {dailyChallenges.map((c, i) => (
-                  <div key={i} className="challenge-card"
-                    style={{ background: "#fafaf8", borderRadius: 12, padding: "13px 14px", border: "1.5px solid #f0ece4", display: "flex", alignItems: "center", gap: 11, cursor: "pointer" }}>
-                    <span style={{ fontSize: 20, flexShrink: 0 }}>{c.icon}</span>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "#333", marginBottom: 2 }}>{c.text}</p>
-                      <p style={{ fontSize: 11, color: "#aaa" }}>+{c.credits} cr · +{c.xp} XP</p>
+                  <a key={i} href={c.href} className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl border border-stone-100 no-underline hover:border-emerald-300 hover:bg-emerald-50 transition-all cursor-pointer group">
+                    <span className="text-xl flex-shrink-0">{c.icon}</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-stone-700 group-hover:text-emerald-700 transition-colors leading-snug">{c.text}</p>
+                      <p className="text-[11px] text-stone-400 mt-0.5">+{c.credits} cr · +{c.xp} XP</p>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Wallet card */}
-            <a href="/wallet" style={{ background: "linear-gradient(135deg, #2d6a4f 0%, #1a4a35 100%)", borderRadius: 22, padding: "24px", color: "#fff", position: "relative", overflow: "hidden", textDecoration: "none", display: "block" }}>
-              <div style={{ position: "absolute", top: -20, right: -20, width: 110, height: 110, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
-              <div style={{ position: "absolute", bottom: -30, right: 20, width: 150, height: 150, borderRadius: "50%", background: "rgba(255,255,255,0.04)" }} />
-              <p style={{ fontSize: 12, opacity: 0.65, marginBottom: 4, position: "relative", fontWeight: 600 }}>YOUR WALLET</p>
-              <p style={{ fontFamily: "'Fraunces', serif", fontSize: 44, fontWeight: 900, margin: "0 0 2px", position: "relative", lineHeight: 1 }}>{profile.credits}</p>
-              <p style={{ fontSize: 13, opacity: 0.65, marginBottom: 20, position: "relative" }}>credits · ₱{profile.credits * 10} value</p>
-              <div style={{ display: "flex", gap: 8, position: "relative" }}>
-                <div style={{ flex: 1, background: "rgba(255,255,255,0.95)", color: "#2d6a4f", padding: "10px", borderRadius: 12, fontSize: 12, fontWeight: 800, textAlign: "center" }}>
-                  + Top Up
-                </div>
-                <div style={{ flex: 1, background: "rgba(255,255,255,0.15)", color: "#fff", padding: "10px", borderRadius: 12, fontSize: 12, fontWeight: 700, textAlign: "center", border: "1px solid rgba(255,255,255,0.2)" }}>
-                  History
-                </div>
-              </div>
-            </a>
-
-            {/* Explore more */}
-            <div style={{ background: "#fff", borderRadius: 22, padding: "22px", border: "1.5px solid #e8e2d9" }}>
-              <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 900, color: "#1a1a1a", marginBottom: 14 }}>Explore More</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {[
-                  { icon: "✅", label: "Get Skill Verified", desc: "Take a quiz, earn a badge", href: "/verify", color: "#166534" },
-                  { icon: "🏆", label: "Leaderboard", desc: "See top earners this week", href: "/leaderboard", color: "#d97706" },
-                  { icon: "⭐", label: "Ratings & Reviews", desc: "See what learners say", href: "/ratings", color: "#7c3aed" },
-                ].map(item => (
-                  <a key={item.label} href={item.href}
-                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 12, background: "#fafaf8", border: "1.5px solid #f0ece4", textDecoration: "none", transition: "border-color 0.15s" }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = item.color}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = "#f0ece4"}>
-                    <span style={{ fontSize: 20 }}>{item.icon}</span>
-                    <div>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a" }}>{item.label}</p>
-                      <p style={{ fontSize: 11, color: "#aaa" }}>{item.desc}</p>
-                    </div>
-                    <span style={{ marginLeft: "auto", fontSize: 14, color: "#ccc" }}>›</span>
+                    <span className="text-stone-300 text-sm group-hover:text-emerald-400 transition-colors">›</span>
                   </a>
                 ))}
               </div>
             </div>
+
+            <a href="/wallet" className="bg-gradient-to-br from-emerald-700 to-emerald-900 rounded-2xl p-6 text-white no-underline block relative overflow-hidden hover:shadow-lg transition-shadow">
+              <div className="absolute -top-5 -right-5 w-28 h-28 rounded-full bg-white opacity-5" />
+              <div className="absolute -bottom-8 right-4 w-36 h-36 rounded-full bg-white opacity-[0.03]" />
+              <p className="text-xs font-bold opacity-60 mb-1 relative">YOUR WALLET</p>
+              <p className="font-fraunces text-5xl font-black relative leading-none mb-1">{profile.credits}</p>
+              <p className="text-sm opacity-60 mb-5 relative">credits · ₱{profile.credits * 10} value</p>
+              <div className="flex gap-2 relative">
+                <div className="flex-1 bg-white text-emerald-700 text-center py-2.5 rounded-xl text-xs font-black">+ Top Up</div>
+                <div className="flex-1 bg-white/10 text-white text-center py-2.5 rounded-xl text-xs font-bold border border-white/20">History</div>
+              </div>
+            </a>
+
           </div>
         </div>
       </div>

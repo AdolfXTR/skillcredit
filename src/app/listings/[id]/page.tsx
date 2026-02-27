@@ -2,89 +2,101 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { PortfolioGallery, PortfolioItem } from "@/components/PortfolioSystem";
+import { ReputationMini, calcReputation } from "@/components/ReputationScore";
+import { BadgeChip, getBadgeTier } from "@/components/BadgeSystem";
 
 type Listing = {
-  id: string;
-  title: string;
-  description: string;
-  credit_price: number;
-  format: string;
-  duration: number;
-  prerequisites: string;
-  outcomes: string;
-  materials: string;
-  is_active: boolean;
-  created_at: string;
-  teacher_id: string;
+  id: string; title: string; description: string;
+  credit_price: number; format: string; duration: number;
+  prerequisites: string; outcomes: string; materials: string;
+  is_active: boolean; created_at: string; teacher_id: string;
   skills: { name: string; category: string };
-  profiles: { id: string; full_name: string; username: string; level: string; bio: string; credits: number; xp: number };
+  profiles: { id: string; full_name: string; username: string; level: string; bio: string; xp: number };
 };
 
-type UserProfile = {
-  id: string;
-  full_name: string;
-  credits: number;
-};
+type UserProfile = { id: string; full_name: string; credits: number };
 
-const FORMAT_INFO: Record<string, { icon: string; label: string; color: string; bg: string; desc: string }> = {
-  video: { icon: "📹", label: "Video Call", color: "#1d6fb8", bg: "#e3f0fb", desc: "Live session via Google Meet, Zoom, or any video platform" },
-  chat:  { icon: "💬", label: "Chat",       color: "#2d6a4f", bg: "#e8f4e8", desc: "Text-based teaching inside SkillCredit messenger" },
-  docs:  { icon: "📄", label: "Docs",       color: "#7c3aed", bg: "#f0ebff", desc: "Shared documents, written guides, and notes" },
-  mixed: { icon: "🎨", label: "Mixed",      color: "#b45309", bg: "#fff8e7", desc: "Combination of video, chat, and documents" },
-};
-
-const LEVEL_COLORS: Record<string, string> = {
-  Seedling: "#2d6a4f", Learner: "#0369a1", Contributor: "#7c3aed",
-  Skilled: "#b45309", Expert: "#dc2626", Master: "#059669", Legend: "#d97706",
-};
-
-const mockListing: Listing = {
-  id: "mock", title: "Python for Absolute Beginners", description: "Learn Python from scratch in a structured, fun, and beginner-friendly session. We'll go through variables, data types, loops, functions, and build a mini project together by the end of the session.", credit_price: 15, format: "video", duration: 60, prerequisites: "No prior experience needed — just bring curiosity!", outcomes: "Understand Python basics, write your first functions, build a simple calculator app", materials: "Slides, code templates, practice exercises PDF", is_active: true, created_at: new Date().toISOString(), teacher_id: "mock-teacher",
-  skills: { name: "Python", category: "Programming" },
-  profiles: { id: "mock-teacher", full_name: "Maria Santos", username: "mariasantos", level: "Expert", bio: "Software engineer with 5 years experience. I love teaching Python to beginners!", credits: 0, xp: 1200 },
+const FORMAT_INFO: Record<string, { icon: string; label: string; color: string; bg: string; border: string; desc: string }> = {
+  video: { icon: "📹", label: "Video Call", color: "text-sky-700",    bg: "bg-sky-50",    border: "border-sky-200", desc: "Live session via Google Meet or Zoom" },
+  chat:  { icon: "💬", label: "Chat",       color: "text-emerald-700",bg: "bg-emerald-50",border: "border-emerald-200", desc: "Text-based teaching inside SkillCredit" },
+  docs:  { icon: "📄", label: "Docs",       color: "text-violet-700", bg: "bg-violet-50", border: "border-violet-200", desc: "Shared documents and written guides" },
+  mixed: { icon: "🎨", label: "Mixed",      color: "text-amber-700",  bg: "bg-amber-50",  border: "border-amber-200", desc: "Combination of video, chat, and documents" },
 };
 
 export default function ListingDetailPage() {
   const params = useParams();
   const id = params?.id as string;
 
-  const [listing, setListing] = useState<Listing | null>(null);
+  const [listing, setListing]         = useState<Listing | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [portfolio, setPortfolio]     = useState<PortfolioItem[]>([]);
+  const [loading, setLoading]         = useState(true);
   const [showBookModal, setShowBookModal] = useState(false);
   const [bookingStep, setBookingStep] = useState<"form" | "confirm" | "success">("form");
   const [proposedDate, setProposedDate] = useState("");
   const [proposedTime, setProposedTime] = useState("");
-  const [note, setNote] = useState("");
-  const [booking, setBooking] = useState(false);
-  const [bookError, setBookError] = useState("");
+  const [note, setNote]               = useState("");
+  const [booking, setBooking]         = useState(false);
+  const [bookError, setBookError]     = useState("");
+
+  // Teacher reputation data
+  const [teacherSessions, setTeacherSessions]     = useState(0);
+  const [teacherAvgRating, setTeacherAvgRating]   = useState(0);
+  const [teacherRepeats, setTeacherRepeats]       = useState(0);
+  const [teacherDisputes, setTeacherDisputes]     = useState(0);
 
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-
       if (user) {
         const { data: prof } = await supabase.from("profiles").select("id, full_name, credits").eq("id", user.id).single();
         if (prof) setCurrentUser(prof);
       }
 
-      if (id === "mock" || !id) {
-        setListing(mockListing);
-        setLoading(false);
-        return;
-      }
-
       const { data, error } = await supabase
         .from("listings")
         .select(`*, skills(name, category), profiles(id, full_name, username, level, bio, xp)`)
-        .eq("id", id)
-        .single();
+        .eq("id", id).single();
 
-      if (error || !data) {
-        setListing(mockListing);
-      } else {
-        setListing(data as Listing);
+      if (error || !data) { setLoading(false); return; }
+      setListing(data as Listing);
+
+      // Portfolio
+      const { data: pData } = await supabase
+        .from("portfolio_items").select("*").eq("listing_id", id);
+      if (pData) setPortfolio(pData as PortfolioItem[]);
+
+      // Teacher reputation data
+      const teacherId = data.teacher_id;
+      const [
+        { count: sCount },
+        { data: ratingData },
+        { data: sessionData },
+        { count: dCount },
+      ] = await Promise.all([
+        supabase.from("sessions").select("*", { count: "exact", head: true }).eq("teacher_id", teacherId).eq("status", "completed"),
+        supabase.from("ratings").select("overall").eq("rated_id", teacherId),
+        supabase.from("sessions").select("learner_id").eq("teacher_id", teacherId).eq("status", "completed"),
+        supabase.from("sessions").select("*", { count: "exact", head: true }).eq("teacher_id", teacherId).eq("status", "disputed"),
+      ]);
+
+      setTeacherSessions(sCount || 0);
+
+      if (ratingData && ratingData.length > 0) {
+        const avg = ratingData.reduce((s: number, r: { overall: number }) => s + r.overall, 0) / ratingData.length;
+        setTeacherAvgRating(parseFloat(avg.toFixed(1)));
       }
+
+      if (sessionData) {
+        const counts: Record<string, number> = {};
+        sessionData.forEach((s: { learner_id: string }) => {
+          counts[s.learner_id] = (counts[s.learner_id] || 0) + 1;
+        });
+        setTeacherRepeats(Object.values(counts).filter(c => c > 1).length);
+      }
+
+      setTeacherDisputes(dCount || 0);
       setLoading(false);
     };
     init();
@@ -93,27 +105,23 @@ export default function ListingDetailPage() {
   const handleBook = async () => {
     if (!currentUser || !listing) return;
     if (!proposedDate || !proposedTime) { setBookError("Please select a date and time."); return; }
+    if (currentUser.credits < listing.credit_price) {
+      setBookError(`You need ${listing.credit_price} credits but only have ${currentUser.credits}.`);
+      return;
+    }
 
     setBooking(true);
     setBookError("");
 
     const proposedDateTime = new Date(`${proposedDate}T${proposedTime}`).toISOString();
 
-    // Check user has enough credits
-    if (currentUser.credits < listing.credit_price) {
-      setBookError(`You need ${listing.credit_price} credits but only have ${currentUser.credits}. Please top up your wallet.`);
-      setBooking(false);
-      return;
-    }
-
-    // Create session
     const { data: session, error: sessionErr } = await supabase.from("sessions").insert({
-      listing_id: listing.id,
-      teacher_id: listing.teacher_id,
-      learner_id: currentUser.id,
+      listing_id:    listing.id,
+      teacher_id:    listing.teacher_id,
+      learner_id:    currentUser.id,
       proposed_time: proposedDateTime,
-      status: "pending",
-      learner_note: note,
+      status:        "pending",
+      learner_note:  note,
       credit_amount: listing.credit_price,
     }).select().single();
 
@@ -123,215 +131,173 @@ export default function ListingDetailPage() {
       return;
     }
 
-    // Create escrow record
-    await supabase.from("escrow").insert({
-      session_id: session.id,
-      amount: listing.credit_price,
-      status: "locked",
-    });
-
-    // Deduct credits from learner
-    await supabase.from("profiles").update({ credits: currentUser.credits - listing.credit_price }).eq("id", currentUser.id);
-
-    // Log credit transaction
-    await supabase.from("credit_transactions").insert({
-      user_id: currentUser.id,
-      amount: -listing.credit_price,
-      type: "session_spend",
-      reference_id: session.id,
-      description: `Booked session: ${listing.title}`,
-    });
-
-    // Create notification for teacher
-    await supabase.from("notifications").insert({
-      user_id: listing.teacher_id,
-      type: "session",
-      title: "New session request!",
-      body: `${currentUser.full_name} wants to book "${listing.title}" on ${new Date(proposedDateTime).toLocaleDateString("en-PH", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}`,
-      link: `/sessions/${session.id}`,
-    });
+    await Promise.all([
+      supabase.from("escrow").insert({ session_id: session.id, amount: listing.credit_price, status: "locked" }),
+      supabase.from("profiles").update({ credits: currentUser.credits - listing.credit_price }).eq("id", currentUser.id),
+      supabase.from("credit_transactions").insert({
+        user_id: currentUser.id, amount: -listing.credit_price,
+        type: "session_spend", reference_id: session.id,
+        description: `Booked session: ${listing.title}`,
+      }),
+      supabase.from("notifications").insert({
+        user_id: listing.teacher_id, type: "session",
+        title: "New session request!",
+        body: `${currentUser.full_name} wants to book "${listing.title}"`,
+        link: `/sessions/${session.id}`,
+      }),
+    ]);
 
     setBooking(false);
     setBookingStep("success");
   };
 
   const isOwnListing = currentUser?.id === listing?.teacher_id;
-  const canAfford = currentUser ? currentUser.credits >= (listing?.credit_price || 0) : false;
-  const fmt = FORMAT_INFO[listing?.format || "mixed"] || FORMAT_INFO.mixed;
-  const levelColor = LEVEL_COLORS[listing?.profiles?.level || "Seedling"] || "#2d6a4f";
+  const canAfford    = currentUser ? currentUser.credits >= (listing?.credit_price || 0) : false;
+  const fmt          = FORMAT_INFO[listing?.format || "mixed"] || FORMAT_INFO.mixed;
   const teacherInitials = listing?.profiles?.full_name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "??";
+  const teacherBadge = getBadgeTier(listing?.profiles?.xp || 0, teacherSessions, teacherAvgRating);
+  const repScore     = calcReputation({ avgRating: teacherAvgRating, completedSessions: teacherSessions, repeatClients: teacherRepeats, disputes: teacherDisputes });
 
-  // Min date = tomorrow
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().split("T")[0];
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: "#f5f5f0", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
-          <p style={{ color: "#888" }}>Loading listing...</p>
-        </div>
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="text-center"><div className="text-5xl mb-4">📋</div><p className="text-stone-400 text-sm">Loading listing...</p></div>
       </div>
     );
   }
 
-  if (!listing) return null;
+  if (!listing) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="text-center"><div className="text-5xl mb-4">😕</div><p className="text-stone-400 text-sm">Listing not found.</p><a href="/listings" className="text-emerald-600 text-sm font-bold no-underline mt-2 block">← Back to listings</a></div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f5f0", fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="min-h-screen bg-stone-50 font-sans">
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap'); .font-fraunces{font-family:'Fraunces',serif;} .font-sans{font-family:'DM Sans',sans-serif;}`}</style>
 
       {/* Booking Modal */}
       {showBookModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)", padding: 24 }}>
-          <div style={{ background: "white", borderRadius: 24, padding: "36px", maxWidth: 480, width: "100%", boxShadow: "0 24px 80px rgba(0,0,0,0.2)" }}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
 
-            {/* Step: Form */}
             {bookingStep === "form" && (
               <>
-                <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 22, fontWeight: 800, color: "#1a1a1a", marginBottom: 4 }}>Book a Session 📅</h2>
-                <p style={{ fontSize: 14, color: "#888", marginBottom: 24 }}>Propose a time and the teacher will confirm.</p>
+                <h2 className="font-fraunces text-2xl font-black text-stone-900 mb-1">Book a Session 📅</h2>
+                <p className="text-stone-400 text-sm mb-6">Propose a time and the teacher will confirm.</p>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div className="flex flex-col gap-4">
                   {/* Summary */}
-                  <div style={{ background: fmt.bg, borderRadius: 12, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div className={`rounded-2xl border p-4 flex justify-between items-center ${fmt.bg} ${fmt.border}`}>
                     <div>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a", margin: "0 0 2px" }}>{listing.title}</p>
-                      <p style={{ fontSize: 12, color: "#888", margin: 0 }}>{fmt.icon} {fmt.label} · {listing.duration} min</p>
+                      <p className="text-sm font-bold text-stone-800 mb-0.5">{listing.title}</p>
+                      <p className="text-xs text-stone-400">{fmt.icon} {fmt.label} · {listing.duration} min</p>
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <p style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 800, color: "#2d6a4f", margin: 0 }}>{listing.credit_price} cr</p>
-                      <p style={{ fontSize: 11, color: "#888", margin: 0 }}>from your wallet</p>
+                    <div className="text-right">
+                      <p className="font-fraunces text-xl font-black text-emerald-700">{listing.credit_price} cr</p>
+                      <p className="text-[11px] text-stone-400">from wallet</p>
                     </div>
                   </div>
 
-                  {/* Date */}
                   <div>
-                    <label style={{ fontSize: 13, fontWeight: 700, color: "#333", display: "block", marginBottom: 6 }}>Preferred Date *</label>
-                    <input
-                      type="date"
-                      min={minDate}
-                      value={proposedDate}
+                    <label className="text-xs font-bold text-stone-500 block mb-1.5">Preferred Date *</label>
+                    <input type="date" min={minDate} value={proposedDate}
                       onChange={e => setProposedDate(e.target.value)}
-                      style={{ width: "100%", padding: "11px 14px", borderRadius: 12, border: `1.5px solid ${proposedDate ? "#2d6a4f" : "#e8e0d0"}`, fontSize: 14, outline: "none", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box", background: "#fafaf8" }}
-                    />
+                      className={`w-full p-3 rounded-xl border text-sm bg-stone-50 outline-none font-sans transition-colors ${proposedDate ? "border-emerald-400" : "border-stone-200"}`} />
                   </div>
 
-                  {/* Time */}
                   <div>
-                    <label style={{ fontSize: 13, fontWeight: 700, color: "#333", display: "block", marginBottom: 6 }}>Preferred Time *</label>
-                    <input
-                      type="time"
-                      value={proposedTime}
+                    <label className="text-xs font-bold text-stone-500 block mb-1.5">Preferred Time *</label>
+                    <input type="time" value={proposedTime}
                       onChange={e => setProposedTime(e.target.value)}
-                      style={{ width: "100%", padding: "11px 14px", borderRadius: 12, border: `1.5px solid ${proposedTime ? "#2d6a4f" : "#e8e0d0"}`, fontSize: 14, outline: "none", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box", background: "#fafaf8" }}
-                    />
+                      className={`w-full p-3 rounded-xl border text-sm bg-stone-50 outline-none font-sans transition-colors ${proposedTime ? "border-emerald-400" : "border-stone-200"}`} />
                   </div>
 
-                  {/* Note */}
                   <div>
-                    <label style={{ fontSize: 13, fontWeight: 700, color: "#333", display: "block", marginBottom: 6 }}>
-                      Message to teacher <span style={{ fontWeight: 400, color: "#aaa" }}>(optional)</span>
-                    </label>
-                    <textarea
-                      rows={3}
-                      placeholder="Tell the teacher about your experience level, what you want to focus on, any questions..."
-                      value={note}
-                      onChange={e => setNote(e.target.value)}
-                      style={{ width: "100%", padding: "11px 14px", borderRadius: 12, border: "1.5px solid #e8e0d0", fontSize: 14, outline: "none", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box", resize: "vertical", background: "#fafaf8" }}
-                    />
+                    <label className="text-xs font-bold text-stone-500 block mb-1.5">Message to teacher <span className="font-normal text-stone-300">(optional)</span></label>
+                    <textarea rows={3} placeholder="Tell the teacher about your experience level..."
+                      value={note} onChange={e => setNote(e.target.value)}
+                      className="w-full p-3 rounded-xl border border-stone-200 text-sm bg-stone-50 outline-none font-sans resize-none" />
                   </div>
 
-                  {/* Wallet check */}
-                  <div style={{ background: canAfford ? "#e8f4e8" : "#fef2f2", borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 13, color: canAfford ? "#2d6a4f" : "#dc2626", fontWeight: 600 }}>
+                  <div className={`rounded-xl p-3 flex justify-between items-center ${canAfford ? "bg-emerald-50" : "bg-red-50"}`}>
+                    <span className={`text-sm font-bold ${canAfford ? "text-emerald-700" : "text-red-600"}`}>
                       {canAfford ? "✓ You have enough credits" : "✗ Insufficient credits"}
                     </span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: canAfford ? "#2d6a4f" : "#dc2626" }}>
+                    <span className={`text-sm font-black ${canAfford ? "text-emerald-700" : "text-red-600"}`}>
                       {currentUser?.credits || 0} / {listing.credit_price} cr
                     </span>
                   </div>
                 </div>
 
-                {bookError && <p style={{ color: "#dc2626", fontSize: 13, marginTop: 12, background: "#fef2f2", padding: "8px 12px", borderRadius: 8 }}>{bookError}</p>}
+                {bookError && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-xl mt-3">{bookError}</p>}
 
-                <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                  <button onClick={() => setShowBookModal(false)} style={{ flex: 1, padding: "12px", background: "#f5f0e8", color: "#555", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                    Cancel
-                  </button>
+                <div className="flex gap-3 mt-6">
+                  <button onClick={() => setShowBookModal(false)} className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl text-sm font-bold border-0 cursor-pointer hover:bg-stone-200 transition-colors">Cancel</button>
                   <button
-                    onClick={() => { if (!proposedDate || !proposedTime) { setBookError("Please select a date and time."); return; } if (!canAfford) { setBookError(`You need ${listing.credit_price} credits but only have ${currentUser?.credits || 0}.`); return; } setBookError(""); setBookingStep("confirm"); }}
-                    style={{ flex: 2, padding: "12px", background: "#2d6a4f", color: "white", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-                  >
+                    onClick={() => { if (!proposedDate || !proposedTime) { setBookError("Please select a date and time."); return; } if (!canAfford) { setBookError(`You need ${listing.credit_price} credits.`); return; } setBookError(""); setBookingStep("confirm"); }}
+                    className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl text-sm font-black border-0 cursor-pointer hover:bg-emerald-700 transition-colors">
                     Review Booking →
                   </button>
                 </div>
               </>
             )}
 
-            {/* Step: Confirm */}
             {bookingStep === "confirm" && (
               <>
-                <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 22, fontWeight: 800, color: "#1a1a1a", marginBottom: 4 }}>Confirm Booking 🔒</h2>
-                <p style={{ fontSize: 14, color: "#888", marginBottom: 24 }}>Credits will be held in escrow until the session is complete.</p>
+                <h2 className="font-fraunces text-2xl font-black text-stone-900 mb-1">Confirm Booking 🔒</h2>
+                <p className="text-stone-400 text-sm mb-6">Credits will be held in escrow until the session is complete.</p>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+                <div className="flex flex-col gap-2 mb-5">
                   {[
-                    { label: "Session", value: listing.title },
-                    { label: "Teacher", value: listing.profiles?.full_name },
-                    { label: "Format", value: `${fmt.icon} ${fmt.label}` },
-                    { label: "Duration", value: `${listing.duration} minutes` },
+                    { label: "Session",       value: listing.title },
+                    { label: "Teacher",       value: listing.profiles?.full_name },
+                    { label: "Format",        value: `${fmt.icon} ${fmt.label}` },
+                    { label: "Duration",      value: `${listing.duration} minutes` },
                     { label: "Proposed time", value: proposedDate && proposedTime ? new Date(`${proposedDate}T${proposedTime}`).toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "" },
-                    { label: "Credits", value: `${listing.credit_price} credits (₱${listing.credit_price * 10})` },
+                    { label: "Credits",       value: `${listing.credit_price} cr (₱${listing.credit_price * 10})` },
                   ].map(item => (
-                    <div key={item.label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#fafaf8", borderRadius: 10, fontSize: 13 }}>
-                      <span style={{ color: "#888", fontWeight: 600 }}>{item.label}</span>
-                      <span style={{ color: "#1a1a1a", fontWeight: 700, textAlign: "right", maxWidth: "60%" }}>{item.value}</span>
+                    <div key={item.label} className="flex justify-between items-center px-4 py-2.5 bg-stone-50 rounded-xl text-sm">
+                      <span className="text-stone-400 font-semibold">{item.label}</span>
+                      <span className="text-stone-800 font-bold text-right max-w-[55%]">{item.value}</span>
                     </div>
                   ))}
                 </div>
 
-                <div style={{ background: "#fff8e7", borderRadius: 12, padding: "12px 14px", marginBottom: 20 }}>
-                  <p style={{ fontSize: 12, color: "#b45309", margin: 0, lineHeight: 1.5 }}>
-                    ⚠️ <strong>{listing.credit_price} credits</strong> will be locked in escrow when you confirm. They'll be released to the teacher after the session is marked complete. You can cancel for a full refund if the teacher hasn't confirmed yet.
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5">
+                  <p className="text-xs text-amber-700 leading-relaxed">
+                    ⚠️ <strong>{listing.credit_price} credits</strong> will be locked in escrow. Released to the teacher after the session is marked complete.
                   </p>
                 </div>
 
-                {bookError && <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12, background: "#fef2f2", padding: "8px 12px", borderRadius: 8 }}>{bookError}</p>}
+                {bookError && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-xl mb-3">{bookError}</p>}
 
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={() => setBookingStep("form")} style={{ flex: 1, padding: "12px", background: "#f5f0e8", color: "#555", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                    ← Back
-                  </button>
-                  <button onClick={handleBook} disabled={booking} style={{ flex: 2, padding: "12px", background: booking ? "#a8c5b5" : "#2d6a4f", color: "white", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: booking ? "not-allowed" : "pointer" }}>
+                <div className="flex gap-3">
+                  <button onClick={() => setBookingStep("form")} className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl text-sm font-bold border-0 cursor-pointer hover:bg-stone-200 transition-colors">← Back</button>
+                  <button onClick={handleBook} disabled={booking}
+                    className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl text-sm font-black border-0 cursor-pointer hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
                     {booking ? "Confirming..." : `🔒 Confirm & Lock ${listing.credit_price} Credits`}
                   </button>
                 </div>
               </>
             )}
 
-            {/* Step: Success */}
             {bookingStep === "success" && (
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
-                <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 24, fontWeight: 800, color: "#1a1a1a", marginBottom: 8 }}>
-                  Session Requested!
-                </h2>
-                <p style={{ fontSize: 14, color: "#555", lineHeight: 1.6, marginBottom: 8 }}>
-                  Your request has been sent to <strong>{listing.profiles?.full_name}</strong>.
-                </p>
-                <p style={{ fontSize: 14, color: "#888", marginBottom: 8 }}>
-                  <strong>{listing.credit_price} credits</strong> are now held in escrow.
-                </p>
-                <p style={{ fontSize: 13, color: "#aaa", marginBottom: 28 }}>
-                  You'll get a notification when the teacher responds. ⏳
-                </p>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <a href="/dashboard" style={{ flex: 1, padding: "12px", background: "#e8f4e8", color: "#2d6a4f", borderRadius: 12, fontSize: 14, fontWeight: 700, textDecoration: "none", textAlign: "center" }}>
-                    Dashboard
-                  </a>
-                  <button onClick={() => { setShowBookModal(false); setBookingStep("form"); }} style={{ flex: 1, padding: "12px", background: "#2d6a4f", color: "white", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              <div className="text-center py-4">
+                <div className="text-6xl mb-4">🎉</div>
+                <h2 className="font-fraunces text-2xl font-black text-stone-900 mb-2">Session Requested!</h2>
+                <p className="text-stone-500 text-sm mb-1">Your request has been sent to <strong>{listing.profiles?.full_name}</strong>.</p>
+                <p className="text-stone-400 text-sm mb-6"><strong>{listing.credit_price} credits</strong> are now held in escrow.</p>
+                <div className="flex gap-3">
+                  <a href="/dashboard" className="flex-1 py-3 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-bold no-underline text-center hover:bg-emerald-100 transition-colors">Dashboard</a>
+                  <button onClick={() => { setShowBookModal(false); setBookingStep("form"); }}
+                    className="flex-1 py-3 bg-emerald-600 text-white rounded-xl text-sm font-black border-0 cursor-pointer hover:bg-emerald-700 transition-colors">
                     Done ✓
                   </button>
                 </div>
@@ -342,127 +308,116 @@ export default function ListingDetailPage() {
       )}
 
       {/* Navbar */}
-      <nav style={{ background: "white", borderBottom: "1px solid #e8e0d0", padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <a href="/dashboard" style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 22, fontWeight: 800, color: "#2d6a4f", textDecoration: "none" }}>SkillCredit</a>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <a href="/listings" style={{ padding: "7px 14px", borderRadius: 8, color: "#555", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>← All Listings</a>
+      <nav className="bg-white border-b border-stone-200 sticky top-0 z-40 px-8 h-14 flex items-center justify-between">
+        <a href="/dashboard" className="flex items-center no-underline">
+          <span className="font-fraunces text-xl font-black text-emerald-700">Skill</span>
+          <span className="font-fraunces text-xl font-black text-stone-900">Credit</span>
+        </a>
+        <div className="flex items-center gap-2">
+          <a href="/listings" className="px-3 py-1.5 rounded-lg text-stone-500 text-sm font-semibold hover:bg-stone-100 transition-colors no-underline">← All Listings</a>
           {currentUser && (
-            <div style={{ background: "#e8f4e8", borderRadius: 20, padding: "6px 14px", fontSize: 13, fontWeight: 700, color: "#2d6a4f" }}>
-              💰 {currentUser.credits} credits
-            </div>
+            <span className="bg-emerald-50 text-emerald-700 text-sm font-bold px-3 py-1.5 rounded-full">💰 {currentUser.credits} cr</span>
           )}
         </div>
       </nav>
 
-      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "40px 24px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 28, alignItems: "start" }}>
+      <div className="max-w-5xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-[1fr_320px] gap-7 items-start">
 
-          {/* LEFT — Main content */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* LEFT */}
+          <div className="flex flex-col gap-5">
 
-            {/* Hero card */}
-            <div style={{ background: "white", borderRadius: 24, padding: "32px", border: "1px solid #e8e0d0" }}>
-              {/* Tags */}
-              <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-                <span style={{ background: fmt.bg, color: fmt.color, fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999 }}>
-                  {fmt.icon} {fmt.label}
-                </span>
-                <span style={{ background: "#e8f4e8", color: "#2d6a4f", fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999 }}>
-                  {listing.skills?.category}
-                </span>
-                <span style={{ background: "#f5f0e8", color: "#b45309", fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999 }}>
-                  ⏱ {listing.duration} min
-                </span>
-                {listing.is_active && (
-                  <span style={{ background: "#e8f4e8", color: "#2d6a4f", fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999 }}>
-                    ● Active
-                  </span>
+            {/* Hero */}
+            <div className="bg-white rounded-2xl border border-stone-200 p-7">
+              <div className="flex gap-2 flex-wrap mb-4">
+                <span className={`text-xs font-bold px-3 py-1 rounded-full ${fmt.bg} ${fmt.color}`}>{fmt.icon} {fmt.label}</span>
+                <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700">{listing.skills?.category}</span>
+                <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-50 text-amber-700">⏱ {listing.duration} min</span>
+                {portfolio.length > 0 && (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-violet-50 text-violet-700">📁 {portfolio.length} portfolio sample{portfolio.length > 1 ? "s" : ""}</span>
                 )}
               </div>
-
-              <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 28, fontWeight: 800, color: "#1a1a1a", marginBottom: 16, lineHeight: 1.25 }}>
-                {listing.title}
-              </h1>
-
-              <p style={{ fontSize: 15, color: "#555", lineHeight: 1.7, marginBottom: 0 }}>
-                {listing.description}
-              </p>
+              <h1 className="font-fraunces text-2xl font-black text-stone-900 mb-4 leading-snug">{listing.title}</h1>
+              <p className="text-sm text-stone-500 leading-relaxed">{listing.description}</p>
             </div>
+
+            {/* Portfolio Gallery */}
+            <PortfolioGallery items={portfolio} />
 
             {/* What you'll learn */}
             {listing.outcomes && (
-              <div style={{ background: "#e8f4e8", borderRadius: 20, padding: "24px", border: "1px solid #c8e6c9" }}>
-                <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 16, fontWeight: 800, color: "#2d6a4f", marginBottom: 12 }}>
-                  🎯 What You'll Walk Away With
-                </h3>
-                <p style={{ fontSize: 14, color: "#333", lineHeight: 1.7, margin: 0 }}>{listing.outcomes}</p>
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6">
+                <h3 className="font-fraunces text-base font-black text-emerald-700 mb-2">🎯 What You'll Walk Away With</h3>
+                <p className="text-sm text-stone-600 leading-relaxed">{listing.outcomes}</p>
               </div>
             )}
 
-            {/* Details grid */}
-            <div style={{ background: "white", borderRadius: 20, padding: "24px", border: "1px solid #e8e0d0" }}>
-              <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 16, fontWeight: 800, color: "#1a1a1a", marginBottom: 16 }}>Session Details</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {/* Session details */}
+            <div className="bg-white rounded-2xl border border-stone-200 p-6">
+              <h3 className="font-fraunces text-base font-black text-stone-900 mb-4">Session Details</h3>
+              <div className="grid grid-cols-2 gap-3">
                 {[
-                  { icon: fmt.icon, label: "Format", value: `${fmt.label} — ${fmt.desc}` },
-                  { icon: "⏱", label: "Duration", value: `${listing.duration} minutes per session` },
-                  { icon: "📋", label: "Prerequisites", value: listing.prerequisites || "None required" },
-                  { icon: "📦", label: "Materials", value: listing.materials || "Will be discussed in session" },
+                  { icon: fmt.icon, label: "Format",        value: `${fmt.label} — ${fmt.desc}` },
+                  { icon: "⏱",     label: "Duration",      value: `${listing.duration} minutes` },
+                  { icon: "📋",    label: "Prerequisites",  value: listing.prerequisites || "None required" },
+                  { icon: "📦",    label: "Materials",      value: listing.materials || "Will be discussed in session" },
                 ].map(item => (
-                  <div key={item.label} style={{ background: "#fafaf8", borderRadius: 12, padding: "14px" }}>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "#aaa", marginBottom: 4 }}>{item.icon} {item.label.toUpperCase()}</p>
-                    <p style={{ fontSize: 13, color: "#333", margin: 0, lineHeight: 1.4 }}>{item.value}</p>
+                  <div key={item.label} className="bg-stone-50 rounded-xl p-4">
+                    <p className="text-[10px] font-black text-stone-400 uppercase tracking-wide mb-1">{item.icon} {item.label}</p>
+                    <p className="text-sm text-stone-600 leading-snug">{item.value}</p>
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Teacher card */}
-            <div style={{ background: "white", borderRadius: 20, padding: "24px", border: "1px solid #e8e0d0" }}>
-              <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 16, fontWeight: 800, color: "#1a1a1a", marginBottom: 16 }}>About the Teacher</h3>
-              <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", background: levelColor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: "white", flexShrink: 0 }}>
+            <div className="bg-white rounded-2xl border border-stone-200 p-6">
+              <h3 className="font-fraunces text-base font-black text-stone-900 mb-4">About the Teacher</h3>
+              <div className="flex items-start gap-4 mb-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 text-lg font-black flex items-center justify-center flex-shrink-0">
                   {teacherInitials}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                    <h4 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 18, fontWeight: 800, color: "#1a1a1a", margin: 0 }}>{listing.profiles?.full_name}</h4>
-                    <span style={{ background: "#f5f0e8", color: levelColor, fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>
-                      {listing.profiles?.level}
-                    </span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <h4 className="font-fraunces text-lg font-black text-stone-900">{listing.profiles?.full_name}</h4>
+                    <BadgeChip tier={teacherBadge} size="sm" />
                   </div>
-                  <p style={{ fontSize: 13, color: "#888", margin: "0 0 8px" }}>@{listing.profiles?.username}</p>
-                  {listing.profiles?.bio && (
-                    <p style={{ fontSize: 14, color: "#555", lineHeight: 1.6, margin: 0 }}>{listing.profiles.bio}</p>
-                  )}
+                  <p className="text-xs text-stone-400 mb-2">@{listing.profiles?.username}</p>
+                  {listing.profiles?.bio && <p className="text-sm text-stone-500 leading-relaxed">{listing.profiles.bio}</p>}
                 </div>
               </div>
+
+              {/* Reputation mini */}
+              <ReputationMini data={{
+                avgRating:          teacherAvgRating,
+                completedSessions:  teacherSessions,
+                repeatClients:      teacherRepeats,
+                disputes:           teacherDisputes,
+              }} />
             </div>
           </div>
 
           {/* RIGHT — Booking sidebar */}
-          <div style={{ position: "sticky", top: 88 }}>
-            <div style={{ background: "white", borderRadius: 24, padding: "28px", border: "1px solid #e8e0d0", boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
-
+          <div className="sticky top-20">
+            <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm">
               {/* Price */}
-              <div style={{ textAlign: "center", marginBottom: 20, paddingBottom: 20, borderBottom: "1px solid #f0ece4" }}>
-                <p style={{ fontSize: 13, color: "#888", marginBottom: 4 }}>Session price</p>
-                <p style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 44, fontWeight: 800, color: "#2d6a4f", margin: "0 0 2px" }}>
-                  {listing.credit_price}
-                </p>
-                <p style={{ fontSize: 14, color: "#888", margin: 0 }}>credits · ₱{listing.credit_price * 10}</p>
+              <div className="text-center mb-5 pb-5 border-b border-stone-100">
+                <p className="text-xs text-stone-400 font-semibold mb-1">Session price</p>
+                <p className="font-fraunces text-5xl font-black text-emerald-700 leading-none mb-1">{listing.credit_price}</p>
+                <p className="text-sm text-stone-400">credits · ₱{listing.credit_price * 10}</p>
               </div>
 
               {/* Quick info */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+              <div className="flex flex-col gap-2.5 mb-5">
                 {[
                   { icon: fmt.icon, text: `${fmt.label} session` },
-                  { icon: "⏱", text: `${listing.duration} minutes` },
-                  { icon: "🔒", text: "Credits held in escrow" },
-                  { icon: "↩️", text: "Full refund if cancelled" },
+                  { icon: "⏱",     text: `${listing.duration} minutes` },
+                  { icon: "🔒",    text: "Credits held in escrow" },
+                  { icon: "↩️",    text: "Full refund if cancelled" },
+                  ...(portfolio.length > 0 ? [{ icon: "📁", text: `${portfolio.length} portfolio sample${portfolio.length > 1 ? "s" : ""}` }] : []),
                 ].map(item => (
-                  <div key={item.text} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#555" }}>
-                    <span style={{ width: 20, textAlign: "center" }}>{item.icon}</span>
+                  <div key={item.text} className="flex items-center gap-2.5 text-sm text-stone-500">
+                    <span className="w-5 text-center">{item.icon}</span>
                     <span>{item.text}</span>
                   </div>
                 ))}
@@ -470,33 +425,30 @@ export default function ListingDetailPage() {
 
               {/* CTA */}
               {isOwnListing ? (
-                <div style={{ background: "#f5f0e8", borderRadius: 14, padding: "14px", textAlign: "center" }}>
-                  <p style={{ fontSize: 13, color: "#888", margin: 0 }}>This is your own listing</p>
+                <div className="bg-stone-50 rounded-xl p-4 text-center">
+                  <p className="text-sm text-stone-400">This is your own listing</p>
                 </div>
               ) : currentUser ? (
                 <>
-                  <button
-                    onClick={() => setShowBookModal(true)}
-                    style={{ width: "100%", padding: "15px", background: "#2d6a4f", color: "white", border: "none", borderRadius: 14, fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "'Fraunces', Georgia, serif", marginBottom: 10 }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#1a4a35"}
-                    onMouseLeave={e => e.currentTarget.style.background = "#2d6a4f"}
-                  >
+                  <button onClick={() => setShowBookModal(true)}
+                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-fraunces text-base font-black border-0 cursor-pointer transition-colors mb-2">
                     Book Session →
                   </button>
                   {!canAfford && (
-                    <p style={{ fontSize: 12, color: "#dc2626", textAlign: "center", margin: "8px 0 0" }}>
-                      You need {listing.credit_price - (currentUser?.credits || 0)} more credits.{" "}
-                      <a href="/wallet/topup" style={{ color: "#dc2626", fontWeight: 700 }}>Top up →</a>
+                    <p className="text-xs text-red-500 text-center">
+                      Need {listing.credit_price - (currentUser?.credits || 0)} more credits.{" "}
+                      <a href="/wallet" className="font-bold text-red-500 no-underline hover:underline">Top up →</a>
                     </p>
                   )}
                 </>
               ) : (
-                <a href="/login" style={{ display: "block", width: "100%", padding: "15px", background: "#2d6a4f", color: "white", border: "none", borderRadius: 14, fontSize: 15, fontWeight: 800, cursor: "pointer", textDecoration: "none", textAlign: "center", boxSizing: "border-box", fontFamily: "'Fraunces', Georgia, serif" }}>
+                <a href="/login"
+                  className="block w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-fraunces text-base font-black no-underline text-center transition-colors">
                   Log in to Book →
                 </a>
               )}
 
-              <p style={{ fontSize: 11, color: "#aaa", textAlign: "center", marginTop: 12, lineHeight: 1.5 }}>
+              <p className="text-[11px] text-stone-300 text-center mt-3 leading-relaxed">
                 Credits are locked in escrow until both parties confirm the session is complete.
               </p>
             </div>
