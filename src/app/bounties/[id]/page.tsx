@@ -66,8 +66,9 @@ function getInitials(name: string) {
 }
 
 function Avatar({ name, level, size = 38 }: { name: string; level?: string; size?: number }) {
+  const bg = LEVEL_COLORS[level || "Seedling"] || "#2d6a4f";
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: LEVEL_COLORS[level || "Seedling"] || "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.3, fontWeight: 800, color: "#fff", flexShrink: 0, boxShadow: `0 0 0 2px white, 0 0 0 3px ${LEVEL_COLORS[level || "Seedling"] || "#2d6a4f"}44` }}>
+    <div style={{ width: size, height: size, borderRadius: "50%", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.3, fontWeight: 800, color: "#fff", flexShrink: 0, boxShadow: `0 0 0 2px white, 0 0 0 3px ${bg}44` }}>
       {getInitials(name)}
     </div>
   );
@@ -107,7 +108,7 @@ function ImageUploader({ onUploaded, label = "📷 Attach Photo" }: { onUploaded
           <button onClick={clear} style={{ position: "absolute", top: 5, right: 5, width: 22, height: 22, borderRadius: "50%", background: "#1a1a1a", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
       ) : (
-        <button onClick={() => inputRef.current?.click()} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10, background: "#fef3c7", border: "1.5px dashed #fbbf24", color: "#92400e", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>{label}</button>
+        <button onClick={() => inputRef.current?.click()} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10, background: "#fef3c7", border: "1.5px dashed #fbbf24", color: "#92400e", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{label}</button>
       )}
       <input ref={inputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
     </div>
@@ -141,9 +142,15 @@ export default function BountyDetailPage() {
       const { data: b } = await supabase.from("bounties").select("*, profiles(full_name, username, level)").eq("id", id).single();
       if (b) setBounty(b as Bounty);
       if (user) {
-        const { data: myAns } = await supabase.from("bounty_answers").select("id").eq("bounty_id", id).eq("answerer_id", user.id).single();
-        if (myAns) {
-          setHasAnswered(true);
+        // Always load answers for poster
+        const { data: bountyCheck } = await supabase.from("bounties").select("poster_id").eq("id", id).single();
+        const userIsPoster = bountyCheck?.poster_id === user.id;
+
+        const { data: myAns } = await supabase.from("bounty_answers").select("id").eq("bounty_id", id).eq("answerer_id", user.id).maybeSingle();
+        if (myAns) setHasAnswered(true);
+
+        // Load answers if poster OR already answered
+        if (userIsPoster || myAns) {
           const { data: allAnswers } = await supabase.from("bounty_answers").select("*, profiles(full_name, username, level)").eq("bounty_id", id).order("created_at", { ascending: true });
           setAnswers((allAnswers as Answer[]) || []);
         }
@@ -160,19 +167,43 @@ export default function BountyDetailPage() {
 
   async function handleSubmitAnswer() {
     if (!currentUser || !bounty) return;
-    if (!answerContent.trim() || answerContent.length < 20) { setSubmitError("Answer must be at least 20 characters."); return; }
-    setSubmitting(true); setSubmitError("");
-    const { error } = await supabase.from("bounty_answers").insert({
-      bounty_id: bounty.id, answerer_id: currentUser.id,
-      content: answerContent.trim(), image_url: answerImageUrl || null,
-    });
-    if (error) { setSubmitError("Failed to submit. Please try again."); setSubmitting(false); return; }
+    if (!answerContent.trim() || answerContent.length < 20) {
+      setSubmitError("Answer must be at least 20 characters.");
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError("");
+
+    // Insert WITHOUT image_url first to test, then add it
+    const insertData: Record<string, unknown> = {
+      bounty_id: bounty.id,
+      answerer_id: currentUser.id,
+      content: answerContent.trim(),
+    };
+
+    // Only add image_url if it was uploaded
+    if (answerImageUrl) {
+      insertData.image_url = answerImageUrl;
+    }
+
+    const { error } = await supabase.from("bounty_answers").insert(insertData);
+
+    if (error) {
+      console.error("Submit error full:", JSON.stringify(error));
+      setSubmitError("Failed to submit: " + (error.message || error.details || JSON.stringify(error)));
+      setSubmitting(false);
+      return;
+    }
+
     await loadAnswers();
-    setHasAnswered(true); setSubmitSuccess(true); setSubmitting(false);
-    // Notify poster
+    setHasAnswered(true);
+    setSubmitSuccess(true);
+    setSubmitting(false);
+
     if (bounty.poster_id !== currentUser.id) {
       await supabase.from("notifications").insert({
-        user_id: bounty.poster_id, type: "platform",
+        user_id: bounty.poster_id,
+        type: "platform",
         title: "New answer on your bounty! 🎯",
         body: `${currentUser.full_name} answered your bounty: "${bounty.title}"`,
         link: `/bounties/${bounty.id}`,
@@ -247,7 +278,6 @@ export default function BountyDetailPage() {
         textarea:focus, input:focus { outline: none; border-color: #b45309 !important; }
       `}</style>
 
-      {/* LIGHTBOX */}
       {lightbox && (
         <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", padding: 24, animation: "fadeIn 0.2s ease" }}>
           <img src={lightbox} alt="full" style={{ maxWidth: "88vw", maxHeight: "88vh", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }} />
@@ -255,7 +285,6 @@ export default function BountyDetailPage() {
         </div>
       )}
 
-      {/* NAVBAR */}
       <nav style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid #e8e2d9", padding: "0 28px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
         <a href="/dashboard" style={{ display: "flex", alignItems: "center" }}>
           <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
@@ -279,9 +308,8 @@ export default function BountyDetailPage() {
 
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "32px 20px" }}>
 
-        {/* BOUNTY HEADER CARD */}
+        {/* BOUNTY CARD */}
         <div style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8e2d9", padding: "28px 30px", marginBottom: 16, boxShadow: "0 2px 16px rgba(0,0,0,0.04)", animation: "fadeUp 0.3s ease" }}>
-          {/* Status row */}
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 800, padding: "4px 12px", borderRadius: 999, background: urgency.bg, color: urgency.color }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: urgency.dot, display: "inline-block", animation: isOpen ? "pulse 2s infinite" : "none" }} />{urgency.label}
@@ -290,21 +318,14 @@ export default function BountyDetailPage() {
             <span style={{ fontSize: 12, color: "#bbb", fontWeight: 600 }}>💬 {answers.length} answer{answers.length !== 1 ? "s" : ""}</span>
             {isExpired && <span style={{ fontSize: 11, fontWeight: 800, padding: "4px 12px", borderRadius: 999, background: "#fef2f2", color: "#dc2626" }}>Deadline passed</span>}
           </div>
-
           <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 900, color: "#111", lineHeight: 1.3, marginBottom: 14 }}>{bounty.title}</h1>
           <p style={{ fontSize: 15, color: "#555", lineHeight: 1.75, marginBottom: 18, whiteSpace: "pre-wrap" }}>{bounty.description}</p>
-
-          {/* Bounty image */}
           {bounty.image_url && (
             <div style={{ marginBottom: 20 }}>
-              <img src={bounty.image_url} alt="bounty" className="img-zoom"
-                onClick={() => setLightbox(bounty.image_url!)}
-                style={{ maxWidth: "100%", maxHeight: 360, borderRadius: 14, border: "1.5px solid #e8e2d9", display: "block" }} />
+              <img src={bounty.image_url} alt="bounty" className="img-zoom" onClick={() => setLightbox(bounty.image_url!)} style={{ maxWidth: "100%", maxHeight: 360, borderRadius: 14, border: "1.5px solid #e8e2d9", display: "block" }} />
               <span style={{ fontSize: 11, color: "#ccc", marginTop: 5, display: "block" }}>Click to enlarge</span>
             </div>
           )}
-
-          {/* Posted by */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 16, borderTop: "1px solid #f0ece4" }}>
             <Avatar name={bounty.profiles?.full_name || "?"} level={bounty.profiles?.level} size={36} />
             <div>
@@ -322,11 +343,7 @@ export default function BountyDetailPage() {
               <div style={{ fontFamily: "'Fraunces', serif", fontSize: 44, fontWeight: 900, color: "#b45309", lineHeight: 1 }}>{bounty.credit_reward} <span style={{ fontSize: 20 }}>credits</span></div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              {[
-                { e: "🥇 1st", p: bounty.first_place_pct },
-                { e: "🥈 2nd", p: bounty.second_place_pct },
-                { e: "🥉 3rd", p: bounty.third_place_pct },
-              ].map(({ e, p }) => (
+              {[{ e: "🥇 1st", p: bounty.first_place_pct }, { e: "🥈 2nd", p: bounty.second_place_pct }, { e: "🥉 3rd", p: bounty.third_place_pct }].map(({ e, p }) => (
                 <div key={e} style={{ background: "#fff", borderRadius: 14, padding: "14px 18px", textAlign: "center", border: "1px solid #fde68a", minWidth: 80 }}>
                   <div style={{ fontSize: 13, color: "#888", marginBottom: 4 }}>{e}</div>
                   <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 800, color: "#b45309" }}>{Math.floor(bounty.credit_reward * p / 100)} cr</div>
@@ -337,7 +354,7 @@ export default function BountyDetailPage() {
           </div>
         </div>
 
-        {/* POSTER — judge view */}
+        {/* POSTER JUDGE VIEW */}
         {isPoster && (
           <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9", padding: "22px 26px", marginBottom: 16, animation: "fadeUp 0.3s 0.1s ease both" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: answers.length > 0 ? 14 : 0 }}>
@@ -354,24 +371,23 @@ export default function BountyDetailPage() {
 
         {/* NOT LOGGED IN */}
         {!currentUser && (
-          <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9", padding: "40px 24px", textAlign: "center", marginBottom: 16, animation: "fadeUp 0.3s 0.1s ease both" }}>
+          <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9", padding: "40px 24px", textAlign: "center", marginBottom: 16 }}>
             <div style={{ fontSize: 44, marginBottom: 14 }}>🔒</div>
             <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 800, color: "#111", marginBottom: 8 }}>Sign in to answer</div>
             <p style={{ fontSize: 14, color: "#888", marginBottom: 20 }}>You need an account to submit answers and earn credits.</p>
-            <a href="/login" style={{ display: "inline-block", padding: "12px 28px", background: "#b45309", color: "#fff", borderRadius: 999, fontSize: 14, fontWeight: 700, boxShadow: "0 4px 16px rgba(180,83,9,0.3)" }}>Sign in to Answer →</a>
+            <a href="/login" style={{ display: "inline-block", padding: "12px 28px", background: "#b45309", color: "#fff", borderRadius: 999, fontSize: 14, fontWeight: 700 }}>Sign in to Answer →</a>
           </div>
         )}
 
-        {/* ANSWER FORM — semi-blind */}
+        {/* ANSWER FORM */}
         {currentUser && !isPoster && !hasAnswered && isOpen && (
           <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9", padding: "26px 28px", marginBottom: 16, animation: "fadeUp 0.3s 0.1s ease both", boxShadow: "0 4px 20px rgba(0,0,0,0.05)" }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: "#1a1a1a", marginBottom: 6 }}>Submit Your Answer 💡</div>
             <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 14px", marginBottom: 18, fontSize: 13, color: "#b45309", fontWeight: 600 }}>
               🙈 Semi-blind contest — you can't see other answers until you submit your own. Be original!
             </div>
-
             {submitSuccess ? (
-              <div style={{ textAlign: "center", padding: "24px 0", animation: "fadeUp 0.3s ease" }}>
+              <div style={{ textAlign: "center", padding: "24px 0" }}>
                 <div style={{ fontSize: 52, marginBottom: 12 }}>✅</div>
                 <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 800, color: "#2d6a4f", marginBottom: 6 }}>Answer submitted!</div>
                 <p style={{ fontSize: 14, color: "#888" }}>You can now see all answers below. Good luck! 🤞</p>
@@ -382,7 +398,7 @@ export default function BountyDetailPage() {
                 <div style={{ flex: 1 }}>
                   <textarea rows={6} value={answerContent} onChange={e => setAnswerContent(e.target.value)}
                     placeholder="Write your answer here. Be detailed and clear — the poster will judge based on quality…"
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14, fontFamily: "'DM Sans', sans-serif", resize: "vertical", lineHeight: 1.65, transition: "border-color 0.15s", marginBottom: 12 }} />
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14, fontFamily: "'DM Sans', sans-serif", resize: "vertical", lineHeight: 1.65, marginBottom: 12 }} />
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <ImageUploader onUploaded={url => setAnswerImageUrl(url)} label="📷 Add Photo" />
@@ -390,9 +406,9 @@ export default function BountyDetailPage() {
                         {answerContent.length < 20 ? `${20 - answerContent.length} more chars` : "✓ Ready"}
                       </span>
                     </div>
-                    {submitError && <p style={{ color: "#dc2626", fontSize: 12, margin: 0 }}>{submitError}</p>}
+                    {submitError && <p style={{ color: "#dc2626", fontSize: 12, margin: 0, maxWidth: 300 }}>{submitError}</p>}
                     <button onClick={handleSubmitAnswer} disabled={submitting || answerContent.trim().length < 20} className="btn"
-                      style={{ padding: "10px 24px", borderRadius: 999, background: answerContent.trim().length < 20 ? "#e8e2d9" : "#b45309", color: answerContent.trim().length < 20 ? "#aaa" : "#fff", fontSize: 14, fontWeight: 700, boxShadow: answerContent.trim().length >= 20 ? "0 4px 16px rgba(180,83,9,0.25)" : "none" }}>
+                      style={{ padding: "10px 24px", borderRadius: 999, background: answerContent.trim().length < 20 ? "#e8e2d9" : "#b45309", color: answerContent.trim().length < 20 ? "#aaa" : "#fff", fontSize: 14, fontWeight: 700 }}>
                       {submitting ? "Submitting…" : "Submit → See All Answers"}
                     </button>
                   </div>
@@ -402,7 +418,7 @@ export default function BountyDetailPage() {
           </div>
         )}
 
-        {/* EXPIRED — didn't answer */}
+        {/* EXPIRED */}
         {currentUser && !isPoster && !hasAnswered && isExpired && (
           <div style={{ background: "#fef2f2", borderRadius: 16, padding: "22px", textAlign: "center", border: "1.5px solid #fecaca", marginBottom: 16 }}>
             <p style={{ fontSize: 14, color: "#dc2626", fontWeight: 700 }}>⏰ This bounty expired before you answered.</p>
@@ -416,7 +432,6 @@ export default function BountyDetailPage() {
             <div style={{ fontSize: 11, fontWeight: 800, color: "#bbb", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14, paddingLeft: 4 }}>
               {answers.length} Answer{answers.length !== 1 ? "s" : ""}
             </div>
-
             {answers.length === 0 ? (
               <div style={{ textAlign: "center", padding: "48px 24px", background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>⏳</div>
@@ -429,28 +444,22 @@ export default function BountyDetailPage() {
                   const isMyAnswer = answer.answerer_id === currentUser?.id;
                   const placementEmoji = answer.placement === 1 ? "🥇" : answer.placement === 2 ? "🥈" : answer.placement === 3 ? "🥉" : null;
                   const placementLabel = answer.placement === 1 ? "1st Place" : answer.placement === 2 ? "2nd Place" : "3rd Place";
-
                   return (
                     <div key={answer.id} style={{
                       background: placementEmoji ? "linear-gradient(135deg, #fffbeb, #fef3c7)" : isMyAnswer ? "#f0fdf4" : "#fff",
-                      borderRadius: 16,
-                      border: `1.5px solid ${placementEmoji ? "#fde68a" : isMyAnswer ? "#86efac" : "#e8e2d9"}`,
-                      padding: "22px 24px",
-                      position: "relative",
-                      overflow: "hidden",
+                      borderRadius: 16, border: `1.5px solid ${placementEmoji ? "#fde68a" : isMyAnswer ? "#86efac" : "#e8e2d9"}`,
+                      padding: "22px 24px", position: "relative", overflow: "hidden",
                       boxShadow: placementEmoji ? "0 4px 20px rgba(180,83,9,0.1)" : "0 2px 8px rgba(0,0,0,0.03)",
                       animation: `fadeUp 0.3s ${idx * 0.05}s ease both`,
                     }}>
-                      {/* Placement badge */}
                       {placementEmoji && (
-                        <div style={{ position: "absolute", top: 0, right: 0, background: "#b45309", color: "#fff", fontSize: 12, fontWeight: 800, padding: "5px 16px", borderBottomLeftRadius: 12, letterSpacing: "0.04em" }}>
+                        <div style={{ position: "absolute", top: 0, right: 0, background: "#b45309", color: "#fff", fontSize: 12, fontWeight: 800, padding: "5px 16px", borderBottomLeftRadius: 12 }}>
                           {placementEmoji} {placementLabel} · +{answer.credits_earned} cr
                         </div>
                       )}
                       {isMyAnswer && !placementEmoji && (
                         <div style={{ position: "absolute", top: 0, right: 0, background: "#2d6a4f", color: "#fff", fontSize: 11, fontWeight: 800, padding: "4px 12px", borderBottomLeftRadius: 10 }}>Your answer</div>
                       )}
-
                       <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                         <Avatar name={answer.profiles?.full_name || "?"} level={answer.profiles?.level} size={40} />
                         <div style={{ flex: 1 }}>
@@ -459,20 +468,13 @@ export default function BountyDetailPage() {
                             <span style={{ fontSize: 11, color: "#bbb" }}>@{answer.profiles?.username}</span>
                             <span style={{ fontSize: 11, color: "#ccc", marginLeft: "auto" }}>#{idx + 1} · {new Date(answer.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                           </div>
-
                           <p style={{ fontSize: 14, color: "#333", lineHeight: 1.75, whiteSpace: "pre-wrap", marginBottom: answer.image_url ? 14 : 0 }}>{answer.content}</p>
-
-                          {/* Answer image */}
                           {answer.image_url && (
                             <div style={{ marginBottom: 14 }}>
-                              <img src={answer.image_url} alt="attachment" className="img-zoom"
-                                onClick={() => setLightbox(answer.image_url!)}
-                                style={{ maxWidth: "100%", maxHeight: 280, borderRadius: 12, border: "1.5px solid #e8e2d9", display: "block" }} />
+                              <img src={answer.image_url} alt="attachment" className="img-zoom" onClick={() => setLightbox(answer.image_url!)} style={{ maxWidth: "100%", maxHeight: 280, borderRadius: 12, border: "1.5px solid #e8e2d9", display: "block" }} />
                               <span style={{ fontSize: 11, color: "#ccc", marginTop: 4, display: "block" }}>Click to enlarge</span>
                             </div>
                           )}
-
-                          {/* Judge buttons */}
                           {isPoster && !answer.placement && (
                             <div style={{ display: "flex", gap: 8, alignItems: "center", paddingTop: 12, borderTop: "1px solid #f0ece4", flexWrap: "wrap" }}>
                               <span style={{ fontSize: 12, color: "#aaa", fontWeight: 600 }}>Award:</span>
