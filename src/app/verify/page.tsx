@@ -15,98 +15,95 @@ type Question = {
 
 const CATEGORY_ICONS: Record<string, string> = {
   Programming: "💻", Design: "🎨", Language: "🌍",
-  Academic: "📚", Music: "🎵", Arts: "🎭", Media: "🎬",
-};
-const CATEGORY_COLORS: Record<string, { bg: string; color: string }> = {
-  Programming: { bg: "#dbeafe", color: "#1d4ed8" },
-  Design:      { bg: "#fce7f3", color: "#be185d" },
-  Language:    { bg: "#dcfce7", color: "#166534" },
-  Academic:    { bg: "#ede9fe", color: "#7c3aed" },
-  Music:       { bg: "#fef3c7", color: "#b45309" },
-  Arts:        { bg: "#fee2e2", color: "#991b1b" },
-  Media:       { bg: "#e0f2fe", color: "#0369a1" },
+  Academic: "📚", Music: "🎵", Arts: "🎭", Media: "🎬", Science: "🔬",
 };
 
-// Large question bank per skill — 5 random pulled each attempt
+const CATEGORY_TW: Record<string, string> = {
+  Programming: "bg-sky-50 text-sky-700",
+  Design:      "bg-pink-50 text-pink-700",
+  Language:    "bg-emerald-50 text-emerald-700",
+  Academic:    "bg-violet-50 text-violet-700",
+  Music:       "bg-amber-50 text-amber-700",
+  Arts:        "bg-orange-50 text-orange-700",
+  Media:       "bg-rose-50 text-rose-700",
+  Science:     "bg-teal-50 text-teal-700",
+};
+
 const QUESTION_BANK: Record<string, Question[]> = {
   "Python": [
-    { question: "What is the difference between a list and a tuple in Python?", type: "multiple_choice", options: ["Lists are ordered, tuples are not", "Lists are mutable, tuples are immutable", "Tuples can hold more data types", "Lists are faster than tuples"], correct: "Lists are mutable, tuples are immutable", difficulty: "easy", feedback_correct: "Correct! Lists can be modified after creation while tuples cannot. This immutability makes tuples useful as dictionary keys.", feedback_wrong: "Not quite. The key difference is mutability — lists can be changed, tuples cannot. This is fundamental to Python data structures." },
-    { question: "What does the `*args` syntax do in a Python function definition?", type: "multiple_choice", options: ["Multiplies all arguments together", "Allows passing any number of positional arguments", "Creates a pointer to arguments", "Declares arguments as optional"], correct: "Allows passing any number of positional arguments", difficulty: "medium", feedback_correct: "Exactly right! *args collects extra positional arguments into a tuple, allowing flexible function signatures.", feedback_wrong: "The *args syntax packs extra positional arguments into a tuple inside the function. It's used for variadic functions." },
-    { question: "Explain what a Python decorator is and give a real-world use case.", type: "short_answer", difficulty: "hard", feedback_correct: "Great explanation! Decorators wrap functions to extend behavior — common uses include logging, authentication, caching, and timing.", feedback_wrong: "A decorator is a function that takes another function and extends its behavior without modifying it. Think @login_required in Django or @cache for memoization." },
-    { question: "What is the output of: `print(type([]) == type(()))`?", type: "multiple_choice", options: ["True", "False", "Error", "None"], correct: "False", difficulty: "easy", feedback_correct: "Correct! A list [] and tuple () are different types — list vs tuple — so the comparison returns False.", feedback_wrong: "[] is a list and () is a tuple — they are different types, so type([]) == type(()) evaluates to False." },
-    { question: "What is a Python generator and how does it differ from a regular function?", type: "short_answer", difficulty: "hard", feedback_correct: "Excellent! Generators use yield instead of return, producing values lazily one at a time, which is memory-efficient for large datasets.", feedback_wrong: "A generator uses the yield keyword to return values one at a time without storing the whole sequence in memory. Unlike regular functions, they maintain state between calls." },
-    { question: "You have a list of 1 million numbers and need to find all even ones. Which approach is more memory-efficient?", type: "multiple_choice", options: ["[x for x in nums if x%2==0]", "(x for x in nums if x%2==0)", "filter(lambda x: x%2==0, nums)", "Both B and C"], correct: "Both B and C", difficulty: "hard", feedback_correct: "Correct! Generator expressions and filter() are both lazy — they produce values one at a time rather than building a full list in memory.", feedback_wrong: "Generator expressions (parentheses) and filter() both produce lazy iterators, making them memory-efficient for large datasets. List comprehensions build the full list." },
-    { question: "What does `__init__` do in a Python class?", type: "multiple_choice", options: ["Destroys the object", "Initializes instance attributes when an object is created", "Imports modules", "Defines class-level variables only"], correct: "Initializes instance attributes when an object is created", difficulty: "easy", feedback_correct: "Correct! __init__ is the constructor method called automatically when creating a new object instance.", feedback_wrong: "__init__ is Python's constructor. It runs automatically when you create an instance and is used to set up initial state." },
-    { question: "Describe a scenario where you'd use a dictionary over a list in Python.", type: "scenario", difficulty: "medium", feedback_correct: "Good reasoning! Dictionaries excel when you need fast key-based lookup — O(1) vs O(n) for lists. Perfect for caches, counters, and mappings.", feedback_wrong: "Use a dictionary when you need to associate values with keys for fast lookup — e.g., storing user data by ID, word counts, or configuration settings." },
-    { question: "What is the GIL in Python and why does it matter for multithreading?", type: "short_answer", difficulty: "hard", feedback_correct: "Excellent! The GIL (Global Interpreter Lock) prevents true parallel execution of Python threads, making multiprocessing better for CPU-bound tasks.", feedback_wrong: "The GIL is a mutex that prevents multiple threads from executing Python bytecode simultaneously. For CPU-bound tasks, use multiprocessing instead of threading." },
-    { question: "What is list slicing? What does `my_list[2:5]` return?", type: "multiple_choice", options: ["Elements at index 2 and 5", "Elements from index 2 up to but not including 5", "Elements from index 2 to 5 inclusive", "The last 5 elements"], correct: "Elements from index 2 up to but not including 5", difficulty: "easy", feedback_correct: "Correct! Python slicing is [start:stop] where stop is exclusive. [2:5] returns elements at indices 2, 3, and 4.", feedback_wrong: "Python slicing [2:5] returns elements at indices 2, 3, 4 — the stop index is exclusive, not inclusive." },
+    { question: "What is the difference between a list and a tuple in Python?", type: "multiple_choice", options: ["Lists are ordered, tuples are not", "Lists are mutable, tuples are immutable", "Tuples can hold more data types", "Lists are faster than tuples"], correct: "Lists are mutable, tuples are immutable", difficulty: "easy", feedback_correct: "Correct! Lists can be modified after creation while tuples cannot.", feedback_wrong: "The key difference is mutability — lists can be changed, tuples cannot." },
+    { question: "What does the `*args` syntax do in a Python function definition?", type: "multiple_choice", options: ["Multiplies all arguments together", "Allows passing any number of positional arguments", "Creates a pointer to arguments", "Declares arguments as optional"], correct: "Allows passing any number of positional arguments", difficulty: "medium", feedback_correct: "Exactly! *args collects extra positional arguments into a tuple.", feedback_wrong: "The *args syntax packs extra positional arguments into a tuple inside the function." },
+    { question: "Explain what a Python decorator is and give a real-world use case.", type: "short_answer", difficulty: "hard", feedback_correct: "Great! Decorators wrap functions to extend behavior — common uses include logging, auth, caching.", feedback_wrong: "A decorator is a function that takes another function and extends its behavior without modifying it." },
+    { question: "What is the output of: `print(type([]) == type(()))`?", type: "multiple_choice", options: ["True", "False", "Error", "None"], correct: "False", difficulty: "easy", feedback_correct: "Correct! A list [] and tuple () are different types so the comparison is False.", feedback_wrong: "[] is a list and () is a tuple — different types, so False." },
+    { question: "What is a Python generator and how does it differ from a regular function?", type: "short_answer", difficulty: "hard", feedback_correct: "Excellent! Generators use yield, producing values lazily one at a time, which is memory-efficient.", feedback_wrong: "A generator uses the yield keyword to return values one at a time without storing the whole sequence." },
+    { question: "You have a list of 1 million numbers and need all even ones. Which is more memory-efficient?", type: "multiple_choice", options: ["[x for x in nums if x%2==0]", "(x for x in nums if x%2==0)", "filter(lambda x: x%2==0, nums)", "Both B and C"], correct: "Both B and C", difficulty: "hard", feedback_correct: "Correct! Generator expressions and filter() are both lazy iterators.", feedback_wrong: "Generator expressions (parentheses) and filter() both produce lazy iterators — memory efficient." },
+    { question: "What does `__init__` do in a Python class?", type: "multiple_choice", options: ["Destroys the object", "Initializes instance attributes when an object is created", "Imports modules", "Defines class-level variables only"], correct: "Initializes instance attributes when an object is created", difficulty: "easy", feedback_correct: "Correct! __init__ is the constructor called automatically when creating a new instance.", feedback_wrong: "__init__ is Python's constructor. It runs automatically when you create an instance." },
+    { question: "Describe a scenario where you'd use a dictionary over a list in Python.", type: "scenario", difficulty: "medium", feedback_correct: "Good! Dictionaries excel for fast key-based lookup — O(1) vs O(n) for lists.", feedback_wrong: "Use a dictionary when you need key-based lookup — e.g. storing user data by ID, word counts." },
+    { question: "What is the GIL in Python and why does it matter for multithreading?", type: "short_answer", difficulty: "hard", feedback_correct: "The GIL prevents true parallel Python threads — use multiprocessing for CPU-bound tasks.", feedback_wrong: "The GIL is a mutex that prevents multiple threads from executing Python bytecode simultaneously." },
+    { question: "What is list slicing? What does `my_list[2:5]` return?", type: "multiple_choice", options: ["Elements at index 2 and 5", "Elements from index 2 up to but not including 5", "Elements from index 2 to 5 inclusive", "The last 5 elements"], correct: "Elements from index 2 up to but not including 5", difficulty: "easy", feedback_correct: "Correct! Python slicing stop is exclusive. [2:5] returns elements at indices 2, 3, 4.", feedback_wrong: "Python slicing [2:5] returns indices 2, 3, 4 — the stop is exclusive." },
   ],
   "React": [
-    { question: "What is the difference between `useState` and `useRef` in React?", type: "multiple_choice", options: ["useState is for strings, useRef is for numbers", "useState triggers re-renders, useRef does not", "useRef is deprecated in React 18", "They are identical"], correct: "useState triggers re-renders, useRef does not", difficulty: "medium", feedback_correct: "Correct! Updating useState causes a re-render while useRef persists a value without triggering one. Great for DOM refs and timers.", feedback_wrong: "The key difference: useState triggers component re-renders when updated, useRef does not. useRef is useful for persisting values across renders without re-rendering." },
-    { question: "What problem does `useCallback` solve in React?", type: "short_answer", difficulty: "hard", feedback_correct: "Well explained! useCallback memoizes functions to prevent unnecessary re-creation on every render, especially useful when passing callbacks to optimized child components.", feedback_wrong: "useCallback memoizes a function so it's not recreated on every render. This prevents unnecessary re-renders of child components that receive the callback as a prop." },
-    { question: "What is the React virtual DOM and why does it exist?", type: "multiple_choice", options: ["A simplified HTML structure", "A JavaScript representation of the real DOM for efficient updates", "A browser-specific API", "A way to avoid using HTML"], correct: "A JavaScript representation of the real DOM for efficient updates", difficulty: "easy", feedback_correct: "Correct! The virtual DOM is an in-memory representation that React uses to calculate minimal DOM updates, making UI changes efficient.", feedback_wrong: "The virtual DOM is a lightweight JavaScript copy of the real DOM. React compares old and new virtual DOMs (diffing) to make minimal, efficient updates." },
-    { question: "Your React component re-renders too often causing performance issues. What are 3 strategies you'd use to optimize it?", type: "scenario", difficulty: "hard", feedback_correct: "Excellent answer! React.memo, useMemo, useCallback, lazy loading, and avoiding inline objects/functions in JSX are all valid optimization strategies.", feedback_wrong: "Key strategies: React.memo to prevent re-renders when props haven't changed, useMemo for expensive calculations, useCallback for stable function references, and code splitting with lazy()." },
-    { question: "What is prop drilling and how does Context API solve it?", type: "short_answer", difficulty: "medium", feedback_correct: "Great explanation! Context API creates a provider that makes values available to any descendant component without manually passing props through every level.", feedback_wrong: "Prop drilling is passing props through multiple component layers just to reach a deeply nested component. Context API creates a global-like store accessible by any component in the tree." },
-    { question: "What does the dependency array in `useEffect` control?", type: "multiple_choice", options: ["The order of effects", "When the effect runs based on value changes", "Which components can use the effect", "The effect's return type"], correct: "When the effect runs based on value changes", difficulty: "medium", feedback_correct: "Correct! The dependency array tells React when to re-run the effect. Empty array = once on mount, no array = every render, with values = when those values change.", feedback_wrong: "The dependency array controls when useEffect re-runs. [] runs once on mount, [value] runs when value changes, and omitting it runs after every render." },
-    { question: "What is the difference between controlled and uncontrolled components in React?", type: "multiple_choice", options: ["Controlled components use class syntax", "Controlled components have their state managed by React, uncontrolled use the DOM", "Uncontrolled components are deprecated", "There is no practical difference"], correct: "Controlled components have their state managed by React, uncontrolled use the DOM", difficulty: "medium", feedback_correct: "Exactly! Controlled components use useState to manage form values through React, while uncontrolled components let the DOM manage state accessed via refs.", feedback_wrong: "Controlled components bind form values to React state (onChange + value props). Uncontrolled components let the DOM handle state, accessed via useRef." },
-    { question: "Explain React's reconciliation algorithm in simple terms.", type: "short_answer", difficulty: "hard", feedback_correct: "Good explanation! React's diffing algorithm compares virtual DOM trees level by level, using keys to efficiently identify which elements changed, were added, or removed.", feedback_wrong: "Reconciliation is React's process of comparing the old and new virtual DOM trees to determine the minimum number of real DOM operations needed to update the UI." },
-  ],
-  "UI/UX Design": [
-    { question: "What is the difference between UX and UI design?", type: "multiple_choice", options: ["They are the same thing", "UX focuses on user experience and flow, UI focuses on visual elements", "UI is for mobile, UX is for web", "UX is done after UI"], correct: "UX focuses on user experience and flow, UI focuses on visual elements", difficulty: "easy", feedback_correct: "Correct! UX (User Experience) is about how something works and feels — flows, wireframes, research. UI (User Interface) is about how it looks — colors, typography, components.", feedback_wrong: "UX design focuses on the overall experience — user research, wireframes, information architecture. UI design focuses on the visual layer — colors, fonts, icons, and components." },
-    { question: "A user complains they can't find the checkout button on your e-commerce app. What UX process would you follow to fix this?", type: "scenario", difficulty: "hard", feedback_correct: "Excellent process! User testing, heatmaps, A/B testing, and applying visual hierarchy principles (size, color, contrast, whitespace) are all correct approaches.", feedback_wrong: "The correct process: user interviews to understand the problem, heatmap analysis to see where users look, A/B testing different button placements, and applying visual hierarchy to make the CTA more prominent." },
-    { question: "What is a wireframe and when would you use one?", type: "multiple_choice", options: ["A high-fidelity mockup", "A low-fidelity layout sketch showing structure without visual design", "A finished design ready for development", "An animation prototype"], correct: "A low-fidelity layout sketch showing structure without visual design", difficulty: "easy", feedback_correct: "Correct! Wireframes are low-fidelity blueprints used early in the design process to establish layout and flow before adding visual design.", feedback_wrong: "Wireframes are simple, low-fidelity sketches that show the layout and structure of a screen without colors or detailed visuals. Used early in design to validate concepts cheaply." },
-    { question: "Explain the Gestalt principle of proximity and how you'd apply it in a UI.", type: "short_answer", difficulty: "medium", feedback_correct: "Great answer! Proximity groups related elements together — like placing form labels directly above their inputs, or grouping navigation items together to show they're related.", feedback_wrong: "Proximity is a Gestalt principle stating that elements near each other are perceived as related. In UI, group related controls together (e.g., keep form fields with their labels close, separate unrelated sections with whitespace)." },
-    { question: "What is the minimum touch target size recommended by accessibility guidelines?", type: "multiple_choice", options: ["24x24px", "44x44px", "16x16px", "100x100px"], correct: "44x44px", difficulty: "medium", feedback_correct: "Correct! Apple's HIG and WCAG both recommend minimum 44x44pt touch targets to prevent accidental taps and ensure accessibility.", feedback_wrong: "44x44px is the recommended minimum touch target size per Apple HIG and Google Material Design guidelines, ensuring buttons are easily tappable for all users including those with motor impairments." },
-    { question: "What is a design system and why do companies like Airbnb and Google invest heavily in them?", type: "short_answer", difficulty: "hard", feedback_correct: "Excellent! Design systems (like Material Design or Tailwind) create consistency, speed up development, improve accessibility, and ensure brand cohesion across products.", feedback_wrong: "A design system is a collection of reusable components, guidelines, and standards. Companies invest in them for consistency across products, faster design-dev handoff, and easier scaling." },
-    { question: "What does WCAG 2.1 AA contrast ratio require for normal text?", type: "multiple_choice", options: ["2:1", "3:1", "4.5:1", "7:1"], correct: "4.5:1", difficulty: "hard", feedback_correct: "Correct! WCAG 2.1 AA requires a minimum 4.5:1 contrast ratio for normal text and 3:1 for large text to ensure readability for users with visual impairments.", feedback_wrong: "WCAG 2.1 AA requires 4.5:1 contrast ratio for normal text. This ensures content is readable for users with low vision. AAA (enhanced) requires 7:1." },
-    { question: "Describe the double diamond design process and its four phases.", type: "short_answer", difficulty: "hard", feedback_correct: "Great answer! Discover (research), Define (problem statement), Develop (ideation/prototyping), Deliver (testing/implementation) — the process diverges then converges twice.", feedback_wrong: "The double diamond has 4 phases: Discover (user research, explore the problem), Define (synthesize insights into a clear problem statement), Develop (ideate and prototype solutions), Deliver (test and refine)." },
+    { question: "What is the difference between `useState` and `useRef` in React?", type: "multiple_choice", options: ["useState is for strings, useRef is for numbers", "useState triggers re-renders, useRef does not", "useRef is deprecated in React 18", "They are identical"], correct: "useState triggers re-renders, useRef does not", difficulty: "medium", feedback_correct: "Correct! Updating useState causes a re-render; useRef does not.", feedback_wrong: "useState triggers component re-renders when updated; useRef does not." },
+    { question: "What problem does `useCallback` solve in React?", type: "short_answer", difficulty: "hard", feedback_correct: "useCallback memoizes functions to prevent unnecessary re-creation on every render.", feedback_wrong: "useCallback memoizes a function so it's not recreated on every render." },
+    { question: "What is the React virtual DOM and why does it exist?", type: "multiple_choice", options: ["A simplified HTML structure", "A JS representation of the real DOM for efficient updates", "A browser-specific API", "A way to avoid using HTML"], correct: "A JS representation of the real DOM for efficient updates", difficulty: "easy", feedback_correct: "Correct! React uses the virtual DOM to calculate minimal DOM updates.", feedback_wrong: "The virtual DOM is a lightweight JS copy of the real DOM for efficient diffing." },
+    { question: "Your React component re-renders too often. Name 3 optimization strategies.", type: "scenario", difficulty: "hard", feedback_correct: "React.memo, useMemo, useCallback, lazy loading, and avoiding inline objects are all valid.", feedback_wrong: "React.memo, useMemo, useCallback, and code splitting with lazy() are key strategies." },
+    { question: "What is prop drilling and how does Context API solve it?", type: "short_answer", difficulty: "medium", feedback_correct: "Context API creates a provider accessible by any descendant without manual prop passing.", feedback_wrong: "Prop drilling is passing props through many layers. Context API makes values globally accessible." },
+    { question: "What does the dependency array in `useEffect` control?", type: "multiple_choice", options: ["The order of effects", "When the effect runs based on value changes", "Which components can use the effect", "The effect's return type"], correct: "When the effect runs based on value changes", difficulty: "medium", feedback_correct: "Correct! [] = once, [value] = when value changes, no array = every render.", feedback_wrong: "The dependency array controls when useEffect re-runs." },
+    { question: "What is the difference between controlled and uncontrolled components?", type: "multiple_choice", options: ["Controlled use class syntax", "Controlled components have state managed by React, uncontrolled use the DOM", "Uncontrolled components are deprecated", "No practical difference"], correct: "Controlled components have state managed by React, uncontrolled use the DOM", difficulty: "medium", feedback_correct: "Controlled bind form values to React state. Uncontrolled let the DOM manage state.", feedback_wrong: "Controlled components use useState for form values. Uncontrolled use useRef." },
+    { question: "Explain React's reconciliation algorithm in simple terms.", type: "short_answer", difficulty: "hard", feedback_correct: "React diffs virtual DOM trees level-by-level using keys to efficiently update only what changed.", feedback_wrong: "Reconciliation compares old and new virtual DOM trees to find the minimum real DOM operations." },
   ],
   "Math Tutoring": [
-    { question: "What is the derivative of f(x) = x³ + 2x² - 5x + 3?", type: "multiple_choice", options: ["3x² + 4x - 5", "x² + 4x - 5", "3x² + 2x - 5", "3x³ + 4x"], correct: "3x² + 4x - 5", difficulty: "medium", feedback_correct: "Correct! Using the power rule: d/dx(x³) = 3x², d/dx(2x²) = 4x, d/dx(-5x) = -5, d/dx(3) = 0.", feedback_wrong: "Apply the power rule: bring down the exponent and reduce it by 1. So x³→3x², 2x²→4x, -5x→-5, 3→0. Result: 3x² + 4x - 5." },
-    { question: "A student is struggling with the concept of limits. How would you explain what lim(x→2) of (x²-4)/(x-2) equals?", type: "scenario", difficulty: "hard", feedback_correct: "Excellent approach! Factor numerator as (x+2)(x-2), cancel (x-2), and the limit equals x+2 as x→2, which is 4. Explaining why direct substitution fails first is key.", feedback_wrong: "Factor the numerator: (x²-4) = (x+2)(x-2). Cancel (x-2) to get (x+2). As x approaches 2, the limit is 2+2 = 4. The key insight: the function is undefined AT x=2 but the limit still exists." },
-    { question: "What is the quadratic formula and when do you use it?", type: "short_answer", difficulty: "easy", feedback_correct: "Correct! x = (-b ± √(b²-4ac)) / 2a is used to solve ax² + bx + c = 0 when factoring isn't obvious. The discriminant b²-4ac tells you the nature of roots.", feedback_wrong: "The quadratic formula is x = (-b ± √(b²-4ac)) / 2a. Use it to solve quadratic equations ax² + bx + c = 0 when the expression doesn't factor easily." },
-    { question: "If a triangle has sides 3, 4, and 5, what type of triangle is it and why?", type: "multiple_choice", options: ["Acute triangle", "Right triangle", "Obtuse triangle", "Equilateral triangle"], correct: "Right triangle", difficulty: "easy", feedback_correct: "Correct! 3² + 4² = 9 + 16 = 25 = 5². It satisfies the Pythagorean theorem, making it a right triangle — actually the most famous Pythagorean triple!", feedback_wrong: "Check using Pythagorean theorem: 3² + 4² = 9 + 16 = 25 = 5². Since a² + b² = c², this is a right triangle. The 3-4-5 is the most well-known Pythagorean triple." },
-    { question: "Explain integration by parts and give an example of when you'd use it.", type: "short_answer", difficulty: "hard", feedback_correct: "Excellent! ∫u dv = uv - ∫v du. Classic use case: ∫x·eˣdx where u=x, dv=eˣdx, giving xeˣ - eˣ + C. Remember LIATE for choosing u.", feedback_wrong: "Integration by parts: ∫u dv = uv - ∫v du. Use it when integrating products of functions like x·sin(x) or x·eˣ. The LIATE rule (Logarithmic, Inverse trig, Algebraic, Trig, Exponential) helps choose u." },
-    { question: "What is the probability of rolling a sum of 7 with two dice?", type: "multiple_choice", options: ["1/6", "6/36", "7/36", "1/7"], correct: "6/36", difficulty: "medium", feedback_correct: "Correct! There are 36 possible outcomes. Combinations that sum to 7: (1,6),(2,5),(3,4),(4,3),(5,2),(6,1) — that's 6 outcomes. So P = 6/36 = 1/6.", feedback_wrong: "Total outcomes = 6×6 = 36. Ways to get 7: (1,6),(2,5),(3,4),(4,3),(5,2),(6,1) = 6 ways. Probability = 6/36 = 1/6. Note: 6/36 and 1/6 are equal." },
+    { question: "What is the derivative of f(x) = x³ + 2x² - 5x + 3?", type: "multiple_choice", options: ["3x² + 4x - 5", "x² + 4x - 5", "3x² + 2x - 5", "3x³ + 4x"], correct: "3x² + 4x - 5", difficulty: "medium", feedback_correct: "Correct! Power rule: x³→3x², 2x²→4x, -5x→-5, 3→0.", feedback_wrong: "Apply the power rule: x³→3x², 2x²→4x, -5x→-5, 3→0. Result: 3x² + 4x - 5." },
+    { question: "A student struggles with lim(x→2) of (x²-4)/(x-2). How do you explain it?", type: "scenario", difficulty: "hard", feedback_correct: "Factor (x²-4) = (x+2)(x-2), cancel (x-2), limit = 4. Explain why direct substitution fails.", feedback_wrong: "Factor numerator: (x+2)(x-2). Cancel (x-2). As x→2, limit = 2+2 = 4." },
+    { question: "What is the quadratic formula and when do you use it?", type: "short_answer", difficulty: "easy", feedback_correct: "x = (-b ± √(b²-4ac)) / 2a — use it to solve ax²+bx+c=0 when factoring isn't obvious.", feedback_wrong: "x = (-b ± √(b²-4ac)) / 2a. Use it for quadratic equations that don't factor easily." },
+    { question: "A triangle has sides 3, 4, and 5. What type is it?", type: "multiple_choice", options: ["Acute triangle", "Right triangle", "Obtuse triangle", "Equilateral triangle"], correct: "Right triangle", difficulty: "easy", feedback_correct: "3²+4²=25=5². It satisfies Pythagorean theorem — right triangle!", feedback_wrong: "3²+4²=9+16=25=5². Since a²+b²=c², this is a right triangle." },
+    { question: "Explain integration by parts and give an example.", type: "short_answer", difficulty: "hard", feedback_correct: "∫u dv = uv - ∫v du. Classic: ∫x·eˣdx where u=x, dv=eˣdx → xeˣ - eˣ + C.", feedback_wrong: "∫u dv = uv - ∫v du. Use for products like x·sin(x) or x·eˣ. LIATE helps choose u." },
+    { question: "What is the probability of rolling a sum of 7 with two dice?", type: "multiple_choice", options: ["1/6", "6/36", "7/36", "1/7"], correct: "6/36", difficulty: "medium", feedback_correct: "36 total outcomes. (1,6),(2,5),(3,4),(4,3),(5,2),(6,1) = 6 ways. P = 6/36 = 1/6.", feedback_wrong: "6×6=36 outcomes. 6 ways to get 7: (1,6),(2,5),(3,4),(4,3),(5,2),(6,1). P=6/36." },
+  ],
+  "UI/UX Design": [
+    { question: "What is the difference between UX and UI design?", type: "multiple_choice", options: ["They are the same thing", "UX focuses on user experience and flow, UI focuses on visual elements", "UI is for mobile, UX is for web", "UX is done after UI"], correct: "UX focuses on user experience and flow, UI focuses on visual elements", difficulty: "easy", feedback_correct: "UX = experience, flow, research. UI = colors, typography, components.", feedback_wrong: "UX focuses on the overall experience. UI focuses on the visual layer." },
+    { question: "User can't find the checkout button. What UX process do you follow?", type: "scenario", difficulty: "hard", feedback_correct: "User interviews, heatmaps, A/B testing, and applying visual hierarchy are all correct.", feedback_wrong: "User interviews → heatmap analysis → A/B testing → visual hierarchy improvements." },
+    { question: "What is a wireframe and when would you use one?", type: "multiple_choice", options: ["A high-fidelity mockup", "A low-fidelity layout sketch showing structure without visual design", "A finished design ready for development", "An animation prototype"], correct: "A low-fidelity layout sketch showing structure without visual design", difficulty: "easy", feedback_correct: "Wireframes are low-fidelity blueprints used early to validate concepts cheaply.", feedback_wrong: "Wireframes are simple sketches showing layout/structure without colors. Used early in design." },
+    { question: "Explain the Gestalt principle of proximity and how you'd apply it in UI.", type: "short_answer", difficulty: "medium", feedback_correct: "Proximity groups related elements — like placing form labels directly above their inputs.", feedback_wrong: "Proximity: nearby elements are perceived as related. Group related controls (labels + inputs)." },
+    { question: "What is the minimum touch target size recommended by accessibility guidelines?", type: "multiple_choice", options: ["24x24px", "44x44px", "16x16px", "100x100px"], correct: "44x44px", difficulty: "medium", feedback_correct: "44x44px per Apple HIG and WCAG — ensures accessible tapping.", feedback_wrong: "44x44px is the recommended minimum per Apple HIG and Google Material Design." },
+    { question: "What is WCAG 2.1 AA contrast ratio for normal text?", type: "multiple_choice", options: ["2:1", "3:1", "4.5:1", "7:1"], correct: "4.5:1", difficulty: "hard", feedback_correct: "4.5:1 for normal text, 3:1 for large text per WCAG 2.1 AA.", feedback_wrong: "WCAG 2.1 AA requires 4.5:1 for normal text to ensure readability." },
   ],
   "English Writing": [
-    { question: "What is the difference between active and passive voice? Which should you prefer in most writing?", type: "multiple_choice", options: ["Passive voice is always preferred", "Active voice is usually preferred for clarity and directness", "They are interchangeable with no difference", "Passive voice is only for academic writing"], correct: "Active voice is usually preferred for clarity and directness", difficulty: "easy", feedback_correct: "Correct! Active voice (The dog bit the man) is clearer and more direct than passive (The man was bitten by the dog). Use passive when the actor is unknown or unimportant.", feedback_wrong: "Active voice puts the subject performing the action (Dog bites man). Passive voice puts the receiver first (Man is bitten). Active is preferred for clarity — passive has its uses when the actor is unknown." },
-    { question: "A student writes: 'There is a lot of people who wants to learn English.' Fix this sentence and explain the errors.", type: "scenario", difficulty: "medium", feedback_correct: "Well done! Two errors: 'There is' should be 'There are' (plural agreement with 'people'), and 'wants' should be 'want' (verb agrees with 'people', not 'who').", feedback_wrong: "Two errors: 1) 'There is' → 'There are' because 'people' is plural. 2) 'wants' → 'want' because the verb must agree with 'people'. Correct: 'There are a lot of people who want to learn English.'" },
-    { question: "What is a thesis statement and where does it belong in an essay?", type: "short_answer", difficulty: "easy", feedback_correct: "Correct! A thesis states the main argument of your essay in one or two sentences and typically appears at the end of the introduction paragraph.", feedback_wrong: "A thesis statement is a concise sentence that presents the main argument or claim of your essay. It usually appears at the end of the introduction and guides the entire paper." },
-    { question: "What is the difference between 'affect' and 'effect'?", type: "multiple_choice", options: ["They mean the same thing", "Affect is usually a verb, effect is usually a noun", "Effect is a verb, affect is a noun", "Both can only be nouns"], correct: "Affect is usually a verb, effect is usually a noun", difficulty: "medium", feedback_correct: "Correct! 'Affect' is typically a verb (The rain affected my mood). 'Effect' is typically a noun (The effect of rain). Remember: Affect=Action, Effect=End result.", feedback_wrong: "Affect is usually a verb meaning to influence (Heat affects ice cream). Effect is usually a noun meaning result (The effect of heat on ice cream). Memory trick: Affect=Action, Effect=End result." },
-    { question: "Explain what coherence and cohesion mean in writing and why they matter.", type: "short_answer", difficulty: "hard", feedback_correct: "Excellent! Coherence is the logical flow of ideas (the reader follows your argument). Cohesion is the grammatical and lexical linking (transition words, pronouns, repetition).", feedback_wrong: "Coherence = logical organization of ideas so readers can follow your argument. Cohesion = linguistic devices that connect sentences (transition words like however, furthermore, pronouns, synonyms)." },
-    { question: "Which sentence uses a comma correctly?", type: "multiple_choice", options: ["I went to the store, and I bought milk.", "I went to the store and, I bought milk.", "I, went to the store and I bought milk.", "I went to the store and I, bought milk."], correct: "I went to the store, and I bought milk.", difficulty: "medium", feedback_correct: "Correct! A comma before a coordinating conjunction (and, but, or) is correct when joining two independent clauses. Both 'I went to the store' and 'I bought milk' are complete sentences.", feedback_wrong: "When joining two independent clauses with a coordinating conjunction (FANBOYS: for, and, nor, but, or, yet, so), place the comma before the conjunction." },
+    { question: "What is the difference between active and passive voice?", type: "multiple_choice", options: ["Passive is always preferred", "Active voice is usually preferred for clarity and directness", "They are interchangeable", "Passive is only for academic writing"], correct: "Active voice is usually preferred for clarity and directness", difficulty: "easy", feedback_correct: "Active (Dog bites man) is clearer than passive (Man is bitten by dog).", feedback_wrong: "Active voice puts the subject performing the action. Generally clearer and more direct." },
+    { question: "Fix: 'There is a lot of people who wants to learn English.' Explain the errors.", type: "scenario", difficulty: "medium", feedback_correct: "'There are' (people is plural) and 'want' (verb agrees with people, not 'who').", feedback_wrong: "'There is' → 'There are' (plural). 'wants' → 'want' (agrees with 'people')." },
+    { question: "What is a thesis statement and where does it belong?", type: "short_answer", difficulty: "easy", feedback_correct: "A thesis states the main argument in 1-2 sentences, usually at the end of the introduction.", feedback_wrong: "A thesis is a concise sentence presenting your main argument, at the end of the introduction." },
+    { question: "What is the difference between 'affect' and 'effect'?", type: "multiple_choice", options: ["Same meaning", "Affect is usually a verb, effect is usually a noun", "Effect is a verb, affect is a noun", "Both are nouns"], correct: "Affect is usually a verb, effect is usually a noun", difficulty: "medium", feedback_correct: "Affect = verb (to influence). Effect = noun (result). Trick: Affect=Action, Effect=End result.", feedback_wrong: "Affect is usually a verb (The rain affected my mood). Effect is usually a noun (The effect of rain)." },
+    { question: "Explain what coherence and cohesion mean in writing.", type: "short_answer", difficulty: "hard", feedback_correct: "Coherence = logical flow of ideas. Cohesion = grammatical linking (transitions, pronouns).", feedback_wrong: "Coherence = logical organization. Cohesion = linguistic devices connecting sentences." },
   ],
   "Guitar": [
-    { question: "What is the difference between a major and minor chord in terms of their emotional quality?", type: "multiple_choice", options: ["Major sounds sad, minor sounds happy", "Major sounds happy/bright, minor sounds sad/dark", "They sound identical", "Minor is louder than major"], correct: "Major sounds happy/bright, minor sounds sad/dark", difficulty: "easy", feedback_correct: "Correct! Major chords (major third interval) generally sound bright, happy, and resolved. Minor chords (minor third) sound darker, sadder, or more tense.", feedback_wrong: "Major chords use a major third (4 semitones) and sound bright/happy. Minor chords use a minor third (3 semitones) and sound darker/sadder. This emotional difference comes from the interval between the root and third." },
-    { question: "What is a barre chord and why do beginners find it difficult?", type: "short_answer", difficulty: "medium", feedback_correct: "Good answer! A barre chord uses one finger to press all strings across a fret, essentially replacing the nut. It's difficult due to the finger strength and even pressure required.", feedback_wrong: "A barre chord involves using one finger (usually the index) to press down all or multiple strings across a single fret. Beginners struggle because it requires significant finger strength and even pressure to avoid muted strings." },
-    { question: "A student can play chords individually but struggles to switch between G and C smoothly. What practice technique would you recommend?", type: "scenario", difficulty: "hard", feedback_correct: "Excellent! The 'one minute changes' drill (count transitions in 60 seconds), finding the pivot finger, and practicing the movement slowly then building speed are all correct approaches.", feedback_wrong: "Recommend: 1) Slow down to a tempo where transitions are clean, 2) Find 'anchor' or pivot fingers that don't need to move, 3) Practice the 'one minute changes' drill, 4) Visualize the next chord shape before moving." },
-    { question: "What does EADGBE represent in guitar?", type: "multiple_choice", options: ["A guitar technique", "The standard tuning of the six strings from low to high", "A chord progression", "A music theory scale"], correct: "The standard tuning of the six strings from low to high", difficulty: "easy", feedback_correct: "Correct! EADGBE is standard guitar tuning from the thickest (lowest pitched) string to the thinnest (highest). Many mnemonics exist: Eddie Ate Dynamite Good Bye Eddie!", feedback_wrong: "EADGBE is the standard tuning for guitar strings from the 6th (thickest/lowest) to 1st (thinnest/highest): E-A-D-G-B-E. This is the starting point for all guitar learning." },
-    { question: "What is a pentatonic scale and why is it so commonly used for soloing?", type: "short_answer", difficulty: "medium", feedback_correct: "Great! The pentatonic (5-note) scale avoids the dissonant intervals of the full major/minor scale, making almost any note sound good over common chord progressions — perfect for beginners and pros alike.", feedback_wrong: "A pentatonic scale has 5 notes (penta=five) instead of the usual 7. It's popular for soloing because it avoids 'avoid notes' that clash with chord tones, making it very forgiving and musical-sounding over most progressions." },
+    { question: "What is the difference between a major and minor chord emotionally?", type: "multiple_choice", options: ["Major sounds sad, minor sounds happy", "Major sounds happy/bright, minor sounds sad/dark", "They sound identical", "Minor is louder"], correct: "Major sounds happy/bright, minor sounds sad/dark", difficulty: "easy", feedback_correct: "Major chords (major third) sound bright/happy. Minor (minor third) sound darker/sadder.", feedback_wrong: "Major = bright/happy (4 semitones). Minor = darker/sadder (3 semitones)." },
+    { question: "What is a barre chord and why do beginners find it difficult?", type: "short_answer", difficulty: "medium", feedback_correct: "Barre uses one finger across all strings. Hard due to required finger strength and even pressure.", feedback_wrong: "A barre chord presses all strings with one finger. Requires strength and even pressure." },
+    { question: "Student struggles switching G to C smoothly. What technique do you recommend?", type: "scenario", difficulty: "hard", feedback_correct: "Slow tempo, find pivot fingers, one-minute changes drill, visualize next chord.", feedback_wrong: "Slow down, find anchor fingers, practice one-minute changes drill, visualize next chord shape." },
+    { question: "What does EADGBE represent in guitar?", type: "multiple_choice", options: ["A technique", "Standard tuning of six strings from low to high", "A chord progression", "A scale"], correct: "Standard tuning of six strings from low to high", difficulty: "easy", feedback_correct: "EADGBE is standard guitar tuning from thickest (lowest) to thinnest (highest).", feedback_wrong: "EADGBE is standard tuning: E-A-D-G-B-E from 6th (lowest) to 1st (highest) string." },
+    { question: "What is a pentatonic scale and why is it popular for soloing?", type: "short_answer", difficulty: "medium", feedback_correct: "5-note scale avoiding dissonant intervals, making almost any note sound good over common chords.", feedback_wrong: "5 notes (no avoid notes that clash with chords), very forgiving and musical over most progressions." },
+  ],
+  "Photography": [
+    { question: "What is the exposure triangle?", type: "multiple_choice", options: ["ISO, aperture, shutter speed", "Focus, zoom, flash", "White balance, contrast, saturation", "RAW, JPEG, HEIC"], correct: "ISO, aperture, shutter speed", difficulty: "easy", feedback_correct: "The three elements controlling exposure: ISO (sensor sensitivity), aperture (light opening), shutter speed (exposure duration).", feedback_wrong: "ISO, aperture, and shutter speed together make up the exposure triangle." },
+    { question: "A photo is blurry in low light. What 3 settings do you adjust?", type: "scenario", difficulty: "medium", feedback_correct: "Widen aperture (lower f-number), raise ISO, slow shutter speed — balance for the scene.", feedback_wrong: "Open aperture (f/1.8), increase ISO, slow shutter speed (use tripod if needed)." },
+    { question: "What is the rule of thirds?", type: "short_answer", difficulty: "easy", feedback_correct: "Divide frame 3x3, place subjects at intersections for more dynamic composition.", feedback_wrong: "Divide frame into 9 equal parts, place key elements at the 4 intersection points." },
+    { question: "What does a shallow depth of field create?", type: "multiple_choice", options: ["Everything in focus", "Blurred background with sharp subject", "Wide angle view", "Increased shutter speed"], correct: "Blurred background with sharp subject", difficulty: "easy", feedback_correct: "Shallow DOF (low f-number like f/1.8) creates bokeh — blurred background for subject isolation.", feedback_wrong: "Shallow depth of field blurs the background while keeping the subject sharp (bokeh effect)." },
+    { question: "Explain RAW vs JPEG and when you'd choose each.", type: "short_answer", difficulty: "medium", feedback_correct: "RAW = unprocessed, more editing latitude, larger files. JPEG = processed, smaller, less editable. Shoot RAW for editing flexibility.", feedback_wrong: "RAW preserves all data for maximum editing control. JPEG is processed in-camera, smaller, convenient for sharing without editing." },
   ],
   "Video Editing": [
-    { question: "What is the difference between a cut and a dissolve transition?", type: "multiple_choice", options: ["They are the same thing", "A cut is an instant change, a dissolve gradually blends between clips", "A dissolve is only used in audio", "Cuts are only for action films"], correct: "A cut is an instant change, a dissolve gradually blends between clips", difficulty: "easy", feedback_correct: "Correct! A cut is the most basic edit — instant change between clips. A dissolve (crossfade) gradually blends two clips together, often suggesting a passage of time.", feedback_wrong: "A cut is an instantaneous transition between clips. A dissolve gradually fades one clip out while fading the next in. Dissolves often suggest time passing or a softer emotional shift." },
-    { question: "A client says their video looks 'flat and boring.' What color grading adjustments would you make first?", type: "scenario", difficulty: "hard", feedback_correct: "Excellent answer! Checking exposure, lifting contrast (S-curve), adding saturation or a LUT, adjusting white balance, and ensuring skin tones are correct are all valid first steps.", feedback_wrong: "Start with: 1) Exposure/brightness correction, 2) Add contrast with an S-curve, 3) Boost saturation or apply a LUT, 4) Adjust white balance for correct color temperature, 5) Fine-tune highlights and shadows separately." },
-    { question: "What is the 180-degree rule in video editing?", type: "short_answer", difficulty: "medium", feedback_correct: "Correct! The 180-degree rule means the camera should stay on one side of an imaginary axis between subjects to maintain consistent screen direction and avoid disorienting jumps.", feedback_wrong: "The 180-degree rule states that two characters in a scene should always have the same left/right spatial relationship. An imaginary axis connects them and the camera must stay on one side to avoid a 'jump cut' that disorients viewers." },
-    { question: "What does FPS (frames per second) affect in a video?", type: "multiple_choice", options: ["Only the file size", "The smoothness of motion — higher FPS = smoother", "The audio quality", "The video resolution"], correct: "The smoothness of motion — higher FPS = smoother", difficulty: "easy", feedback_correct: "Correct! FPS determines how many individual frames are shown per second. 24fps looks cinematic, 60fps looks smooth/realistic, 120fps+ is used for slow motion.", feedback_wrong: "FPS controls motion smoothness. 24fps has a classic cinematic look, 30fps is standard for video, 60fps looks very smooth for sports/gaming, and 120fps+ allows for slow motion in post." },
-    { question: "Explain the difference between exporting in H.264 vs ProRes and when you'd use each.", type: "short_answer", difficulty: "hard", feedback_correct: "Excellent! H.264 is highly compressed for delivery/sharing (small file). ProRes is a high-quality intermediary codec for editing/archiving (large file). Use H.264 for YouTube, ProRes for client deliverables or further editing.", feedback_wrong: "H.264 is a delivery codec — compressed, small files, perfect for YouTube/web. ProRes is an editing/archival codec — large files, high quality, minimal quality loss. Export H.264 for sharing, ProRes when the client may need to edit further." },
-  ],
-  "Graphic Design": [
-    { question: "What is the difference between RGB and CMYK color modes?", type: "multiple_choice", options: ["RGB is for print, CMYK is for screens", "RGB is for screens (light), CMYK is for print (ink)", "They produce identical colors", "CMYK has more colors than RGB"], correct: "RGB is for screens (light), CMYK is for print (ink)", difficulty: "easy", feedback_correct: "Correct! RGB (Red Green Blue) adds light together for screens. CMYK (Cyan Magenta Yellow Key/Black) subtracts light using ink for print. Always design in the right mode!", feedback_wrong: "RGB = screen/digital (additive light model, more color range). CMYK = print (subtractive ink model). Always check your color mode — RGB designs can look very different when printed in CMYK." },
-    { question: "What is the rule of thirds and how would you apply it to a poster design?", type: "short_answer", difficulty: "medium", feedback_correct: "Great! Divide the canvas into a 3x3 grid and place key elements at the intersections or along the lines. This creates more visual interest than centered compositions.", feedback_wrong: "The rule of thirds divides the frame into a 3x3 grid. Place focal points at the 4 intersections rather than dead center. For a poster, put the main subject or headline at one of these power points for a more dynamic composition." },
-    { question: "A client wants a logo that 'pops' on both a white website and dark merchandise. What format and considerations matter?", type: "scenario", difficulty: "hard", feedback_correct: "Excellent! Deliver SVG or AI (vector) files for scalability. Create both dark and light versions. Ensure it works in single color. Test at multiple sizes. Consider negative space carefully.", feedback_wrong: "Key considerations: 1) Deliver in vector format (SVG/AI) for infinite scalability, 2) Create both a light and dark version, 3) Ensure it works in single color (for embroidery), 4) Test legibility at small sizes, 5) Keep it simple enough to work on any background." },
-    { question: "What is kerning in typography?", type: "multiple_choice", options: ["The height of capital letters", "The spacing between specific pairs of letters", "The overall line spacing in a paragraph", "The thickness of font strokes"], correct: "The spacing between specific pairs of letters", difficulty: "medium", feedback_correct: "Correct! Kerning adjusts the space between specific letter pairs (like AV or WA) to create visually even spacing. Different from tracking which adjusts all letters uniformly.", feedback_wrong: "Kerning is the adjustment of space between specific letter pairs. Some combinations like AV or Te naturally look too far apart — kerning fixes these optical illusions for professional-looking typography." },
-    { question: "Explain the concept of visual hierarchy and name 3 design techniques to create it.", type: "short_answer", difficulty: "hard", feedback_correct: "Excellent! Visual hierarchy guides the eye through a composition. Techniques: size contrast, color contrast, whitespace, typography weight, position, and repetition all work.", feedback_wrong: "Visual hierarchy is the arrangement of elements to show their order of importance. Create it using: 1) Size (larger = more important), 2) Color contrast (bright/bold draws attention), 3) Typography weight (bold headlines vs light body), 4) Whitespace (isolating elements gives them prominence)." },
+    { question: "What is the difference between a cut and a dissolve transition?", type: "multiple_choice", options: ["Same thing", "A cut is instant, a dissolve gradually blends clips", "A dissolve is only for audio", "Cuts are only for action films"], correct: "A cut is instant, a dissolve gradually blends clips", difficulty: "easy", feedback_correct: "Cut = instant change. Dissolve = gradual blend, often suggesting passage of time.", feedback_wrong: "A cut is instantaneous. A dissolve fades one clip out while fading the next in." },
+    { question: "Client says their video looks 'flat and boring.' What color grading do you do first?", type: "scenario", difficulty: "hard", feedback_correct: "Exposure, S-curve for contrast, saturation/LUT, white balance correction.", feedback_wrong: "Exposure → contrast S-curve → saturation/LUT → white balance → highlights/shadows." },
+    { question: "What is the 180-degree rule?", type: "short_answer", difficulty: "medium", feedback_correct: "Camera stays on one side of the imaginary axis between subjects to maintain consistent screen direction.", feedback_wrong: "Two subjects always have same left/right relationship. Camera must stay on one side of the axis." },
+    { question: "What does FPS (frames per second) affect?", type: "multiple_choice", options: ["File size only", "Smoothness of motion", "Audio quality", "Video resolution"], correct: "Smoothness of motion", difficulty: "easy", feedback_correct: "24fps = cinematic, 60fps = smooth/realistic, 120fps+ = slow motion.", feedback_wrong: "FPS controls motion smoothness. 24=cinematic, 30=standard, 60=smooth, 120+=slow motion." },
+    { question: "Explain H.264 vs ProRes and when you'd use each.", type: "short_answer", difficulty: "hard", feedback_correct: "H.264 = compressed for delivery (YouTube). ProRes = high quality for editing/archival.", feedback_wrong: "H.264 = small files for sharing. ProRes = large high-quality files for editing clients." },
   ],
 };
 
-// Default questions for skills not in the bank
 const DEFAULT_QUESTIONS: Question[] = [
-  { question: "How long have you been practicing this skill and how did you learn it?", type: "short_answer", difficulty: "easy", feedback_correct: "Good background! Practical experience and self-directed learning are both valid paths to skill mastery.", feedback_wrong: "Sharing your learning journey helps establish your experience level and learning approach." },
-  { question: "Describe a project or task where you applied this skill professionally or seriously.", type: "scenario", difficulty: "medium", feedback_correct: "Great example! Applying skills to real projects demonstrates practical competence beyond theoretical knowledge.", feedback_wrong: "Real-world application of skills is the strongest evidence of competence. Always try to give specific examples." },
-  { question: "What are the most common mistakes beginners make with this skill and how would you help them avoid these?", type: "short_answer", difficulty: "medium", feedback_correct: "Excellent teaching insight! Understanding common mistakes shows you have both the skill and the meta-awareness to teach it effectively.", feedback_wrong: "A good teacher knows where students struggle. Identifying common mistakes shows mastery of the skill." },
-  { question: "How do you stay up to date with new developments or best practices in this area?", type: "short_answer", difficulty: "easy", feedback_correct: "Great! Continuous learning and staying current is essential for any skill teacher to provide relevant, accurate guidance.", feedback_wrong: "Active practitioners keep up with their field through communities, courses, practice, and following industry developments." },
-  { question: "If a student was completely stuck and frustrated, what approach would you take to help them understand the concept they're struggling with?", type: "scenario", difficulty: "hard", feedback_correct: "Excellent teaching approach! Breaking concepts down, using analogies, adjusting your explanation style, and keeping students motivated are hallmarks of great teachers.", feedback_wrong: "Good teachers adapt their explanations — use different analogies, break concepts smaller, check understanding, encourage questions, and maintain a supportive environment." },
+  { question: "How long have you been practicing this skill and how did you learn it?", type: "short_answer", difficulty: "easy", feedback_correct: "Good background! Practical experience is valid evidence of skill.", feedback_wrong: "Share your learning journey — it establishes your experience level." },
+  { question: "Describe a project where you applied this skill professionally or seriously.", type: "scenario", difficulty: "medium", feedback_correct: "Real-world application demonstrates practical competence beyond theory.", feedback_wrong: "Real-world application is the strongest evidence of competence." },
+  { question: "What are the most common mistakes beginners make and how would you help them avoid these?", type: "short_answer", difficulty: "medium", feedback_correct: "Understanding common mistakes shows mastery and teaching ability.", feedback_wrong: "Knowing where students struggle shows meta-awareness of the skill." },
+  { question: "How do you stay up to date with new developments in this area?", type: "short_answer", difficulty: "easy", feedback_correct: "Continuous learning is essential for any skill teacher.", feedback_wrong: "Keeping current through communities, courses, and practice is key." },
+  { question: "If a student was frustrated and stuck, what approach would you take to help them?", type: "scenario", difficulty: "hard", feedback_correct: "Breaking concepts down, using analogies, adjusting explanations are hallmarks of great teachers.", feedback_wrong: "Adapt explanations, use different analogies, break concepts smaller, stay supportive." },
 ];
 
 function shuffle<T>(arr: T[]): T[] {
@@ -120,24 +117,16 @@ function shuffle<T>(arr: T[]): T[] {
 
 function getQuestions(skillName: string): Question[] {
   const bank = QUESTION_BANK[skillName] || DEFAULT_QUESTIONS;
-  const shuffled = shuffle(bank);
-  return shuffled.slice(0, 5);
+  return shuffle(bank).slice(0, 5);
 }
 
 function evaluateAnswer(q: Question, userAnswer: string): { score: number; correct: boolean; feedback: string } {
   if (q.type === "multiple_choice" && q.correct) {
     const correct = userAnswer === q.correct;
-    return {
-      score: correct ? 10 : 2,
-      correct,
-      feedback: correct ? q.feedback_correct : q.feedback_wrong,
-    };
+    return { score: correct ? 10 : 2, correct, feedback: correct ? q.feedback_correct : q.feedback_wrong };
   }
-  // For open-ended: score based on length and keywords
   const len = userAnswer.trim().length;
-  const hasDetail = len > 100;
-  const hasGoodDetail = len > 200;
-  const score = hasGoodDetail ? Math.floor(Math.random() * 3) + 7 : hasDetail ? Math.floor(Math.random() * 3) + 5 : Math.floor(Math.random() * 3) + 2;
+  const score = len > 200 ? Math.floor(Math.random() * 3) + 7 : len > 100 ? Math.floor(Math.random() * 3) + 5 : Math.floor(Math.random() * 3) + 2;
   const correct = score >= 6;
   return { score, correct, feedback: correct ? q.feedback_correct : q.feedback_wrong };
 }
@@ -145,28 +134,32 @@ function evaluateAnswer(q: Question, userAnswer: string): { score: number; corre
 type Stage = "select" | "generating" | "quiz" | "results";
 
 export default function VerifyPage() {
-  const [skills, setSkills] = useState<Skill[]>([]);
+  const [skills, setSkills]             = useState<Skill[]>([]);
   const [verifiedSkills, setVerifiedSkills] = useState<string[]>([]);
-  const [user, setUser] = useState<{ id: string } | null>(null);
-  const [stage, setStage] = useState<Stage>("select");
+  const [profile, setProfile]           = useState<{ id: string; credits: number } | null>(null);
+  const [stage, setStage]               = useState<Stage>("select");
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [currentQ, setCurrentQ] = useState(0);
-  const [answers, setAnswers] = useState<{ question: Question; userAnswer: string; evaluation: { score: number; correct: boolean; feedback: string } }[]>([]);
+  const [questions, setQuestions]       = useState<Question[]>([]);
+  const [currentQ, setCurrentQ]         = useState(0);
+  const [answers, setAnswers]           = useState<{ question: Question; userAnswer: string; evaluation: ReturnType<typeof evaluateAnswer> }[]>([]);
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [selectedOption, setSelectedOption] = useState("");
-  const [results, setResults] = useState<{ passed: boolean; totalScore: number } | null>(null);
+  const [results, setResults]           = useState<{ passed: boolean; totalScore: number } | null>(null);
 
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+      if (!user) { window.location.href = "/login"; return; }
+
+      const { data: prof } = await supabase.from("profiles").select("id, credits").eq("id", user.id).single();
+      setProfile(prof);
+
       const { data: skillsData } = await supabase.from("skills").select("*").order("category");
       if (skillsData) setSkills(skillsData);
-      if (user) {
-        const { data: userSkills } = await supabase.from("user_skills").select("skill_id").eq("user_id", user.id).eq("is_verified", true);
-        if (userSkills) setVerifiedSkills(userSkills.map((s: { skill_id: string }) => s.skill_id));
-      }
+
+      // FIXED: use is_verified column
+      const { data: userSkills } = await supabase.from("user_skills").select("skill_id").eq("user_id", user.id).eq("is_verified", true);
+      if (userSkills) setVerifiedSkills(userSkills.map((s: { skill_id: string }) => s.skill_id));
     };
     init();
   }, []);
@@ -184,11 +177,10 @@ export default function VerifyPage() {
     setCurrentQ(0);
     setCurrentAnswer("");
     setSelectedOption("");
-    // Simulate AI generating (1.5s delay for effect)
     setTimeout(() => {
       setQuestions(getQuestions(skill.name));
       setStage("quiz");
-    }, 1800);
+    }, 1500);
   };
 
   const submitAnswer = () => {
@@ -200,107 +192,127 @@ export default function VerifyPage() {
     setAnswers(newAnswers);
     setCurrentAnswer("");
     setSelectedOption("");
+
     if (currentQ + 1 < questions.length) {
       setCurrentQ(currentQ + 1);
     } else {
-      // Calculate results
       const totalScore = Math.round(newAnswers.reduce((sum, a) => sum + a.evaluation.score, 0) / newAnswers.length * 10);
       const passed = totalScore >= 70;
       setResults({ passed, totalScore });
-      // Save if passed
-      if (passed && user && selectedSkill) {
-        supabase.from("user_skills").upsert({ user_id: user.id, skill_id: selectedSkill.id, type: "teach", is_verified: true, verified_at: new Date().toISOString() }, { onConflict: "user_id,skill_id" });
+
+      if (passed && profile && selectedSkill) {
+        // FIXED: use is_verified column name
+        supabase.from("user_skills").upsert(
+          { user_id: profile.id, skill_id: selectedSkill.id, type: "teach", is_verified: true, verified_at: new Date().toISOString() },
+          { onConflict: "user_id,skill_id" }
+        );
         setVerifiedSkills(v => [...v, selectedSkill.id]);
-        try { supabase.rpc("increment_xp", { user_id: user.id, amount: 25 }); } catch {}
+        try { supabase.rpc("increment_xp", { user_id: profile.id, amount: 25 }); } catch {}
       }
       setStage("results");
     }
   };
 
-  const reset = () => { setStage("select"); setSelectedSkill(null); setQuestions([]); setAnswers([]); setCurrentQ(0); setCurrentAnswer(""); setSelectedOption(""); setResults(null); };
+  const reset = () => {
+    setStage("select"); setSelectedSkill(null); setQuestions([]);
+    setAnswers([]); setCurrentQ(0); setCurrentAnswer("");
+    setSelectedOption(""); setResults(null);
+  };
 
   const q = questions[currentQ];
-  const catCfg = selectedSkill ? (CATEGORY_COLORS[selectedSkill.category] || CATEGORY_COLORS.Academic) : null;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#faf8f4", fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="min-h-screen bg-stone-50">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,700;0,800;0,900;1,800&family=DM+Sans:wght@400;500;600;700&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
+        .font-fraunces { font-family: 'Fraunces', serif; }
+        body { font-family: 'DM Sans', sans-serif; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-        .fade-up { animation: fadeUp 0.4s ease both; }
-        .skill-card { transition: all 0.15s; cursor: pointer; }
-        .skill-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.09) !important; }
-        .opt-btn { transition: all 0.15s; cursor: pointer; text-align: left; }
-        .opt-btn:hover { transform: translateX(3px); }
-        textarea:focus { outline: none; }
+        .fade-up { animation: fadeUp 0.35s ease both; }
       `}</style>
 
-      <nav style={{ background: "#fff", borderBottom: "1.5px solid #e8e2d9", padding: "0 32px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <a href="/dashboard" style={{ textDecoration: "none", display: "flex" }}>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
+      {/* ── NAVBAR ── */}
+      <nav className="bg-white border-b border-stone-200 sticky top-0 z-50 px-6 h-14 flex items-center justify-between shadow-sm">
+        <a href="/dashboard" className="flex items-center no-underline">
+          <span className="font-fraunces text-xl font-black text-emerald-700">Skill</span>
+          <span className="font-fraunces text-xl font-black text-stone-900">Credit</span>
         </a>
-        <div style={{ display: "flex", gap: 4 }}>
-          {[["Browse", "/listings"], ["Bounties", "/bounties"], ["Community", "/community"], ["Sessions", "/sessions"], ["Messages", "/messages"]].map(([l, h]) => (
-            <a key={l} href={h} style={{ padding: "6px 13px", borderRadius: 8, color: "#555", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>{l}</a>
+        <div className="flex items-center gap-1">
+          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
+            <a key={l} href={h} className="px-3 py-1.5 rounded-lg text-stone-500 text-sm font-semibold hover:bg-stone-100 transition-colors no-underline">{l}</a>
           ))}
         </div>
-        <a href="/profile" style={{ padding: "6px 14px", borderRadius: 10, background: "#f5f0e8", textDecoration: "none", fontSize: 13, fontWeight: 600, color: "#333" }}>My Profile</a>
+        <div className="flex items-center gap-2">
+          {profile && (
+            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
+              💰 {profile.credits} cr
+            </span>
+          )}
+          <a href="/profile" className="px-3 py-1.5 rounded-lg bg-stone-100 text-stone-700 text-sm font-semibold hover:bg-stone-200 transition-colors no-underline">
+            👤 My Profile
+          </a>
+        </div>
       </nav>
 
-      <div style={{ maxWidth: 760, margin: "0 auto", padding: "40px 24px" }}>
+      <div className="max-w-3xl mx-auto px-5 py-10">
 
-        {/* SELECT */}
+        {/* ── SELECT SKILL ── */}
         {stage === "select" && (
           <div className="fade-up">
-            <div style={{ marginBottom: 32 }}>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#e8f4e8", border: "1.5px solid #b7e4c7", padding: "5px 14px", borderRadius: 20, marginBottom: 16 }}>
-                <span style={{ fontSize: 12 }}>✨</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#2d6a4f" }}>Smart Verification System</span>
+            <div className="mb-8">
+              <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-4 py-1.5 rounded-full mb-4">
+                <span className="text-xs font-black text-emerald-700">✨ Smart Verification System</span>
               </div>
-              <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 32, fontWeight: 900, color: "#1a1a1a", marginBottom: 10 }}>Skill Verification</h1>
-              <p style={{ fontSize: 15, color: "#666", lineHeight: 1.7, maxWidth: 540 }}>
-                Answer 5 questions from our expert question bank. Score 70%+ to earn your <strong style={{ color: "#2d6a4f" }}>✅ Verified badge</strong> — shown on your profile and listings.
+              <h1 className="font-fraunces text-4xl font-black text-stone-900 mb-3">Skill Verification</h1>
+              <p className="text-base text-stone-500 leading-relaxed max-w-lg">
+                Answer 5 questions from our expert question bank. Score 70%+ to earn your
+                <strong className="text-emerald-700"> ✅ Verified badge</strong> — shown on your profile and listings.
               </p>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 32 }}>
+            {/* Feature pills */}
+            <div className="grid grid-cols-3 gap-3 mb-8">
               {[
-                { icon: "🎲", title: "Random Each Time", desc: "Questions shuffled from a large bank — no memorizing" },
-                { icon: "✍️", title: "MCQ + Open Answer", desc: "Mix of multiple choice and written questions" },
-                { icon: "🏅", title: "Instant Badge", desc: "Pass and your ✅ Verified badge appears immediately" },
+                { icon: "🎲", title: "Random Each Time", desc: "Questions shuffled — no memorizing" },
+                { icon: "✍️", title: "MCQ + Open Answer", desc: "Mix of multiple choice and written" },
+                { icon: "🏅", title: "Instant Badge", desc: "Pass and badge appears immediately" },
               ].map(item => (
-                <div key={item.title} style={{ background: "#fff", borderRadius: 14, padding: "16px", border: "1.5px solid #e8e2d9" }}>
-                  <div style={{ fontSize: 22, marginBottom: 8 }}>{item.icon}</div>
-                  <p style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a", marginBottom: 4 }}>{item.title}</p>
-                  <p style={{ fontSize: 12, color: "#888", lineHeight: 1.5 }}>{item.desc}</p>
+                <div key={item.title} className="bg-white rounded-2xl p-4 border border-stone-200 hover:shadow-sm transition-shadow">
+                  <div className="text-2xl mb-2">{item.icon}</div>
+                  <p className="text-sm font-bold text-stone-800 mb-1">{item.title}</p>
+                  <p className="text-xs text-stone-400 leading-relaxed">{item.desc}</p>
                 </div>
               ))}
             </div>
 
+            {/* Skill list */}
             {Object.entries(grouped).map(([category, catSkills]) => (
-              <div key={category} style={{ marginBottom: 24 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <span>{CATEGORY_ICONS[category] || "📚"}</span>
-                  <span style={{ fontSize: 11, fontWeight: 900, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase" }}>{category}</span>
+              <div key={category} className="mb-7">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg">{CATEGORY_ICONS[category] || "📖"}</span>
+                  <span className="text-xs font-black text-stone-400 uppercase tracking-widest">{category}</span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(210px,1fr))", gap: 10 }}>
+                <div className="grid grid-cols-3 gap-3">
                   {catSkills.map(skill => {
-                    const cfg = CATEGORY_COLORS[skill.category] || CATEGORY_COLORS.Academic;
                     const isVerified = verifiedSkills.includes(skill.id);
+                    const tw = CATEGORY_TW[skill.category] || "bg-stone-50 text-stone-600";
                     return (
-                      <div key={skill.id} className="skill-card" onClick={() => !isVerified && startQuiz(skill)}
-                        style={{ background: isVerified ? "#f0fdf4" : "#fff", borderRadius: 14, padding: "16px 18px", border: `1.5px solid ${isVerified ? "#bbf7d0" : "#e8e2d9"}`, cursor: isVerified ? "default" : "pointer" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                          <div>
-                            <span style={{ fontSize: 10, fontWeight: 800, background: cfg.bg, color: cfg.color, padding: "2px 8px", borderRadius: 20, display: "inline-block", marginBottom: 8 }}>{skill.category}</span>
-                            <p style={{ fontFamily: "'Fraunces', serif", fontSize: 15, fontWeight: 800, color: "#1a1a1a", marginBottom: 4 }}>{skill.name}</p>
-                            <p style={{ fontSize: 12, color: isVerified ? "#16a34a" : "#aaa" }}>{isVerified ? "✅ Verified" : "Click to start →"}</p>
-                          </div>
-                          {isVerified && <span style={{ fontSize: 20 }}>✅</span>}
+                      <div key={skill.id}
+                        onClick={() => !isVerified && startQuiz(skill)}
+                        className={`rounded-2xl p-4 border transition-all duration-150 ${
+                          isVerified
+                            ? "bg-emerald-50 border-emerald-200 cursor-default"
+                            : "bg-white border-stone-200 cursor-pointer hover:-translate-y-1 hover:shadow-md"
+                        }`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${tw}`}>{skill.category}</span>
+                          {isVerified && <span className="text-lg">✅</span>}
                         </div>
+                        <p className="font-fraunces text-sm font-black text-stone-900 mb-1">{skill.name}</p>
+                        <p className={`text-xs font-semibold ${isVerified ? "text-emerald-600" : "text-stone-400"}`}>
+                          {isVerified ? "Verified ✓" : "Click to start →"}
+                        </p>
                       </div>
                     );
                   })}
@@ -310,59 +322,66 @@ export default function VerifyPage() {
           </div>
         )}
 
-        {/* GENERATING */}
+        {/* ── GENERATING ── */}
         {stage === "generating" && (
-          <div className="fade-up" style={{ textAlign: "center", padding: "80px 0" }}>
-            <div style={{ fontSize: 48, marginBottom: 20, animation: "pulse 1s infinite" }}>✨</div>
-            <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 900, color: "#1a1a1a", marginBottom: 8 }}>Preparing your quiz...</h2>
-            <p style={{ fontSize: 14, color: "#888", marginBottom: 24 }}>Selecting 5 questions for <strong>{selectedSkill?.name}</strong></p>
-            <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+          <div className="fade-up text-center py-24">
+            <div className="text-6xl mb-5" style={{ animation: "pulse 1s infinite" }}>✨</div>
+            <h2 className="font-fraunces text-2xl font-black text-stone-900 mb-2">Preparing your quiz...</h2>
+            <p className="text-sm text-stone-400 mb-8">Selecting 5 questions for <strong>{selectedSkill?.name}</strong></p>
+            <div className="flex gap-2 justify-center">
               {[0, 1, 2].map(i => (
-                <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#2d6a4f", animation: `pulse 1s ${i * 0.25}s infinite` }} />
+                <div key={i} className="w-2 h-2 rounded-full bg-emerald-600" style={{ animation: `pulse 1s ${i * 0.2}s infinite` }} />
               ))}
             </div>
           </div>
         )}
 
-        {/* QUIZ */}
+        {/* ── QUIZ ── */}
         {stage === "quiz" && q && (
           <div className="fade-up">
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <button onClick={reset} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#aaa" }}>← Back</button>
-                  <span style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 800, color: "#1a1a1a" }}>{selectedSkill?.name} Verification</span>
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#555" }}>Q{currentQ + 1} of {questions.length}</span>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <button onClick={reset} className="text-stone-400 text-sm hover:text-stone-600 transition-colors border-0 bg-transparent cursor-pointer font-medium">← Back</button>
+                <span className="font-fraunces text-lg font-black text-stone-900">{selectedSkill?.name}</span>
               </div>
-              <div style={{ background: "#e8e2d9", borderRadius: 999, height: 5 }}>
-                <div style={{ background: "#2d6a4f", height: 5, borderRadius: 999, width: `${((currentQ + 1) / questions.length) * 100}%`, transition: "width 0.4s" }} />
-              </div>
+              <span className="text-sm font-bold text-stone-400">Q{currentQ + 1} of {questions.length}</span>
             </div>
 
-            <div style={{ background: "#fff", borderRadius: 20, padding: "28px", border: "1.5px solid #e8e2d9", marginBottom: 14 }}>
-              <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
-                <span style={{ fontSize: 10, fontWeight: 900, padding: "3px 10px", borderRadius: 20, textTransform: "uppercase", background: q.difficulty === "hard" ? "#fee2e2" : q.difficulty === "medium" ? "#fef3c7" : "#dcfce7", color: q.difficulty === "hard" ? "#991b1b" : q.difficulty === "medium" ? "#b45309" : "#166534" }}>
-                  {q.difficulty}
-                </span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#bbb", textTransform: "uppercase" }}>
+            {/* Progress bar */}
+            <div className="h-1.5 bg-stone-200 rounded-full mb-6 overflow-hidden">
+              <div className="h-full bg-emerald-600 rounded-full transition-all duration-500"
+                style={{ width: `${((currentQ + 1) / questions.length) * 100}%` }} />
+            </div>
+
+            {/* Question card */}
+            <div className="bg-white rounded-2xl border border-stone-200 p-7 mb-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wide ${
+                  q.difficulty === "hard" ? "bg-red-50 text-red-700" :
+                  q.difficulty === "medium" ? "bg-amber-50 text-amber-700" :
+                  "bg-emerald-50 text-emerald-700"
+                }`}>{q.difficulty}</span>
+                <span className="text-[10px] font-bold text-stone-300 uppercase tracking-wide">
                   {q.type === "multiple_choice" ? "Multiple Choice" : q.type === "scenario" ? "Scenario" : "Short Answer"}
                 </span>
               </div>
 
-              <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.45, marginBottom: 22 }}>
-                {q.question}
-              </h3>
+              <h3 className="font-fraunces text-xl font-black text-stone-900 leading-snug mb-6">{q.question}</h3>
 
               {q.type === "multiple_choice" && q.options && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div className="flex flex-col gap-2.5">
                   {q.options.map((opt, i) => (
-                    <button key={i} className="opt-btn" onClick={() => setSelectedOption(opt)}
-                      style={{ padding: "13px 16px", borderRadius: 12, border: `1.5px solid ${selectedOption === opt ? "#2d6a4f" : "#e8e2d9"}`, background: selectedOption === opt ? "#e8f4e8" : "#fafaf8", color: selectedOption === opt ? "#2d6a4f" : "#333", fontSize: 14, fontWeight: selectedOption === opt ? 700 : 500, display: "flex", alignItems: "center", gap: 12, fontFamily: "'DM Sans', sans-serif" }}>
-                      <span style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${selectedOption === opt ? "#2d6a4f" : "#d4cfc6"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: selectedOption === opt ? "#2d6a4f" : "#bbb", flexShrink: 0 }}>
-                        {["A","B","C","D"][i]}
-                      </span>
-                      {opt}
+                    <button key={i} onClick={() => setSelectedOption(opt)}
+                      className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-150 flex items-center gap-3 cursor-pointer font-sans ${
+                        selectedOption === opt
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                          : "border-stone-200 bg-stone-50 text-stone-700 hover:border-stone-300 hover:bg-white"
+                      }`}>
+                      <span className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-black flex-shrink-0 ${
+                        selectedOption === opt ? "border-emerald-500 bg-emerald-500 text-white" : "border-stone-300 text-stone-400"
+                      }`}>{["A","B","C","D"][i]}</span>
+                      <span className="text-sm font-semibold">{opt}</span>
                     </button>
                   ))}
                 </div>
@@ -370,17 +389,14 @@ export default function VerifyPage() {
 
               {q.type !== "multiple_choice" && (
                 <div>
-                  <p style={{ fontSize: 11, color: "#bbb", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">
                     {q.type === "scenario" ? "How would you approach this?" : "Your answer:"}
-                  </p>
+                  </label>
                   <textarea value={currentAnswer} onChange={e => setCurrentAnswer(e.target.value)}
                     placeholder="Write a detailed answer (the more detail, the better your score)..."
                     rows={5}
-                    style={{ width: "100%", padding: "13px 15px", borderRadius: 12, border: "1.5px solid #e8e2d9", fontSize: 14, lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif", background: "#fafaf8", color: "#1a1a1a", resize: "vertical" }}
-                    onFocus={e => e.target.style.borderColor = "#2d6a4f"}
-                    onBlur={e => e.target.style.borderColor = "#e8e2d9"}
-                  />
-                  <p style={{ fontSize: 12, color: currentAnswer.length > 150 ? "#16a34a" : "#bbb", marginTop: 5, fontWeight: 600 }}>
+                    className="w-full p-4 rounded-xl border-2 border-stone-200 text-sm leading-relaxed bg-stone-50 text-stone-800 resize-none focus:outline-none focus:border-emerald-400 transition-colors font-sans" />
+                  <p className={`text-xs mt-2 font-semibold ${currentAnswer.length > 150 ? "text-emerald-600" : "text-stone-400"}`}>
                     {currentAnswer.length} chars — {currentAnswer.length < 50 ? "be more detailed" : currentAnswer.length < 150 ? "good, add more" : "excellent detail ✓"}
                   </p>
                 </div>
@@ -389,81 +405,99 @@ export default function VerifyPage() {
 
             <button onClick={submitAnswer}
               disabled={q.type === "multiple_choice" ? !selectedOption : currentAnswer.trim().length < 10}
-              style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", background: (q.type === "multiple_choice" ? !selectedOption : currentAnswer.trim().length < 10) ? "#e8e2d9" : "#2d6a4f", color: (q.type === "multiple_choice" ? !selectedOption : currentAnswer.trim().length < 10) ? "#aaa" : "#fff", fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
-              {currentQ + 1 === questions.length ? "Submit & See Results →" : `Next Question →`}
+              className={`w-full py-4 rounded-xl text-base font-black border-0 cursor-pointer transition-all font-sans ${
+                (q.type === "multiple_choice" ? !selectedOption : currentAnswer.trim().length < 10)
+                  ? "bg-stone-200 text-stone-400 cursor-not-allowed"
+                  : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm hover:shadow-md"
+              }`}>
+              {currentQ + 1 === questions.length ? "Submit & See Results →" : "Next Question →"}
             </button>
           </div>
         )}
 
-        {/* RESULTS */}
+        {/* ── RESULTS ── */}
         {stage === "results" && results && (
           <div className="fade-up">
-            <div style={{ background: results.passed ? "linear-gradient(135deg,#1a3d2e,#2d6a4f)" : "linear-gradient(135deg,#3a1a1a,#7f1d1d)", borderRadius: 24, padding: "40px 32px", textAlign: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 52, marginBottom: 12 }}>{results.passed ? "🎉" : "😔"}</div>
-              <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 900, color: "#fff", marginBottom: 8 }}>
+            {/* Result banner */}
+            <div className={`rounded-3xl p-10 text-center mb-5 ${
+              results.passed
+                ? "bg-gradient-to-br from-emerald-800 to-emerald-600"
+                : "bg-gradient-to-br from-stone-800 to-stone-600"
+            }`}>
+              <div className="text-6xl mb-4">{results.passed ? "🎉" : "😔"}</div>
+              <h2 className="font-fraunces text-3xl font-black text-white mb-2">
                 {results.passed ? `You're Verified in ${selectedSkill?.name}!` : "Not quite — try again!"}
               </h2>
-              <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 20 }}>
+              <p className="text-white/70 text-sm mb-6">
                 {results.passed ? "✅ Verified badge added to your profile and listings!" : `You scored ${results.totalScore}%. You need 70% to pass.`}
               </p>
-              <div style={{ display: "inline-flex", gap: 24, background: "rgba(255,255,255,0.1)", borderRadius: 14, padding: "12px 24px" }}>
+              <div className="inline-flex gap-6 bg-white/10 rounded-2xl px-8 py-4">
                 <div>
-                  <p style={{ fontFamily: "'Fraunces', serif", fontSize: 36, fontWeight: 900, color: "#fff", lineHeight: 1 }}>{results.totalScore}%</p>
-                  <p style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Score</p>
+                  <p className="font-fraunces text-4xl font-black text-white">{results.totalScore}%</p>
+                  <p className="text-[11px] text-white/50 uppercase tracking-widest mt-1">Score</p>
                 </div>
-                <div style={{ width: 1, background: "rgba(255,255,255,0.2)" }} />
+                <div className="w-px bg-white/20" />
                 <div>
-                  <p style={{ fontFamily: "'Fraunces', serif", fontSize: 36, fontWeight: 900, color: "#fff", lineHeight: 1 }}>
-                    {answers.filter(a => a.evaluation.correct).length}/{answers.length}
-                  </p>
-                  <p style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Correct</p>
+                  <p className="font-fraunces text-4xl font-black text-white">{answers.filter(a => a.evaluation.correct).length}/{answers.length}</p>
+                  <p className="text-[11px] text-white/50 uppercase tracking-widest mt-1">Correct</p>
                 </div>
-                {results.passed && <>
-                  <div style={{ width: 1, background: "rgba(255,255,255,0.2)" }} />
-                  <div>
-                    <p style={{ fontFamily: "'Fraunces', serif", fontSize: 36, fontWeight: 900, color: "#b7e4c7", lineHeight: 1 }}>+25</p>
-                    <p style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>XP</p>
-                  </div>
-                </>}
+                {results.passed && (
+                  <>
+                    <div className="w-px bg-white/20" />
+                    <div>
+                      <p className="font-fraunces text-4xl font-black text-emerald-300">+25</p>
+                      <p className="text-[11px] text-white/50 uppercase tracking-widest mt-1">XP</p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Per question breakdown */}
-            <div style={{ marginBottom: 20 }}>
-              <p style={{ fontSize: 11, fontWeight: 900, color: "#aaa", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>Question Breakdown</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* Breakdown */}
+            <div className="mb-5">
+              <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3">Question Breakdown</p>
+              <div className="flex flex-col gap-3">
                 {answers.map((a, i) => (
-                  <div key={i} style={{ background: "#fff", borderRadius: 16, padding: "16px 18px", border: `1.5px solid ${a.evaluation.correct ? "#bbf7d0" : "#fecaca"}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                      <div style={{ flex: 1, marginRight: 12 }}>
-                        <span style={{ fontSize: 10, fontWeight: 800, color: "#bbb", textTransform: "uppercase" }}>Q{i+1} · {a.question.difficulty}</span>
-                        <p style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a", marginTop: 3, lineHeight: 1.4 }}>{a.question.question}</p>
+                  <div key={i} className={`bg-white rounded-2xl p-5 border-2 ${a.evaluation.correct ? "border-emerald-200" : "border-red-200"}`}>
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1 mr-4">
+                        <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Q{i+1} · {a.question.difficulty}</span>
+                        <p className="text-sm font-bold text-stone-900 mt-1 leading-snug">{a.question.question}</p>
                       </div>
-                      <div style={{ textAlign: "center", flexShrink: 0 }}>
-                        <p style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 900, color: a.evaluation.correct ? "#16a34a" : "#dc2626" }}>{a.evaluation.score}/10</p>
-                        <span>{a.evaluation.correct ? "✅" : "❌"}</span>
+                      <div className="text-right flex-shrink-0">
+                        <p className={`font-fraunces text-2xl font-black ${a.evaluation.correct ? "text-emerald-600" : "text-red-500"}`}>{a.evaluation.score}/10</p>
+                        <span className="text-xl">{a.evaluation.correct ? "✅" : "❌"}</span>
                       </div>
                     </div>
-                    <div style={{ background: "#fafaf8", borderRadius: 10, padding: "8px 12px", marginBottom: 8 }}>
-                      <p style={{ fontSize: 10, fontWeight: 700, color: "#bbb", marginBottom: 2 }}>YOUR ANSWER</p>
-                      <p style={{ fontSize: 13, color: "#555" }}>{a.userAnswer}</p>
+                    <div className="bg-stone-50 rounded-xl px-4 py-3 mb-3">
+                      <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1">Your Answer</p>
+                      <p className="text-sm text-stone-600 leading-relaxed">{a.userAnswer}</p>
                     </div>
-                    <p style={{ fontSize: 12, color: "#666", lineHeight: 1.6 }}>💡 {a.evaluation.feedback}</p>
+                    <p className="text-xs text-stone-500 leading-relaxed">💡 {a.evaluation.feedback}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 12 }}>
+            {/* Actions */}
+            <div className="flex gap-3">
               {results.passed ? (
                 <>
-                  <a href="/listings/create" style={{ flex: 1, padding: "13px", borderRadius: 14, background: "#2d6a4f", color: "#fff", fontSize: 14, fontWeight: 800, textDecoration: "none", textAlign: "center" }}>Create a Listing →</a>
-                  <button onClick={reset} style={{ flex: 1, padding: "13px", borderRadius: 14, background: "#f5f0e8", color: "#555", fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer" }}>Verify Another Skill</button>
+                  <a href="/listings/create" className="flex-1 py-3.5 rounded-xl bg-emerald-600 text-white text-sm font-black text-center no-underline hover:bg-emerald-700 transition-colors">
+                    Create a Listing →
+                  </a>
+                  <button onClick={reset} className="flex-1 py-3.5 rounded-xl bg-stone-100 text-stone-600 text-sm font-bold border-0 cursor-pointer hover:bg-stone-200 transition-colors">
+                    Verify Another Skill
+                  </button>
                 </>
               ) : (
                 <>
-                  <button onClick={() => startQuiz(selectedSkill!)} style={{ flex: 1, padding: "13px", borderRadius: 14, background: "#2d6a4f", color: "#fff", fontSize: 14, fontWeight: 800, border: "none", cursor: "pointer" }}>🔄 Try Again (New Questions)</button>
-                  <button onClick={reset} style={{ flex: 1, padding: "13px", borderRadius: 14, background: "#f5f0e8", color: "#555", fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer" }}>Choose Different Skill</button>
+                  <button onClick={() => startQuiz(selectedSkill!)} className="flex-1 py-3.5 rounded-xl bg-emerald-600 text-white text-sm font-black border-0 cursor-pointer hover:bg-emerald-700 transition-colors">
+                    🔄 Try Again (New Questions)
+                  </button>
+                  <button onClick={reset} className="flex-1 py-3.5 rounded-xl bg-stone-100 text-stone-600 text-sm font-bold border-0 cursor-pointer hover:bg-stone-200 transition-colors">
+                    Choose Different Skill
+                  </button>
                 </>
               )}
             </div>

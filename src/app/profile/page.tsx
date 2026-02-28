@@ -25,7 +25,9 @@ type Transaction = {
   description: string; created_at: string;
 };
 type UserSkill = {
-  id: string; skill_id: string; verified: boolean;
+  id: string;
+  skill_id: string;
+  is_verified: boolean;   // ← FIXED: was "verified"
   verified_at: string | null;
   skills: { name: string; category: string };
 };
@@ -35,6 +37,17 @@ const XP_TO_NEXT: Record<string, number> = {
   Skilled: 1000, Expert: 2000, Master: 4000, Legend: 9999,
 };
 
+// Correct level thresholds (match your DB logic)
+function getLevelFromXP(xp: number): string {
+  if (xp >= 4000) return "Legend";
+  if (xp >= 2000) return "Master";
+  if (xp >= 1000) return "Expert";
+  if (xp >= 600)  return "Skilled";
+  if (xp >= 300)  return "Contributor";
+  if (xp >= 100)  return "Learner";
+  return "Seedling";
+}
+
 const BADGE_ICONS: Record<string, string> = {
   early_adopter: "🌟", rising_teacher: "🥉", skilled_teacher: "🥈",
   top_teacher: "🥇", expert_teacher: "💎", first_session: "📚",
@@ -42,51 +55,56 @@ const BADGE_ICONS: Record<string, string> = {
   helpful_voice: "💬", connector: "👥", on_fire: "🔥",
 };
 
-const FORMAT_CONFIG: Record<string, { bg: string; color: string; label: string }> = {
-  video: { bg: "bg-sky-50",    color: "text-sky-700",    label: "📹 Video" },
-  chat:  { bg: "bg-emerald-50",color: "text-emerald-700",label: "💬 Chat" },
-  docs:  { bg: "bg-violet-50", color: "text-violet-700", label: "📄 Docs" },
-  mixed: { bg: "bg-amber-50",  color: "text-amber-700",  label: "🎨 Mixed" },
+const FORMAT_CONFIG: Record<string, { label: string; tw: string }> = {
+  video: { label: "📹 Video", tw: "bg-sky-50 text-sky-700" },
+  chat:  { label: "💬 Chat",  tw: "bg-emerald-50 text-emerald-700" },
+  docs:  { label: "📄 Docs",  tw: "bg-violet-50 text-violet-700" },
+  mixed: { label: "🎨 Mixed", tw: "bg-amber-50 text-amber-700" },
 };
 
 const TX_ICONS: Record<string, string> = {
   signup_bonus: "🎁", session_earn: "📚", session_spend: "💳",
   bounty_earn: "🏆", bounty_spend: "🎯", referral: "👥",
   challenge: "⚡", purchase: "💰", forum_earn: "💬",
+  topup: "💳",
 };
 
-// Category colors for skill badges
-const CATEGORY_COLORS: Record<string, { bg: string; color: string; border: string }> = {
-  Programming:  { bg: "bg-sky-50",     color: "text-sky-700",     border: "border-sky-200" },
-  Design:       { bg: "bg-pink-50",    color: "text-pink-700",    border: "border-pink-200" },
-  Academic:     { bg: "bg-amber-50",   color: "text-amber-700",   border: "border-amber-200" },
-  Language:     { bg: "bg-emerald-50", color: "text-emerald-700", border: "border-emerald-200" },
-  Music:        { bg: "bg-violet-50",  color: "text-violet-700",  border: "border-violet-200" },
-  Arts:         { bg: "bg-orange-50",  color: "text-orange-700",  border: "border-orange-200" },
-  Media:        { bg: "bg-rose-50",    color: "text-rose-700",    border: "border-rose-200" },
-  Other:        { bg: "bg-stone-50",   color: "text-stone-600",   border: "border-stone-200" },
+const CATEGORY_TW: Record<string, string> = {
+  Programming: "bg-sky-50 text-sky-700 border-sky-200",
+  Design:      "bg-pink-50 text-pink-700 border-pink-200",
+  Academic:    "bg-amber-50 text-amber-700 border-amber-200",
+  Language:    "bg-emerald-50 text-emerald-700 border-emerald-200",
+  Music:       "bg-violet-50 text-violet-700 border-violet-200",
+  Arts:        "bg-orange-50 text-orange-700 border-orange-200",
+  Media:       "bg-rose-50 text-rose-700 border-rose-200",
+  Science:     "bg-teal-50 text-teal-700 border-teal-200",
+  Other:       "bg-stone-50 text-stone-600 border-stone-200",
 };
 
-function getCategoryColor(category: string) {
-  return CATEGORY_COLORS[category] || CATEGORY_COLORS.Other;
+function getCatTW(cat: string) {
+  return CATEGORY_TW[cat] || CATEGORY_TW.Other;
+}
+
+function getInitials(name: string) {
+  return name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "??";
 }
 
 export default function ProfilePage() {
-  const [profile, setProfile]             = useState<Profile | null>(null);
-  const [badges, setBadges]               = useState<Badge[]>([]);
-  const [listings, setListings]           = useState<Listing[]>([]);
-  const [transactions, setTransactions]   = useState<Transaction[]>([]);
-  const [userSkills, setUserSkills]       = useState<UserSkill[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [activeTab, setActiveTab]         = useState<"listings" | "badges" | "activity">("listings");
-  const [editing, setEditing]             = useState(false);
-  const [saving, setSaving]               = useState(false);
-  const [editForm, setEditForm]           = useState({ full_name: "", bio: "", location: "" });
+  const [profile, setProfile]           = useState<Profile | null>(null);
+  const [badges, setBadges]             = useState<Badge[]>([]);
+  const [listings, setListings]         = useState<Listing[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [userSkills, setUserSkills]     = useState<UserSkill[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [activeTab, setActiveTab]       = useState<"listings" | "badges" | "activity">("listings");
+  const [editing, setEditing]           = useState(false);
+  const [saving, setSaving]             = useState(false);
+  const [editForm, setEditForm]         = useState({ full_name: "", bio: "", location: "" });
 
-  const [sessions, setSessions]           = useState(0);
-  const [avgRating, setAvgRating]         = useState(0);
+  const [sessions, setSessions]         = useState(0);
+  const [avgRating, setAvgRating]       = useState(0);
   const [repeatClients, setRepeatClients] = useState(0);
-  const [disputes, setDisputes]           = useState(0);
+  const [disputes, setDisputes]         = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -116,20 +134,21 @@ export default function ProfilePage() {
         supabase.from("ratings").select("overall").eq("rated_id", user.id),
         supabase.from("sessions").select("learner_id").eq("teacher_id", user.id).eq("status", "completed"),
         supabase.from("sessions").select("*", { count: "exact", head: true }).eq("teacher_id", user.id).eq("status", "disputed"),
-        supabase.from("user_skills").select("*, skills(name, category)").eq("user_id", user.id).order("verified", { ascending: false }),
+        // FIXED: select is_verified (not verified)
+        supabase.from("user_skills").select("*, skills(name, category)").eq("user_id", user.id).order("is_verified", { ascending: false }),
       ]);
 
       setBadges(b || []);
       setListings((l as Listing[]) || []);
       setTransactions(tx || []);
       setSessions(sCount || 0);
+      // FIXED: cast with correct field name
       setUserSkills((skillsData as UserSkill[]) || []);
 
       if (ratingData && ratingData.length > 0) {
         const avg = ratingData.reduce((s: number, r: { overall: number }) => s + r.overall, 0) / ratingData.length;
         setAvgRating(parseFloat(avg.toFixed(1)));
       }
-
       if (sessionData) {
         const counts: Record<string, number> = {};
         sessionData.forEach((s: { learner_id: string }) => {
@@ -137,7 +156,6 @@ export default function ProfilePage() {
         });
         setRepeatClients(Object.values(counts).filter(c => c > 1).length);
       }
-
       setDisputes(dCount || 0);
       setLoading(false);
     };
@@ -158,36 +176,40 @@ export default function ProfilePage() {
     window.location.href = "/";
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-        <div className="text-center"><div className="text-5xl mb-4">👤</div><p className="text-stone-400 text-sm">Loading your profile...</p></div>
+  if (loading) return (
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-5xl mb-4 animate-pulse">👤</div>
+        <p className="text-stone-400 text-sm font-medium">Loading your profile...</p>
       </div>
-    );
-  }
+    </div>
+  );
 
   if (!profile) return null;
 
-  const tier      = getBadgeTier(profile.xp, sessions, avgRating);
-  const repScore  = calcReputation({ avgRating, completedSessions: sessions, repeatClients, disputes });
-  const initials  = profile.full_name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "??";
-  const xpNext    = XP_TO_NEXT[profile.level] || 100;
-  const xpPct     = Math.min((profile.xp / xpNext) * 100, 100);
-  const joinDate  = new Date(profile.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "long" });
+  // FIXED: use is_verified field
+  const verifiedSkills   = userSkills.filter(s => s.is_verified);
+  const unverifiedSkills = userSkills.filter(s => !s.is_verified);
 
-  const verifiedSkills   = userSkills.filter(s => s.verified);
-  const unverifiedSkills = userSkills.filter(s => !s.verified);
+  const tier     = getBadgeTier(profile.xp, sessions, avgRating);
+  const repScore = calcReputation({ avgRating, completedSessions: sessions, repeatClients, disputes });
+  const initials = getInitials(profile.full_name || "");
+  // FIXED: derive level from XP to ensure consistency
+  const displayLevel = getLevelFromXP(profile.xp);
+  const xpNext   = XP_TO_NEXT[displayLevel] || 100;
+  const xpPct    = Math.min((profile.xp / xpNext) * 100, 100);
+  const joinDate = new Date(profile.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "long" });
 
   return (
-    <div className="min-h-screen bg-stone-50 font-sans">
+    <div className="min-h-screen bg-stone-50">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
         .font-fraunces { font-family: 'Fraunces', serif; }
-        .font-sans { font-family: 'DM Sans', sans-serif; }
+        body { font-family: 'DM Sans', sans-serif; }
       `}</style>
 
-      {/* NAVBAR */}
-      <nav className="bg-white border-b border-stone-200 sticky top-0 z-50 px-8 h-14 flex items-center justify-between">
+      {/* ── NAVBAR ── */}
+      <nav className="bg-white border-b border-stone-200 sticky top-0 z-50 px-6 h-14 flex items-center justify-between shadow-sm">
         <a href="/dashboard" className="flex items-center no-underline">
           <span className="font-fraunces text-xl font-black text-emerald-700">Skill</span>
           <span className="font-fraunces text-xl font-black text-stone-900">Credit</span>
@@ -198,7 +220,7 @@ export default function ProfilePage() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <a href="/wallet" className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-sm font-bold px-3 py-1.5 rounded-full no-underline hover:bg-emerald-100 transition-colors">
+          <a href="/wallet" className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-sm font-bold px-3 py-1.5 rounded-full no-underline hover:bg-emerald-100 transition-colors border border-emerald-200">
             💰 {profile.credits} cr
           </a>
           <button onClick={handleLogout} className="px-3 py-1.5 rounded-lg bg-red-50 text-red-500 text-sm font-semibold hover:bg-red-100 transition-colors border-0 cursor-pointer">
@@ -207,33 +229,33 @@ export default function ProfilePage() {
         </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-5 py-8">
 
-        {/* PROFILE HERO */}
+        {/* ── PROFILE HERO ── */}
         <div className="bg-white rounded-3xl border border-stone-200 shadow-sm mb-6 overflow-hidden">
-          <div className="h-1.5 bg-gradient-to-r from-emerald-600 to-emerald-300" />
+          <div className="h-1.5 bg-gradient-to-r from-emerald-600 via-emerald-400 to-teal-400" />
           <div className="p-7">
             {editing ? (
               <div className="max-w-md">
                 <h2 className="font-fraunces text-xl font-black text-stone-900 mb-5">Edit Profile</h2>
                 <div className="flex flex-col gap-4">
                   {[
-                    { key: "full_name", label: "Full Name",  placeholder: "Your full name",              type: "input" },
-                    { key: "location",  label: "Location",   placeholder: "e.g. Manila, Philippines",    type: "input" },
-                    { key: "bio",       label: "Bio",        placeholder: "Tell the community about yourself...", type: "textarea" },
+                    { key: "full_name", label: "Full Name", placeholder: "Your full name", type: "input" },
+                    { key: "location", label: "Location", placeholder: "e.g. Cebu City, Philippines", type: "input" },
+                    { key: "bio", label: "Bio", placeholder: "Tell the community about yourself...", type: "textarea" },
                   ].map(field => (
                     <div key={field.key}>
-                      <label className="text-xs font-bold text-stone-500 uppercase tracking-wide block mb-1.5">{field.label}</label>
+                      <label className="text-xs font-bold text-stone-400 uppercase tracking-widest block mb-1.5">{field.label}</label>
                       {field.type === "textarea" ? (
                         <textarea value={editForm[field.key as keyof typeof editForm]}
                           onChange={e => setEditForm(p => ({ ...p, [field.key]: e.target.value }))}
                           placeholder={field.placeholder} rows={3}
-                          className="w-full p-3 rounded-xl border border-stone-200 text-sm bg-stone-50 resize-none focus:outline-none focus:border-emerald-400 transition-colors font-sans" />
+                          className="w-full p-3 rounded-xl border border-stone-200 text-sm bg-stone-50 resize-none focus:outline-none focus:border-emerald-400 transition-colors" />
                       ) : (
                         <input value={editForm[field.key as keyof typeof editForm]}
                           onChange={e => setEditForm(p => ({ ...p, [field.key]: e.target.value }))}
                           placeholder={field.placeholder}
-                          className="w-full p-3 rounded-xl border border-stone-200 text-sm bg-stone-50 focus:outline-none focus:border-emerald-400 transition-colors font-sans" />
+                          className="w-full p-3 rounded-xl border border-stone-200 text-sm bg-stone-50 focus:outline-none focus:border-emerald-400 transition-colors" />
                       )}
                     </div>
                   ))}
@@ -246,9 +268,9 @@ export default function ProfilePage() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-start gap-6 flex-wrap">
+              <div className="flex items-start gap-5 flex-wrap">
                 {/* Avatar */}
-                <div className="w-20 h-20 rounded-2xl bg-emerald-100 text-emerald-700 text-2xl font-black flex items-center justify-center flex-shrink-0 ring-4 ring-emerald-50">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-700 text-white text-2xl font-black flex items-center justify-center flex-shrink-0 shadow-lg">
                   {initials}
                 </div>
 
@@ -258,30 +280,21 @@ export default function ProfilePage() {
                     <h1 className="font-fraunces text-2xl font-black text-stone-900">{profile.full_name || "Unnamed User"}</h1>
                     <BadgeChip tier={tier} size="sm" />
                     <ReputationChip score={repScore} />
-                    {profile.is_verified && (
-                      <span className="flex items-center gap-1 bg-sky-50 text-sky-700 border border-sky-200 text-xs font-black px-2.5 py-0.5 rounded-full">
-                        ✅ Verified
-                      </span>
-                    )}
                   </div>
-
-                  <p className="text-sm text-stone-400 mb-2">@{profile.username}</p>
+                  <p className="text-sm text-stone-400 font-medium mb-2">@{profile.username}</p>
                   <p className={`text-sm leading-relaxed mb-3 max-w-lg ${profile.bio ? "text-stone-600" : "text-stone-300 italic"}`}>
                     {profile.bio || "No bio yet — add one to stand out!"}
                   </p>
 
-                  {/* Verified skills inline row */}
+                  {/* Verified skills row */}
                   {verifiedSkills.length > 0 && (
                     <div className="flex items-center gap-2 flex-wrap mb-3">
-                      <span className="text-xs font-black text-stone-400">VERIFIED IN:</span>
-                      {verifiedSkills.slice(0, 4).map(s => {
-                        const c = getCategoryColor(s.skills?.category || "Other");
-                        return (
-                          <span key={s.id} className={`flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full border ${c.bg} ${c.color} ${c.border}`}>
-                            ✅ {s.skills?.name}
-                          </span>
-                        );
-                      })}
+                      <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Verified in:</span>
+                      {verifiedSkills.slice(0, 4).map(s => (
+                        <span key={s.id} className={`flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full border ${getCatTW(s.skills?.category || "Other")}`}>
+                          ✅ {s.skills?.name}
+                        </span>
+                      ))}
                       {verifiedSkills.length > 4 && (
                         <span className="text-xs text-stone-400 font-medium">+{verifiedSkills.length - 4} more</span>
                       )}
@@ -291,8 +304,9 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-4 flex-wrap">
                     {profile.location && <span className="text-xs text-stone-400">📍 {profile.location}</span>}
                     <span className="text-xs text-stone-400">📅 Joined {joinDate}</span>
-                    {badges.length > 0 && <span className="text-xs text-stone-400">🏅 {badges.length} badge{badges.length !== 1 ? "s" : ""}</span>}
                     {avgRating > 0 && <span className="text-xs text-stone-400">⭐ {avgRating.toFixed(1)} avg rating</span>}
+                    {/* FIXED: show correct badge count */}
+                    <span className="text-xs text-stone-400">🏅 {badges.length} badge{badges.length !== 1 ? "s" : ""}</span>
                   </div>
                 </div>
 
@@ -302,12 +316,12 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* XP Bar */}
+            {/* XP Bar — FIXED: uses displayLevel derived from XP */}
             {!editing && (
               <div className="mt-5 pt-5 border-t border-stone-100">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-bold text-stone-500">⚡ {profile.xp} XP — {profile.level}</span>
-                  <span className="text-xs text-stone-300">{xpNext - profile.xp} XP to next level</span>
+                  <span className="text-xs font-bold text-stone-500">⚡ {profile.xp} XP — {displayLevel}</span>
+                  <span className="text-xs text-stone-300">{xpNext - profile.xp > 0 ? `${xpNext - profile.xp} XP to next level` : "Max level!"}</span>
                 </div>
                 <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full transition-all duration-700" style={{ width: `${xpPct}%` }} />
@@ -317,119 +331,91 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* STATS ROW */}
+        {/* ── STATS ROW ── */}
         {!editing && (
           <div className="grid grid-cols-5 gap-3 mb-6">
             {[
-              { label: "Credits",  value: profile.credits,  icon: "💰", color: "text-emerald-700", bg: "bg-emerald-50", href: "/wallet" },
-              { label: "XP",       value: profile.xp,       icon: "⚡", color: "text-violet-700",  bg: "bg-violet-50",  href: "/leaderboard" },
-              { label: "Sessions", value: sessions,          icon: "📚", color: "text-sky-700",     bg: "bg-sky-50",     href: "/sessions" },
-              { label: "Listings", value: listings.length,   icon: "📋", color: "text-amber-700",   bg: "bg-amber-50",   href: "/listings/create" },
-              { label: "Badges",   value: badges.length,     icon: "🏅", color: "text-rose-600",    bg: "bg-rose-50",    href: "#badges" },
+              { label: "Credits",  value: profile.credits,  icon: "💰", tw: "text-emerald-700 bg-emerald-50", href: "/wallet" },
+              { label: "XP",       value: profile.xp,       icon: "⚡", tw: "text-violet-700 bg-violet-50",  href: "/leaderboard" },
+              { label: "Sessions", value: sessions,          icon: "📚", tw: "text-sky-700 bg-sky-50",        href: "/sessions" },
+              { label: "Listings", value: listings.length,   icon: "📋", tw: "text-amber-700 bg-amber-50",   href: "/listings/create" },
+              // FIXED: show actual badges count
+              { label: "Badges",   value: badges.length,     icon: "🏅", tw: "text-rose-600 bg-rose-50",     href: "#badges" },
             ].map(stat => (
               <a key={stat.label} href={stat.href}
-                className="bg-white rounded-2xl p-4 border border-stone-200 no-underline text-center hover:-translate-y-0.5 hover:shadow-md transition-all duration-150 block"
-                onClick={stat.href === "#badges" ? (e) => { e.preventDefault(); setActiveTab("badges"); } : undefined}>
-                <div className={`w-9 h-9 ${stat.bg} rounded-xl flex items-center justify-center text-lg mx-auto mb-2`}>{stat.icon}</div>
-                <p className={`font-fraunces text-2xl font-black ${stat.color}`}>{stat.value}</p>
+                onClick={stat.href === "#badges" ? (e) => { e.preventDefault(); setActiveTab("badges"); } : undefined}
+                className="bg-white rounded-2xl p-4 border border-stone-200 no-underline text-center hover:-translate-y-0.5 hover:shadow-md transition-all duration-150 block group">
+                <div className={`w-10 h-10 ${stat.tw.split(" ")[1]} rounded-xl flex items-center justify-center text-xl mx-auto mb-2`}>{stat.icon}</div>
+                <p className={`font-fraunces text-2xl font-black ${stat.tw.split(" ")[0]}`}>{stat.value}</p>
                 <p className="text-[11px] text-stone-400 font-medium mt-0.5">{stat.label}</p>
               </a>
             ))}
           </div>
         )}
 
-        {/* MAIN GRID */}
+        {/* ── MAIN GRID ── */}
         {!editing && (
           <div className="grid grid-cols-[1fr_300px] gap-5">
-
-            {/* LEFT */}
             <div>
-              {/* ── VERIFIED SKILLS SECTION ── */}
-              {userSkills.length > 0 && (
-                <div className="bg-white rounded-2xl border border-stone-200 p-5 mb-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="font-fraunces text-base font-black text-stone-900">Skills & Verifications</h3>
-                      <p className="text-xs text-stone-400 mt-0.5">Skills you've listed or been verified in</p>
+
+              {/* ── SKILLS SECTION ── FIXED: uses is_verified */}
+              <div className="bg-white rounded-2xl border border-stone-200 p-5 mb-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-fraunces text-base font-black text-stone-900">Skills & Verifications</h3>
+                    <p className="text-xs text-stone-400 mt-0.5">Skills you've listed or been verified in</p>
+                  </div>
+                  <a href="/verify" className="text-xs font-black text-emerald-600 hover:text-emerald-700 no-underline bg-emerald-50 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition-colors border border-emerald-200">
+                    + Get Verified
+                  </a>
+                </div>
+
+                {verifiedSkills.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-2.5">✅ Verified Skills</p>
+                    <div className="flex flex-wrap gap-2">
+                      {verifiedSkills.map(s => (
+                        <div key={s.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${getCatTW(s.skills?.category || "Other")}`}>
+                          <span className="text-emerald-500 text-xs">✅</span>
+                          <span className="text-xs font-black">{s.skills?.name}</span>
+                          <span className="text-[10px] text-stone-300">· {s.skills?.category}</span>
+                        </div>
+                      ))}
                     </div>
-                    <a href="/verify" className="text-xs font-black text-emerald-600 hover:text-emerald-700 no-underline bg-emerald-50 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition-colors">
-                      + Get Verified
+                  </div>
+                )}
+
+                {unverifiedSkills.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-2.5">🔓 Unverified</p>
+                    <div className="flex flex-wrap gap-2">
+                      {unverifiedSkills.map(s => (
+                        <div key={s.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 bg-stone-50">
+                          <span className="text-stone-300 text-xs">○</span>
+                          <span className="text-xs font-bold text-stone-500">{s.skills?.name}</span>
+                          <a href="/verify" className="text-[10px] text-emerald-500 font-bold no-underline hover:underline ml-1">verify →</a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {userSkills.length === 0 && (
+                  <div className="bg-gradient-to-r from-sky-50 to-emerald-50 border border-sky-100 rounded-xl p-4 flex items-center gap-3">
+                    <span className="text-3xl">✅</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-sky-800 mb-0.5">Get your skills verified!</p>
+                      <p className="text-xs text-sky-600">Verified teachers get <strong>2x more bookings</strong> and a badge on their profile.</p>
+                    </div>
+                    <a href="/verify" className="bg-sky-600 text-white text-xs font-black px-3 py-2 rounded-xl no-underline hover:bg-sky-700 transition-colors whitespace-nowrap">
+                      Verify Now →
                     </a>
                   </div>
+                )}
+              </div>
 
-                  {/* Verified */}
-                  {verifiedSkills.length > 0 && (
-                    <div className="mb-4">
-                      <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-2">✅ Verified Skills</p>
-                      <div className="flex flex-wrap gap-2">
-                        {verifiedSkills.map(s => {
-                          const c = getCategoryColor(s.skills?.category || "Other");
-                          return (
-                            <div key={s.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${c.bg} ${c.border}`}>
-                              <span className="text-emerald-500 text-xs">✅</span>
-                              <span className={`text-xs font-black ${c.color}`}>{s.skills?.name}</span>
-                              <span className="text-[10px] text-stone-300">· {s.skills?.category}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Unverified */}
-                  {unverifiedSkills.length > 0 && (
-                    <div>
-                      <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-2">🔓 Unverified Skills</p>
-                      <div className="flex flex-wrap gap-2">
-                        {unverifiedSkills.map(s => (
-                          <div key={s.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 bg-stone-50">
-                            <span className="text-stone-300 text-xs">○</span>
-                            <span className="text-xs font-bold text-stone-500">{s.skills?.name}</span>
-                            <a href="/verify" className="text-[10px] text-emerald-500 font-bold no-underline hover:underline">verify →</a>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {verifiedSkills.length === 0 && (
-                    <div className="bg-sky-50 border border-sky-100 rounded-xl p-3 flex items-center gap-3">
-                      <span className="text-2xl">✅</span>
-                      <div>
-                        <p className="text-sm font-bold text-sky-800">Get your skills verified!</p>
-                        <p className="text-xs text-sky-600">Verified teachers get <strong>2x more bookings</strong> and a badge on their profile.</p>
-                      </div>
-                      <a href="/verify" className="ml-auto bg-sky-600 text-white text-xs font-black px-3 py-2 rounded-xl no-underline hover:bg-sky-700 transition-colors whitespace-nowrap flex-shrink-0">
-                        Verify Now →
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* No skills yet prompt */}
-              {userSkills.length === 0 && (
-                <div className="bg-white rounded-2xl border border-stone-200 p-5 mb-5">
-                  <div className="flex items-center gap-3">
-                    <span className="text-3xl">🎯</span>
-                    <div className="flex-1">
-                      <p className="font-fraunces text-sm font-black text-stone-800">No skills listed yet</p>
-                      <p className="text-xs text-stone-400">Create a listing or get verified to show your skills here.</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <a href="/listings/create" className="bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-xl no-underline hover:bg-emerald-700 transition-colors whitespace-nowrap">
-                        + Create Listing
-                      </a>
-                      <a href="/verify" className="bg-sky-50 text-sky-700 text-xs font-bold px-3 py-2 rounded-xl no-underline hover:bg-sky-100 transition-colors whitespace-nowrap">
-                        Get Verified
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Tabs */}
-              <div className="flex gap-1 bg-white border border-stone-200 rounded-xl p-1 w-fit mb-5">
+              {/* ── TABS ── */}
+              <div className="flex gap-1 bg-stone-100 rounded-xl p-1 w-fit mb-5">
                 {([
                   { key: "listings", label: "📋 Listings" },
                   { key: "badges",   label: "🏅 Badges" },
@@ -437,14 +423,14 @@ export default function ProfilePage() {
                 ] as const).map(t => (
                   <button key={t.key} onClick={() => setActiveTab(t.key)}
                     className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border-0 cursor-pointer ${
-                      activeTab === t.key ? "bg-emerald-600 text-white shadow-sm" : "text-stone-500 hover:text-stone-700 hover:bg-stone-50 bg-transparent"
+                      activeTab === t.key ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700 bg-transparent"
                     }`}>
                     {t.label}
                   </button>
                 ))}
               </div>
 
-              {/* LISTINGS TAB */}
+              {/* ── LISTINGS ── */}
               {activeTab === "listings" && (
                 <div>
                   <div className="flex items-center justify-between mb-4">
@@ -466,7 +452,7 @@ export default function ProfilePage() {
                           <div key={listing.id} className="bg-white rounded-2xl border border-stone-200 p-5 flex items-center gap-4 justify-between flex-wrap hover:shadow-sm transition-shadow">
                             <div className="flex-1 min-w-48">
                               <div className="flex items-center gap-2 flex-wrap mb-2">
-                                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${fmt.bg} ${fmt.color}`}>{fmt.label}</span>
+                                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${fmt.tw}`}>{fmt.label}</span>
                                 {listing.skills && <span className="text-xs text-stone-400">{listing.skills.name}</span>}
                                 <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${listing.is_active ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-400"}`}>
                                   {listing.is_active ? "● Active" : "○ Paused"}
@@ -487,7 +473,7 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {/* BADGES TAB */}
+              {/* ── BADGES ── */}
               {activeTab === "badges" && (
                 <div>
                   <h3 className="font-fraunces text-lg font-black text-stone-900 mb-4">Earned Badges</h3>
@@ -512,7 +498,7 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {/* ACTIVITY TAB */}
+              {/* ── ACTIVITY ── */}
               {activeTab === "activity" && (
                 <div>
                   <h3 className="font-fraunces text-lg font-black text-stone-900 mb-4">Credit Activity</h3>
@@ -520,14 +506,14 @@ export default function ProfilePage() {
                     <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center">
                       <div className="text-5xl mb-3">📊</div>
                       <p className="font-fraunces text-lg font-black text-stone-800 mb-1">No transactions yet</p>
-                      <p className="text-sm text-stone-400">Your credit history will appear here once you start teaching or learning.</p>
+                      <p className="text-sm text-stone-400">Your credit history will appear here.</p>
                     </div>
                   ) : (
                     <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
                       {transactions.map((tx, i) => (
-                        <div key={tx.id} className={`flex items-center gap-3 px-5 py-4 justify-between ${i < transactions.length - 1 ? "border-b border-stone-100" : ""}`}>
+                        <div key={tx.id} className={`flex items-center gap-3 px-5 py-4 justify-between hover:bg-stone-50 transition-colors ${i < transactions.length - 1 ? "border-b border-stone-100" : ""}`}>
                           <div className="flex items-center gap-3">
-                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0 ${tx.amount > 0 ? "bg-emerald-50" : "bg-red-50"}`}>
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${tx.amount > 0 ? "bg-emerald-50" : "bg-red-50"}`}>
                               {TX_ICONS[tx.type] || "💳"}
                             </div>
                             <div>
@@ -546,15 +532,15 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* RIGHT */}
+            {/* ── RIGHT SIDEBAR ── */}
             <div className="flex flex-col gap-4">
               <BadgeProgressCard xp={profile.xp} sessions={sessions} avgRating={avgRating} />
               <ReputationCard data={{ avgRating, completedSessions: sessions, repeatClients, disputes }} />
 
               {/* Quick links */}
               <div className="bg-white rounded-2xl border border-stone-200 p-4">
-                <p className="text-xs font-black text-stone-400 uppercase tracking-widest mb-3">Quick Links</p>
-                <div className="flex flex-col gap-1.5">
+                <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3">Quick Links</p>
+                <div className="flex flex-col gap-1">
                   {[
                     { icon: "✅", label: "Get Verified",   href: "/verify" },
                     { icon: "🎓", label: "Create Listing", href: "/listings/create" },
@@ -563,7 +549,7 @@ export default function ProfilePage() {
                     { icon: "💰", label: "Wallet",         href: "/wallet" },
                   ].map(item => (
                     <a key={item.label} href={item.href}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-stone-600 text-sm font-semibold hover:bg-stone-50 hover:text-emerald-700 transition-colors no-underline group">
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-stone-600 text-sm font-semibold hover:bg-emerald-50 hover:text-emerald-700 transition-colors no-underline group">
                       <span>{item.icon}</span>
                       <span>{item.label}</span>
                       <span className="ml-auto text-stone-300 group-hover:text-emerald-400">›</span>

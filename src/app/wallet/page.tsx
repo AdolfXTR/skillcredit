@@ -3,64 +3,55 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Transaction = {
-  id: string;
-  amount: number;
-  type: string;
-  description: string;
-  created_at: string;
+  id: string; amount: number; type: string;
+  description: string; created_at: string;
 };
-
 type Profile = {
-  id: string;
-  full_name: string;
-  username: string;
-  credits: number;
+  id: string; full_name: string; username: string; credits: number;
 };
 
-const typeConfig: Record<string, { icon: string; color: string; bg: string; label: string }> = {
-  signup_bonus: { icon: "🎁", color: "#2d6a4f", bg: "#e8f4e8", label: "Signup Bonus" },
-  session_earned: { icon: "📚", color: "#2d6a4f", bg: "#e8f4e8", label: "Session Earned" },
-  session_spent: { icon: "📖", color: "#dc2626", bg: "#fef2f2", label: "Session Booked" },
-  bounty_earned: { icon: "🏆", color: "#2d6a4f", bg: "#e8f4e8", label: "Bounty Won" },
-  bounty_posted: { icon: "🎯", color: "#dc2626", bg: "#fef2f2", label: "Bounty Posted" },
-  topup: { icon: "💳", color: "#0369a1", bg: "#e0f2fe", label: "Top Up" },
-  forum_earned: { icon: "💬", color: "#2d6a4f", bg: "#e8f4e8", label: "Forum Answer" },
-  refund: { icon: "↩️", color: "#7c3aed", bg: "#f0f4ff", label: "Refund" },
-  default: { icon: "💰", color: "#555", bg: "#f5f5f0", label: "Transaction" },
+const TX_CONFIG: Record<string, { icon: string; label: string; tw: string }> = {
+  signup_bonus:  { icon: "🎁", label: "Signup Bonus",   tw: "bg-emerald-50" },
+  session_earn:  { icon: "📚", label: "Session Earned", tw: "bg-emerald-50" },
+  session_spend: { icon: "📖", label: "Session Booked", tw: "bg-red-50" },
+  bounty_earn:   { icon: "🏆", label: "Bounty Won",     tw: "bg-emerald-50" },
+  bounty_spend:  { icon: "🎯", label: "Bounty Posted",  tw: "bg-red-50" },
+  topup:         { icon: "💳", label: "Top Up",         tw: "bg-sky-50" },
+  forum_earn:    { icon: "💬", label: "Forum Answer",   tw: "bg-emerald-50" },
+  refund:        { icon: "↩️", label: "Refund",         tw: "bg-violet-50" },
+  default:       { icon: "💰", label: "Transaction",    tw: "bg-stone-50" },
 };
 
-const topUpPackages = [
-  { credits: 50, price: 500, label: "Starter", popular: false, bonus: 0 },
-  { credits: 120, price: 1000, label: "Popular", popular: true, bonus: 20 },
-  { credits: 260, price: 2000, label: "Value", popular: false, bonus: 60 },
-  { credits: 550, price: 4000, label: "Pro", popular: false, bonus: 150 },
+const PACKAGES = [
+  { credits: 50,  price: 500,  label: "Starter", bonus: 0,   popular: false },
+  { credits: 120, price: 1000, label: "Popular",  bonus: 20,  popular: true  },
+  { credits: 260, price: 2000, label: "Value",    bonus: 60,  popular: false },
+  { credits: 550, price: 4000, label: "Pro",      bonus: 150, popular: false },
+];
+
+const PAYMENT_METHODS = [
+  { key: "gcash", label: "GCash",       icon: "📱" },
+  { key: "maya",  label: "Maya",        icon: "💚" },
+  { key: "card",  label: "Credit Card", icon: "💳" },
 ];
 
 export default function WalletPage() {
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile]         = useState<Profile | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "topup" | "history">("overview");
-  const [selectedPackage, setSelectedPackage] = useState<number | null>(1);
+  const [loading, setLoading]         = useState(true);
+  const [activeTab, setActiveTab]     = useState<"overview" | "topup" | "history">("overview");
+  const [selectedPkg, setSelectedPkg] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState("gcash");
-  const [processing, setProcessing] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [processing, setProcessing]   = useState(false);
+  const [success, setSuccess]         = useState(false);
 
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = "/login"; return; }
-
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (prof) setProfile(prof);
-
-      const { data: txns } = await supabase
-        .from("credit_transactions")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(50);
-
+      const { data: txns } = await supabase.from("credit_transactions").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(50);
       if (txns) setTransactions(txns);
       setLoading(false);
     };
@@ -68,312 +59,312 @@ export default function WalletPage() {
   }, []);
 
   const handleTopUp = async () => {
-    if (selectedPackage === null || !profile) return;
+    if (!profile) return;
     setProcessing(true);
-
-    const pkg = topUpPackages[selectedPackage];
-    const totalCredits = pkg.credits + pkg.bonus;
-
-    // Simulate PayMongo payment (in real app, redirect to PayMongo checkout)
-    await new Promise((r) => setTimeout(r, 2000));
-
-    // Add credits to profile
-    await supabase.from("profiles")
-      .update({ credits: (profile.credits || 0) + totalCredits })
-      .eq("id", profile.id);
-
-    // Log transaction
+    const pkg = PACKAGES[selectedPkg];
+    const total = pkg.credits + pkg.bonus;
+    await new Promise(r => setTimeout(r, 2000));
+    await supabase.from("profiles").update({ credits: (profile.credits || 0) + total }).eq("id", profile.id);
     await supabase.from("credit_transactions").insert({
-      user_id: profile.id,
-      amount: totalCredits,
-      type: "topup",
-      description: `Top up — ${pkg.label} package (${pkg.credits} + ${pkg.bonus} bonus credits) via ${paymentMethod.toUpperCase()}`,
+      user_id: profile.id, amount: total, type: "topup",
+      description: `Top up — ${pkg.label} (${pkg.credits}+${pkg.bonus} bonus) via ${paymentMethod.toUpperCase()}`,
     });
-
-    setProfile((p) => p ? { ...p, credits: p.credits + totalCredits } : p);
+    setProfile(p => p ? { ...p, credits: p.credits + total } : p);
+    setTransactions(prev => [{
+      id: Date.now().toString(), amount: total, type: "topup",
+      description: `Top up — ${pkg.label} package`, created_at: new Date().toISOString()
+    }, ...prev]);
     setProcessing(false);
     setSuccess(true);
   };
 
   const totalEarned = transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const totalSpent = transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const totalSpent  = transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const pkg = PACKAGES[selectedPkg];
 
-  if (loading) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#fffdf7", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 48 }}>💰</div>
-          <p style={{ color: "#888", marginTop: 12 }}>Loading wallet...</p>
-        </div>
+  if (loading) return (
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-5xl mb-4 animate-pulse">💰</div>
+        <p className="text-stone-400 text-sm font-medium">Loading wallet...</p>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f5f0", fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="min-h-screen bg-stone-50">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
+        .font-fraunces { font-family: 'Fraunces', serif; }
+        body { font-family: 'DM Sans', sans-serif; }
+      `}</style>
 
-      {/* Navbar */}
-      <nav style={{ background: "white", borderBottom: "1px solid #e8e0d0", padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <a href="/dashboard" style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 22, fontWeight: 800, color: "#2d6a4f", textDecoration: "none" }}>SkillCredit</a>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <a href="/dashboard" style={{ padding: "7px 14px", borderRadius: 8, color: "#555", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Dashboard</a>
-          <a href="/listings" style={{ padding: "7px 14px", borderRadius: 8, color: "#555", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Browse</a>
-          <div style={{ background: "#e8f4e8", borderRadius: 20, padding: "6px 14px", display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 13 }}>💰</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#2d6a4f" }}>{profile?.credits} credits</span>
-          </div>
+      {/* ── NAVBAR ── */}
+      <nav className="bg-white border-b border-stone-200 sticky top-0 z-50 px-6 h-14 flex items-center justify-between shadow-sm">
+        <a href="/dashboard" className="flex items-center no-underline">
+          <span className="font-fraunces text-xl font-black text-emerald-700">Skill</span>
+          <span className="font-fraunces text-xl font-black text-stone-900">Credit</span>
+        </a>
+        <div className="flex items-center gap-1">
+          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
+            <a key={l} href={h} className="px-3 py-1.5 rounded-lg text-stone-500 text-sm font-semibold hover:bg-stone-100 transition-colors no-underline">{l}</a>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
+            💰 {profile?.credits} cr
+          </span>
+          <a href="/profile" className="px-3 py-1.5 rounded-lg bg-stone-100 text-stone-700 text-sm font-semibold hover:bg-stone-200 transition-colors no-underline">
+            👤 Profile
+          </a>
         </div>
       </nav>
 
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 24px" }}>
+      <div className="max-w-4xl mx-auto px-5 py-8">
 
-        {/* Header */}
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 32, fontWeight: 800, color: "#1a1a1a", marginBottom: 8 }}>My Wallet 💰</h1>
-          <p style={{ fontSize: 15, color: "#888" }}>Manage your credits and top up anytime</p>
+        {/* ── HEADER ── */}
+        <div className="mb-6">
+          <h1 className="font-fraunces text-4xl font-black text-stone-900 mb-1">My Wallet</h1>
+          <p className="text-stone-400 text-sm">Manage your credits and top up anytime</p>
         </div>
 
-        {/* Balance card */}
-        <div style={{ background: "linear-gradient(135deg, #2d6a4f, #1b4332)", borderRadius: 24, padding: "32px", marginBottom: 24, color: "white", position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: -40, right: -40, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
-          <div style={{ position: "absolute", bottom: -30, left: -30, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.04)" }} />
-          <p style={{ fontSize: 13, opacity: 0.7, marginBottom: 4 }}>Available Balance</p>
-          <p style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 52, fontWeight: 900, margin: "0 0 4px" }}>{profile?.credits}</p>
-          <p style={{ fontSize: 15, opacity: 0.7, marginBottom: 24 }}>credits · ₱{(profile?.credits || 0) * 10} equivalent</p>
-          <div style={{ display: "flex", gap: 12 }}>
-            <button
-              onClick={() => setActiveTab("topup")}
-              style={{ padding: "12px 28px", background: "white", color: "#2d6a4f", border: "none", borderRadius: 12, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
-            >
+        {/* ── BALANCE CARD ── */}
+        <div className="relative bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-700 rounded-3xl p-8 mb-5 overflow-hidden shadow-xl">
+          {/* Decorative circles */}
+          <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-white/5" />
+          <div className="absolute -bottom-8 -left-8 w-36 h-36 rounded-full bg-white/5" />
+
+          <p className="text-emerald-200 text-sm font-semibold mb-1">Available Balance</p>
+          <div className="flex items-end gap-3 mb-1">
+            <p className="font-fraunces text-6xl font-black text-white leading-none">{profile?.credits}</p>
+            <p className="text-emerald-300 text-lg font-bold mb-2">credits</p>
+          </div>
+          <p className="text-emerald-300/70 text-sm mb-7">≈ ₱{((profile?.credits || 0) * 10).toLocaleString()} equivalent</p>
+
+          <div className="flex gap-3">
+            <button onClick={() => { setActiveTab("topup"); setSuccess(false); }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-white text-emerald-800 rounded-xl font-bold text-sm hover:bg-emerald-50 transition-colors border-0 cursor-pointer">
               + Top Up Credits
             </button>
-            <button
-              onClick={() => setActiveTab("history")}
-              style={{ padding: "12px 28px", background: "rgba(255,255,255,0.15)", color: "white", border: "none", borderRadius: 12, fontWeight: 600, fontSize: 14, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
-            >
+            <button onClick={() => setActiveTab("history")}
+              className="flex items-center gap-2 px-5 py-2.5 bg-white/15 text-white rounded-xl font-semibold text-sm hover:bg-white/25 transition-colors border border-white/20 cursor-pointer">
               View History
             </button>
           </div>
         </div>
 
-        {/* Stats row */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+        {/* ── STATS ── */}
+        <div className="grid grid-cols-3 gap-4 mb-5">
           {[
-            { icon: "⬆️", label: "Total Earned", value: totalEarned, color: "#2d6a4f", bg: "#e8f4e8" },
-            { icon: "⬇️", label: "Total Spent", value: totalSpent, color: "#dc2626", bg: "#fef2f2" },
-            { icon: "📊", label: "Transactions", value: transactions.length, color: "#0369a1", bg: "#e0f2fe" },
-          ].map((s) => (
-            <div key={s.label} style={{ background: "white", borderRadius: 16, padding: "20px", border: "1px solid #e8e0d0" }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, marginBottom: 12 }}>
-                {s.icon}
-              </div>
-              <p style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 26, fontWeight: 800, color: s.color, margin: "0 0 2px" }}>{s.value}</p>
-              <p style={{ fontSize: 12, color: "#888", margin: 0 }}>{s.label}</p>
+            { icon: "⬆️", label: "Total Earned", value: `+${totalEarned}`, tw: "text-emerald-700", bg: "bg-emerald-50" },
+            { icon: "⬇️", label: "Total Spent",  value: `-${totalSpent}`,  tw: "text-red-600",     bg: "bg-red-50" },
+            { icon: "🔁", label: "Transactions", value: transactions.length.toString(), tw: "text-sky-700", bg: "bg-sky-50" },
+          ].map(s => (
+            <div key={s.label} className="bg-white rounded-2xl p-5 border border-stone-200 hover:shadow-sm transition-shadow">
+              <div className={`w-10 h-10 ${s.bg} rounded-xl flex items-center justify-center text-xl mb-3`}>{s.icon}</div>
+              <p className={`font-fraunces text-2xl font-black ${s.tw}`}>{s.value}</p>
+              <p className="text-xs text-stone-400 font-medium mt-0.5">{s.label}</p>
             </div>
           ))}
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: "flex", gap: 4, background: "white", borderRadius: 14, padding: 4, marginBottom: 24, border: "1px solid #e8e0d0", width: "fit-content" }}>
+        {/* ── TABS ── */}
+        <div className="flex gap-1 bg-stone-100 rounded-xl p-1 w-fit mb-5">
           {[
-            { key: "overview", label: "Overview" },
-            { key: "topup", label: "💳 Top Up" },
-            { key: "history", label: "📋 History" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => { setActiveTab(tab.key as typeof activeTab); setSuccess(false); }}
-              style={{ padding: "8px 20px", borderRadius: 10, border: "none", background: activeTab === tab.key ? "#2d6a4f" : "transparent", color: activeTab === tab.key ? "white" : "#555", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
-            >
-              {tab.label}
+            { key: "overview", label: "📊 Overview" },
+            { key: "topup",    label: "💳 Top Up" },
+            { key: "history",  label: "📋 History" },
+          ].map(t => (
+            <button key={t.key} onClick={() => { setActiveTab(t.key as typeof activeTab); setSuccess(false); }}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border-0 cursor-pointer ${
+                activeTab === t.key ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700 bg-transparent"
+              }`}>
+              {t.label}
             </button>
           ))}
         </div>
 
-        {/* Overview tab */}
+        {/* ── OVERVIEW ── */}
         {activeTab === "overview" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-            <div style={{ background: "white", borderRadius: 20, padding: "24px", border: "1px solid #e8e0d0" }}>
-              <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 18, fontWeight: 800, color: "#1a1a1a", marginBottom: 16 }}>How to earn credits 💡</h3>
-              {[
-                { icon: "🎓", action: "Teach a session", credits: "+session price" },
-                { icon: "🏆", action: "Win a bounty (1st place)", credits: "+60% of reward" },
-                { icon: "💬", action: "Answer forum questions", credits: "+2 credits" },
-                { icon: "📅", action: "Daily challenges", credits: "+3–5 credits" },
-                { icon: "🎁", action: "Signup bonus", credits: "+20 credits" },
-              ].map((item) => (
-                <div key={item.action} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f5f0e8" }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <span>{item.icon}</span>
-                    <span style={{ fontSize: 13, color: "#333" }}>{item.action}</span>
+          <div className="grid grid-cols-2 gap-5">
+            <div className="bg-white rounded-2xl p-6 border border-stone-200">
+              <h3 className="font-fraunces text-lg font-black text-stone-900 mb-4">How to earn credits 💡</h3>
+              <div className="flex flex-col gap-0">
+                {[
+                  { icon: "🎓", action: "Teach a session",      credits: "+session price" },
+                  { icon: "🏆", action: "Win a bounty (1st)",   credits: "+60% of reward" },
+                  { icon: "💬", action: "Answer forum question", credits: "+2 credits" },
+                  { icon: "📅", action: "Daily challenges",      credits: "+3–5 credits" },
+                  { icon: "🎁", action: "Signup bonus",          credits: "+20 credits" },
+                ].map((item, i, arr) => (
+                  <div key={item.action} className={`flex justify-between items-center py-3 ${i < arr.length - 1 ? "border-b border-stone-100" : ""}`}>
+                    <div className="flex gap-3 items-center">
+                      <span className="text-lg">{item.icon}</span>
+                      <span className="text-sm text-stone-600 font-medium">{item.action}</span>
+                    </div>
+                    <span className="text-sm font-bold text-emerald-600">{item.credits}</span>
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#2d6a4f" }}>{item.credits}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-            <div style={{ background: "white", borderRadius: 20, padding: "24px", border: "1px solid #e8e0d0" }}>
-              <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 18, fontWeight: 800, color: "#1a1a1a", marginBottom: 16 }}>Recent transactions</h3>
-              {transactions.slice(0, 5).map((txn) => {
-                const cfg = typeConfig[txn.type] || typeConfig.default;
+            <div className="bg-white rounded-2xl p-6 border border-stone-200">
+              <h3 className="font-fraunces text-lg font-black text-stone-900 mb-4">Recent Transactions</h3>
+              {transactions.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-4xl mb-2">📊</p>
+                  <p className="text-stone-400 text-sm">No transactions yet</p>
+                </div>
+              ) : transactions.slice(0, 6).map((txn, i, arr) => {
+                const cfg = TX_CONFIG[txn.type] || TX_CONFIG.default;
                 return (
-                  <div key={txn.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f5f0e8" }}>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                      <span style={{ fontSize: 18 }}>{cfg.icon}</span>
+                  <div key={txn.id} className={`flex justify-between items-center py-3 ${i < arr.length - 1 ? "border-b border-stone-100" : ""}`}>
+                    <div className="flex gap-3 items-center">
+                      <div className={`w-8 h-8 ${cfg.tw} rounded-lg flex items-center justify-center text-sm`}>{cfg.icon}</div>
                       <div>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: "#333", margin: 0 }}>{cfg.label}</p>
-                        <p style={{ fontSize: 11, color: "#aaa", margin: 0 }}>{new Date(txn.created_at).toLocaleDateString()}</p>
+                        <p className="text-sm font-semibold text-stone-700">{cfg.label}</p>
+                        <p className="text-[11px] text-stone-300">{new Date(txn.created_at).toLocaleDateString()}</p>
                       </div>
                     </div>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: txn.amount > 0 ? "#2d6a4f" : "#dc2626" }}>
-                      {txn.amount > 0 ? "+" : ""}{txn.amount}
+                    <span className={`text-sm font-black ${txn.amount > 0 ? "text-emerald-600" : "text-red-500"}`}>
+                      {txn.amount > 0 ? "+" : ""}{txn.amount} cr
                     </span>
                   </div>
                 );
               })}
-              {transactions.length === 0 && <p style={{ color: "#aaa", fontSize: 13 }}>No transactions yet</p>}
+              {transactions.length > 6 && (
+                <button onClick={() => setActiveTab("history")} className="w-full mt-3 py-2 text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-transparent border-0 cursor-pointer">
+                  View all {transactions.length} transactions →
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {/* Top Up tab */}
+        {/* ── TOP UP ── */}
         {activeTab === "topup" && (
-          <div>
-            {success ? (
-              <div style={{ background: "white", borderRadius: 24, padding: "60px 40px", textAlign: "center", border: "1px solid #e8e0d0" }}>
-                <div style={{ fontSize: 64, marginBottom: 16 }}>🎉</div>
-                <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 28, fontWeight: 800, color: "#1a1a1a", marginBottom: 12 }}>Credits Added!</h2>
-                <p style={{ color: "#666", fontSize: 15, marginBottom: 8 }}>
-                  Your wallet has been topped up successfully.
-                </p>
-                <div style={{ background: "#e8f4e8", borderRadius: 12, padding: "16px 24px", display: "inline-block", marginBottom: 28 }}>
-                  <p style={{ fontSize: 14, color: "#2d6a4f", fontWeight: 600, margin: 0 }}>
-                    💰 New balance: <strong>{profile?.credits} credits</strong>
-                  </p>
-                </div>
-                <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-                  <a href="/listings" style={{ padding: "12px 28px", background: "#2d6a4f", color: "white", borderRadius: 12, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>Browse Skills →</a>
-                  <button onClick={() => setSuccess(false)} style={{ padding: "12px 28px", background: "#f5f0e8", color: "#555", border: "none", borderRadius: 12, fontWeight: 600, fontSize: 14, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Top up more</button>
-                </div>
+          success ? (
+            <div className="bg-white rounded-3xl p-16 text-center border border-stone-200 shadow-sm">
+              <div className="text-6xl mb-5">🎉</div>
+              <h2 className="font-fraunces text-3xl font-black text-stone-900 mb-3">Credits Added!</h2>
+              <p className="text-stone-400 text-sm mb-5">Your wallet has been topped up successfully.</p>
+              <div className="inline-block bg-emerald-50 border border-emerald-200 rounded-2xl px-6 py-3 mb-8">
+                <p className="text-emerald-700 font-bold text-sm">💰 New balance: <strong className="font-fraunces text-lg">{profile?.credits} credits</strong></p>
               </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
-                <div>
-                  <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 800, color: "#1a1a1a", marginBottom: 16 }}>Choose a package</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
-                    {topUpPackages.map((pkg, i) => (
-                      <div
-                        key={i}
-                        onClick={() => setSelectedPackage(i)}
-                        style={{ background: selectedPackage === i ? "#e8f4e8" : "white", borderRadius: 16, padding: "20px", border: `2px solid ${selectedPackage === i ? "#2d6a4f" : "#e8e0d0"}`, cursor: "pointer", position: "relative", transition: "all 0.2s" }}
-                      >
-                        {pkg.popular && (
-                          <span style={{ position: "absolute", top: -10, right: 16, background: "#2d6a4f", color: "white", fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 999 }}>MOST POPULAR</span>
-                        )}
-                        <p style={{ fontSize: 13, fontWeight: 700, color: "#888", marginBottom: 4 }}>{pkg.label}</p>
-                        <p style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 28, fontWeight: 800, color: "#1a1a1a", margin: "0 0 2px" }}>{pkg.credits} <span style={{ fontSize: 14, fontWeight: 600 }}>credits</span></p>
-                        {pkg.bonus > 0 && <p style={{ fontSize: 12, color: "#2d6a4f", fontWeight: 600, margin: "0 0 8px" }}>+ {pkg.bonus} bonus credits!</p>}
-                        <p style={{ fontSize: 15, fontWeight: 700, color: "#b45309", margin: 0 }}>₱{pkg.price.toLocaleString()}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 18, fontWeight: 800, color: "#1a1a1a", marginBottom: 12 }}>Payment method</h3>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    {[
-                      { key: "gcash", label: "GCash", icon: "📱" },
-                      { key: "maya", label: "Maya", icon: "💚" },
-                      { key: "card", label: "Credit Card", icon: "💳" },
-                    ].map((method) => (
-                      <div
-                        key={method.key}
-                        onClick={() => setPaymentMethod(method.key)}
-                        style={{ flex: 1, background: paymentMethod === method.key ? "#e8f4e8" : "white", borderRadius: 12, padding: "14px", border: `2px solid ${paymentMethod === method.key ? "#2d6a4f" : "#e8e0d0"}`, cursor: "pointer", textAlign: "center" }}
-                      >
-                        <span style={{ fontSize: 24 }}>{method.icon}</span>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: "#333", margin: "6px 0 0" }}>{method.label}</p>
-                      </div>
-                    ))}
-                  </div>
+              <div className="flex gap-3 justify-center max-w-sm mx-auto">
+                <a href="/listings" className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm text-center no-underline hover:bg-emerald-700 transition-colors">Browse Skills →</a>
+                <button onClick={() => setSuccess(false)} className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl font-bold text-sm border-0 cursor-pointer hover:bg-stone-200 transition-colors">Top up more</button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-[1fr_320px] gap-5">
+              <div>
+                <h3 className="font-fraunces text-lg font-black text-stone-900 mb-4">Choose a Package</h3>
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  {PACKAGES.map((p, i) => (
+                    <div key={i} onClick={() => setSelectedPkg(i)}
+                      className={`relative rounded-2xl p-5 border-2 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 ${
+                        selectedPkg === i ? "border-emerald-500 bg-emerald-50 shadow-md" : "border-stone-200 bg-white hover:border-stone-300"
+                      }`}>
+                      {p.popular && (
+                        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-[10px] font-black px-3 py-0.5 rounded-full whitespace-nowrap">
+                          MOST POPULAR
+                        </span>
+                      )}
+                      <p className="text-xs font-bold text-stone-400 mb-1">{p.label}</p>
+                      <p className="font-fraunces text-3xl font-black text-stone-900 mb-0.5">{p.credits} <span className="text-base font-semibold text-stone-500">cr</span></p>
+                      {p.bonus > 0 && <p className="text-xs font-bold text-emerald-600 mb-2">+ {p.bonus} bonus! 🎁</p>}
+                      <p className="text-lg font-black text-amber-600">₱{p.price.toLocaleString()}</p>
+                    </div>
+                  ))}
                 </div>
 
-                {/* Order summary */}
-                <div style={{ background: "white", borderRadius: 20, padding: "24px", border: "1px solid #e8e0d0", height: "fit-content" }}>
-                  <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 18, fontWeight: 800, color: "#1a1a1a", marginBottom: 20 }}>Order Summary</h3>
-                  {selectedPackage !== null && (
-                    <>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: 13, color: "#666" }}>Package</span>
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{topUpPackages[selectedPackage].label}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: 13, color: "#666" }}>Credits</span>
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{topUpPackages[selectedPackage].credits}</span>
-                        </div>
-                        {topUpPackages[selectedPackage].bonus > 0 && (
-                          <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: 13, color: "#2d6a4f" }}>Bonus credits 🎁</span>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: "#2d6a4f" }}>+{topUpPackages[selectedPackage].bonus}</span>
-                          </div>
-                        )}
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: 13, color: "#666" }}>Payment via</span>
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{paymentMethod.toUpperCase()}</span>
-                        </div>
-                        <div style={{ height: 1, background: "#e8e0d0" }} />
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: 14, fontWeight: 700 }}>Total you pay</span>
-                          <span style={{ fontSize: 14, fontWeight: 800, color: "#b45309" }}>₱{topUpPackages[selectedPackage].price.toLocaleString()}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: 14, fontWeight: 700 }}>Credits you get</span>
-                          <span style={{ fontSize: 14, fontWeight: 800, color: "#2d6a4f" }}>{topUpPackages[selectedPackage].credits + topUpPackages[selectedPackage].bonus} cr</span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleTopUp}
-                        disabled={processing}
-                        style={{ width: "100%", padding: "14px", background: processing ? "#a8c5b5" : "#2d6a4f", color: "white", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: processing ? "not-allowed" : "pointer", fontFamily: "'DM Sans', sans-serif" }}
-                      >
-                        {processing ? "Processing payment..." : `Pay ₱${topUpPackages[selectedPackage].price.toLocaleString()} →`}
-                      </button>
-                      <p style={{ fontSize: 11, color: "#aaa", textAlign: "center", marginTop: 10 }}>
-                        Secured by PayMongo · GCash · Maya
-                      </p>
-                    </>
-                  )}
+                <h3 className="font-fraunces text-lg font-black text-stone-900 mb-3">Payment Method</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  {PAYMENT_METHODS.map(m => (
+                    <div key={m.key} onClick={() => setPaymentMethod(m.key)}
+                      className={`rounded-xl p-4 border-2 cursor-pointer transition-all text-center ${
+                        paymentMethod === m.key ? "border-emerald-500 bg-emerald-50" : "border-stone-200 bg-white hover:border-stone-300"
+                      }`}>
+                      <div className="text-3xl mb-1">{m.icon}</div>
+                      <p className="text-sm font-bold text-stone-700">{m.label}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* Order summary */}
+              <div className="bg-white rounded-2xl p-6 border border-stone-200 h-fit shadow-sm">
+                <h3 className="font-fraunces text-lg font-black text-stone-900 mb-5">Order Summary</h3>
+                <div className="flex flex-col gap-3 mb-5">
+                  {[
+                    { label: "Package",  value: pkg.label },
+                    { label: "Credits",  value: `${pkg.credits} cr` },
+                    ...(pkg.bonus > 0 ? [{ label: "🎁 Bonus credits", value: `+${pkg.bonus} cr`, green: true }] : []),
+                    { label: "Payment",  value: paymentMethod.toUpperCase() },
+                  ].map(row => (
+                    <div key={row.label} className="flex justify-between items-center">
+                      <span className={`text-sm ${(row as any).green ? "text-emerald-600 font-semibold" : "text-stone-500"}`}>{row.label}</span>
+                      <span className={`text-sm font-bold ${(row as any).green ? "text-emerald-600" : "text-stone-800"}`}>{row.value}</span>
+                    </div>
+                  ))}
+                  <div className="border-t border-stone-100 pt-3 mt-1">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-sm font-bold text-stone-700">You pay</span>
+                      <span className="font-fraunces text-xl font-black text-amber-600">₱{pkg.price.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-bold text-stone-700">You get</span>
+                      <span className="font-fraunces text-xl font-black text-emerald-600">{pkg.credits + pkg.bonus} cr</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button onClick={handleTopUp} disabled={processing}
+                  className={`w-full py-3.5 rounded-xl text-sm font-black border-0 cursor-pointer transition-all font-sans ${
+                    processing ? "bg-stone-200 text-stone-400 cursor-not-allowed" : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm hover:shadow-md"
+                  }`}>
+                  {processing ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="animate-spin">⟳</span> Processing...
+                    </span>
+                  ) : `Pay ₱${pkg.price.toLocaleString()} →`}
+                </button>
+                <p className="text-[10px] text-stone-300 text-center mt-3 font-medium">Secured by PayMongo · GCash · Maya</p>
+              </div>
+            </div>
+          )
         )}
 
-        {/* History tab */}
+        {/* ── HISTORY ── */}
         {activeTab === "history" && (
-          <div style={{ background: "white", borderRadius: 20, padding: "24px", border: "1px solid #e8e0d0" }}>
-            <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 800, color: "#1a1a1a", marginBottom: 20 }}>Transaction History</h3>
+          <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
+            <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
+              <h3 className="font-fraunces text-lg font-black text-stone-900">Transaction History</h3>
+              <span className="text-xs font-bold text-stone-400 bg-stone-100 px-3 py-1 rounded-full">{transactions.length} total</span>
+            </div>
             {transactions.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "40px 0" }}>
-                <span style={{ fontSize: 40 }}>📋</span>
-                <p style={{ color: "#888", marginTop: 12 }}>No transactions yet</p>
+              <div className="py-16 text-center">
+                <div className="text-5xl mb-3">📋</div>
+                <p className="font-fraunces text-base font-black text-stone-700 mb-1">No transactions yet</p>
+                <p className="text-stone-400 text-sm">Your history will appear here once you start transacting.</p>
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              <div>
                 {transactions.map((txn, i) => {
-                  const cfg = typeConfig[txn.type] || typeConfig.default;
+                  const cfg = TX_CONFIG[txn.type] || TX_CONFIG.default;
                   return (
-                    <div key={txn.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: i < transactions.length - 1 ? "1px solid #f5f0e8" : "none" }}>
-                      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 12, background: cfg.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
+                    <div key={txn.id} className={`flex items-center gap-4 px-6 py-4 hover:bg-stone-50 transition-colors justify-between ${i < transactions.length - 1 ? "border-b border-stone-100" : ""}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 ${cfg.tw} rounded-xl flex items-center justify-center text-xl flex-shrink-0`}>
                           {cfg.icon}
                         </div>
                         <div>
-                          <p style={{ fontSize: 14, fontWeight: 600, color: "#333", margin: "0 0 2px" }}>{cfg.label}</p>
-                          <p style={{ fontSize: 12, color: "#aaa", margin: 0 }}>{txn.description}</p>
-                          <p style={{ fontSize: 11, color: "#ccc", margin: 0 }}>{new Date(txn.created_at).toLocaleString()}</p>
+                          <p className="text-sm font-semibold text-stone-800">{cfg.label}</p>
+                          <p className="text-xs text-stone-400 mt-0.5">{txn.description}</p>
+                          <p className="text-[11px] text-stone-300">{new Date(txn.created_at).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
                         </div>
                       </div>
-                      <span style={{ fontSize: 16, fontWeight: 800, color: txn.amount > 0 ? "#2d6a4f" : "#dc2626", flexShrink: 0 }}>
+                      <span className={`font-fraunces text-xl font-black flex-shrink-0 ${txn.amount > 0 ? "text-emerald-600" : "text-red-500"}`}>
                         {txn.amount > 0 ? "+" : ""}{txn.amount} cr
                       </span>
                     </div>
