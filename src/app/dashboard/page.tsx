@@ -83,7 +83,6 @@ export default function Dashboard() {
         setAvgRating(parseFloat(avg.toFixed(1)));
       }
 
-      // Repeat clients — learners who booked more than once
       const { data: sessionData } = await supabase
         .from("sessions").select("learner_id")
         .eq("teacher_id", user.id).eq("status", "completed");
@@ -95,7 +94,6 @@ export default function Dashboard() {
         setRepeatClients(Object.values(counts).filter(c => c > 1).length);
       }
 
-      // Disputes (sessions marked disputed)
       const { count: dCount } = await supabase
         .from("sessions").select("*", { count: "exact", head: true })
         .eq("teacher_id", user.id).eq("status", "disputed");
@@ -144,7 +142,14 @@ export default function Dashboard() {
           <span className="font-fraunces text-xl font-black text-stone-900">Credit</span>
         </a>
         <div className="flex items-center gap-1">
-          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([label, href]) => (
+          {[
+            ["Browse",    "/listings"],
+            ["Bounties",  "/bounties"],
+            ["Community", "/community"],
+            ["Sessions",  "/sessions"],
+            ["Messages",  "/messages"],
+            ["People",    "/people"],   // 👥 added
+          ].map(([label, href]) => (
             <a key={label} href={href} className="px-3 py-1.5 rounded-lg text-stone-500 text-sm font-semibold hover:bg-stone-100 transition-colors no-underline">{label}</a>
           ))}
         </div>
@@ -176,6 +181,7 @@ export default function Dashboard() {
                 </div>
                 {[
                   { icon: "👤", label: "My Profile",     href: "/profile" },
+                  { icon: "👥", label: "People",          href: "/people" },
                   { icon: "📋", label: "Create Listing", href: "/listings/create" },
                   { icon: "✅", label: "Get Verified",   href: "/verify" },
                   { icon: "💰", label: "Wallet",         href: "/wallet" },
