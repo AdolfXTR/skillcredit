@@ -2,15 +2,23 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { PortfolioGallery, PortfolioItem } from "@/components/PortfolioSystem";
-import { ReputationMini, calcReputation } from "@/components/ReputationScore";
-import { BadgeChip, getBadgeTier } from "@/components/BadgeSystem";
+
+// ── NOTE: If PortfolioGallery / ReputationMini / BadgeChip don't exist yet,
+//    remove those imports and the components will be skipped gracefully.
+// import { PortfolioGallery } from "@/components/PortfolioSystem";
+// import { ReputationMini } from "@/components/ReputationScore";
+// import { BadgeChip } from "@/components/BadgeSystem";
+
+type PortfolioItem = {
+  id: string; url: string; type: string; caption: string;
+};
 
 type Listing = {
   id: string; title: string; description: string;
   credit_price: number; format: string; duration: number;
   prerequisites: string; outcomes: string; materials: string;
   is_active: boolean; created_at: string; teacher_id: string;
+  thumbnail_url?: string;                          // ← FIX: added
   skills: { name: string; category: string };
   profiles: { id: string; full_name: string; username: string; level: string; bio: string; xp: number };
 };
@@ -18,11 +26,63 @@ type Listing = {
 type UserProfile = { id: string; full_name: string; credits: number };
 
 const FORMAT_INFO: Record<string, { icon: string; label: string; color: string; bg: string; border: string; desc: string }> = {
-  video: { icon: "📹", label: "Video Call", color: "text-sky-700",    bg: "bg-sky-50",    border: "border-sky-200", desc: "Live session via Google Meet or Zoom" },
+  video: { icon: "📹", label: "Video Call", color: "text-sky-700",    bg: "bg-sky-50",    border: "border-sky-200",    desc: "Live session via Google Meet or Zoom" },
   chat:  { icon: "💬", label: "Chat",       color: "text-emerald-700",bg: "bg-emerald-50",border: "border-emerald-200", desc: "Text-based teaching inside SkillCredit" },
   docs:  { icon: "📄", label: "Docs",       color: "text-violet-700", bg: "bg-violet-50", border: "border-violet-200", desc: "Shared documents and written guides" },
-  mixed: { icon: "🎨", label: "Mixed",      color: "text-amber-700",  bg: "bg-amber-50",  border: "border-amber-200", desc: "Combination of video, chat, and documents" },
+  mixed: { icon: "🎨", label: "Mixed",      color: "text-amber-700",  bg: "bg-amber-50",  border: "border-amber-200",  desc: "Combination of video, chat, and documents" },
 };
+
+const CATEGORY_TW: Record<string, string> = {
+  Programming: "from-blue-700 to-blue-500",
+  Design:      "from-pink-700 to-pink-500",
+  Language:    "from-emerald-700 to-emerald-500",
+  Academic:    "from-violet-700 to-violet-500",
+  Music:       "from-amber-700 to-amber-500",
+  Arts:        "from-red-700 to-red-500",
+  Media:       "from-sky-700 to-sky-500",
+  Science:     "from-teal-700 to-teal-500",
+};
+
+const CATEGORY_ICON: Record<string, string> = {
+  Programming: "💻", Design: "🎨", Language: "🌍", Academic: "📚",
+  Music: "🎵", Arts: "🎭", Media: "🎬", Science: "🔬", Other: "💡",
+};
+
+function getInitials(name: string) {
+  return (name || "??").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+}
+
+// Simple inline portfolio gallery
+function PortfolioGallery({ items }: { items: PortfolioItem[] }) {
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  if (!items.length) return null;
+  return (
+    <div className="bg-white rounded-2xl border border-stone-200 p-6">
+      <style>{`.font-fraunces{font-family:'Fraunces',serif}`}</style>
+      <h3 className="font-fraunces text-base font-black text-stone-900 mb-4">📁 Portfolio Samples</h3>
+      <div className="grid grid-cols-3 gap-3">
+        {items.map(item => (
+          <div key={item.id} className="rounded-xl overflow-hidden border border-stone-200 cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={() => item.type === "image" && setLightbox(item.url)}>
+            {item.type === "image" ? (
+              <img src={item.url} alt={item.caption || "Portfolio"} className="w-full h-24 object-cover" />
+            ) : item.type === "video" ? (
+              <div className="w-full h-24 bg-stone-100 flex items-center justify-center text-3xl">🎬</div>
+            ) : (
+              <div className="w-full h-24 bg-stone-100 flex items-center justify-center text-3xl">📄</div>
+            )}
+            {item.caption && <p className="text-xs text-stone-400 p-2 truncate">{item.caption}</p>}
+          </div>
+        ))}
+      </div>
+      {lightbox && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="Preview" className="max-w-full max-h-full rounded-2xl shadow-2xl" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ListingDetailPage() {
   const params = useParams();
@@ -40,17 +100,16 @@ export default function ListingDetailPage() {
   const [booking, setBooking]         = useState(false);
   const [bookError, setBookError]     = useState("");
 
-  // Teacher reputation data
-  const [teacherSessions, setTeacherSessions]     = useState(0);
-  const [teacherAvgRating, setTeacherAvgRating]   = useState(0);
-  const [teacherRepeats, setTeacherRepeats]       = useState(0);
-  const [teacherDisputes, setTeacherDisputes]     = useState(0);
+  const [teacherSessions, setTeacherSessions]   = useState(0);
+  const [teacherAvgRating, setTeacherAvgRating] = useState(0);
+  const [teacherDisputes, setTeacherDisputes]   = useState(0);
 
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: prof } = await supabase.from("profiles").select("id, full_name, credits").eq("id", user.id).single();
+        const { data: prof } = await supabase
+          .from("profiles").select("id, full_name, credits").eq("id", user.id).single();
         if (prof) setCurrentUser(prof);
       }
 
@@ -62,40 +121,28 @@ export default function ListingDetailPage() {
       if (error || !data) { setLoading(false); return; }
       setListing(data as Listing);
 
-      // Portfolio
+      // Portfolio items
       const { data: pData } = await supabase
         .from("portfolio_items").select("*").eq("listing_id", id);
       if (pData) setPortfolio(pData as PortfolioItem[]);
 
-      // Teacher reputation data
+      // Teacher stats
       const teacherId = data.teacher_id;
       const [
         { count: sCount },
         { data: ratingData },
-        { data: sessionData },
         { count: dCount },
       ] = await Promise.all([
         supabase.from("sessions").select("*", { count: "exact", head: true }).eq("teacher_id", teacherId).eq("status", "completed"),
         supabase.from("ratings").select("overall").eq("rated_id", teacherId),
-        supabase.from("sessions").select("learner_id").eq("teacher_id", teacherId).eq("status", "completed"),
         supabase.from("sessions").select("*", { count: "exact", head: true }).eq("teacher_id", teacherId).eq("status", "disputed"),
       ]);
 
       setTeacherSessions(sCount || 0);
-
-      if (ratingData && ratingData.length > 0) {
-        const avg = ratingData.reduce((s: number, r: { overall: number }) => s + r.overall, 0) / ratingData.length;
+      if (ratingData?.length) {
+        const avg = ratingData.reduce((s: number, r: any) => s + r.overall, 0) / ratingData.length;
         setTeacherAvgRating(parseFloat(avg.toFixed(1)));
       }
-
-      if (sessionData) {
-        const counts: Record<string, number> = {};
-        sessionData.forEach((s: { learner_id: string }) => {
-          counts[s.learner_id] = (counts[s.learner_id] || 0) + 1;
-        });
-        setTeacherRepeats(Object.values(counts).filter(c => c > 1).length);
-      }
-
       setTeacherDisputes(dCount || 0);
       setLoading(false);
     };
@@ -115,15 +162,16 @@ export default function ListingDetailPage() {
 
     const proposedDateTime = new Date(`${proposedDate}T${proposedTime}`).toISOString();
 
-    const { data: session, error: sessionErr } = await supabase.from("sessions").insert({
-      listing_id:    listing.id,
-      teacher_id:    listing.teacher_id,
-      learner_id:    currentUser.id,
-      proposed_time: proposedDateTime,
-      status:        "pending",
-      learner_note:  note,
-      credit_amount: listing.credit_price,
-    }).select().single();
+    const { data: session, error: sessionErr } = await supabase
+      .from("sessions").insert({
+        listing_id:    listing.id,
+        teacher_id:    listing.teacher_id,
+        learner_id:    currentUser.id,
+        proposed_time: proposedDateTime,
+        status:        "pending",
+        learner_note:  note,
+        credit_amount: listing.credit_price,
+      }).select().single();
 
     if (sessionErr || !session) {
       setBookError("Failed to create session. Please try again.");
@@ -154,35 +202,38 @@ export default function ListingDetailPage() {
   const isOwnListing = currentUser?.id === listing?.teacher_id;
   const canAfford    = currentUser ? currentUser.credits >= (listing?.credit_price || 0) : false;
   const fmt          = FORMAT_INFO[listing?.format || "mixed"] || FORMAT_INFO.mixed;
-  const teacherInitials = listing?.profiles?.full_name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "??";
-  const teacherBadge = getBadgeTier(listing?.profiles?.xp || 0, teacherSessions, teacherAvgRating);
-  const repScore     = calcReputation({ avgRating: teacherAvgRating, completedSessions: teacherSessions, repeatClients: teacherRepeats, disputes: teacherDisputes });
+  const teacherInitials = getInitials(listing?.profiles?.full_name || "??");
+  const catGradient  = CATEGORY_TW[listing?.skills?.category || ""] || "from-emerald-700 to-emerald-500";
+  const catIcon      = CATEGORY_ICON[listing?.skills?.category || ""] || "💡";
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().split("T")[0];
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-        <div className="text-center"><div className="text-5xl mb-4">📋</div><p className="text-stone-400 text-sm">Loading listing...</p></div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+      <div className="text-center"><div className="text-5xl mb-4 animate-pulse">📋</div><p className="text-stone-400 text-sm">Loading listing...</p></div>
+    </div>
+  );
 
-  if (!listing) {
-    return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-        <div className="text-center"><div className="text-5xl mb-4">😕</div><p className="text-stone-400 text-sm">Listing not found.</p><a href="/listings" className="text-emerald-600 text-sm font-bold no-underline mt-2 block">← Back to listings</a></div>
+  if (!listing) return (
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-5xl mb-4">😕</div>
+        <p className="text-stone-400 text-sm">Listing not found.</p>
+        <a href="/listings" className="text-emerald-600 text-sm font-bold no-underline mt-2 block">← Back to listings</a>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-stone-50 font-sans">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap'); .font-fraunces{font-family:'Fraunces',serif;} .font-sans{font-family:'DM Sans',sans-serif;}`}</style>
+    <div className="min-h-screen bg-stone-50">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
+        .font-fraunces{font-family:'Fraunces',serif} body{font-family:'DM Sans',sans-serif}
+      `}</style>
 
-      {/* Booking Modal */}
+      {/* ── BOOKING MODAL ── */}
       {showBookModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -191,7 +242,6 @@ export default function ListingDetailPage() {
               <>
                 <h2 className="font-fraunces text-2xl font-black text-stone-900 mb-1">Book a Session 📅</h2>
                 <p className="text-stone-400 text-sm mb-6">Propose a time and the teacher will confirm.</p>
-
                 <div className="flex flex-col gap-4">
                   {/* Summary */}
                   <div className={`rounded-2xl border p-4 flex justify-between items-center ${fmt.bg} ${fmt.border}`}>
@@ -209,21 +259,21 @@ export default function ListingDetailPage() {
                     <label className="text-xs font-bold text-stone-500 block mb-1.5">Preferred Date *</label>
                     <input type="date" min={minDate} value={proposedDate}
                       onChange={e => setProposedDate(e.target.value)}
-                      className={`w-full p-3 rounded-xl border text-sm bg-stone-50 outline-none font-sans transition-colors ${proposedDate ? "border-emerald-400" : "border-stone-200"}`} />
+                      className={`w-full p-3 rounded-xl border text-sm bg-stone-50 outline-none transition-colors ${proposedDate ? "border-emerald-400" : "border-stone-200"}`} />
                   </div>
 
                   <div>
                     <label className="text-xs font-bold text-stone-500 block mb-1.5">Preferred Time *</label>
                     <input type="time" value={proposedTime}
                       onChange={e => setProposedTime(e.target.value)}
-                      className={`w-full p-3 rounded-xl border text-sm bg-stone-50 outline-none font-sans transition-colors ${proposedTime ? "border-emerald-400" : "border-stone-200"}`} />
+                      className={`w-full p-3 rounded-xl border text-sm bg-stone-50 outline-none transition-colors ${proposedTime ? "border-emerald-400" : "border-stone-200"}`} />
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-stone-500 block mb-1.5">Message to teacher <span className="font-normal text-stone-300">(optional)</span></label>
+                    <label className="text-xs font-bold text-stone-500 block mb-1.5">Message <span className="font-normal text-stone-300">(optional)</span></label>
                     <textarea rows={3} placeholder="Tell the teacher about your experience level..."
                       value={note} onChange={e => setNote(e.target.value)}
-                      className="w-full p-3 rounded-xl border border-stone-200 text-sm bg-stone-50 outline-none font-sans resize-none" />
+                      className="w-full p-3 rounded-xl border border-stone-200 text-sm bg-stone-50 outline-none resize-none" />
                   </div>
 
                   <div className={`rounded-xl p-3 flex justify-between items-center ${canAfford ? "bg-emerald-50" : "bg-red-50"}`}>
@@ -239,9 +289,15 @@ export default function ListingDetailPage() {
                 {bookError && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-xl mt-3">{bookError}</p>}
 
                 <div className="flex gap-3 mt-6">
-                  <button onClick={() => setShowBookModal(false)} className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl text-sm font-bold border-0 cursor-pointer hover:bg-stone-200 transition-colors">Cancel</button>
-                  <button
-                    onClick={() => { if (!proposedDate || !proposedTime) { setBookError("Please select a date and time."); return; } if (!canAfford) { setBookError(`You need ${listing.credit_price} credits.`); return; } setBookError(""); setBookingStep("confirm"); }}
+                  <button onClick={() => setShowBookModal(false)}
+                    className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl text-sm font-bold border-0 cursor-pointer hover:bg-stone-200 transition-colors">
+                    Cancel
+                  </button>
+                  <button onClick={() => {
+                    if (!proposedDate || !proposedTime) { setBookError("Please select a date and time."); return; }
+                    if (!canAfford) { setBookError(`You need ${listing.credit_price} credits.`); return; }
+                    setBookError(""); setBookingStep("confirm");
+                  }}
                     className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl text-sm font-black border-0 cursor-pointer hover:bg-emerald-700 transition-colors">
                     Review Booking →
                   </button>
@@ -253,15 +309,14 @@ export default function ListingDetailPage() {
               <>
                 <h2 className="font-fraunces text-2xl font-black text-stone-900 mb-1">Confirm Booking 🔒</h2>
                 <p className="text-stone-400 text-sm mb-6">Credits will be held in escrow until the session is complete.</p>
-
                 <div className="flex flex-col gap-2 mb-5">
                   {[
-                    { label: "Session",       value: listing.title },
-                    { label: "Teacher",       value: listing.profiles?.full_name },
-                    { label: "Format",        value: `${fmt.icon} ${fmt.label}` },
-                    { label: "Duration",      value: `${listing.duration} minutes` },
-                    { label: "Proposed time", value: proposedDate && proposedTime ? new Date(`${proposedDate}T${proposedTime}`).toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "" },
-                    { label: "Credits",       value: `${listing.credit_price} cr (₱${listing.credit_price * 10})` },
+                    { label: "Session",   value: listing.title },
+                    { label: "Teacher",   value: listing.profiles?.full_name },
+                    { label: "Format",    value: `${fmt.icon} ${fmt.label}` },
+                    { label: "Duration",  value: `${listing.duration} minutes` },
+                    { label: "Time",      value: proposedDate && proposedTime ? new Date(`${proposedDate}T${proposedTime}`).toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "" },
+                    { label: "Credits",   value: `${listing.credit_price} cr (₱${listing.credit_price * 10})` },
                   ].map(item => (
                     <div key={item.label} className="flex justify-between items-center px-4 py-2.5 bg-stone-50 rounded-xl text-sm">
                       <span className="text-stone-400 font-semibold">{item.label}</span>
@@ -269,17 +324,17 @@ export default function ListingDetailPage() {
                     </div>
                   ))}
                 </div>
-
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5">
                   <p className="text-xs text-amber-700 leading-relaxed">
-                    ⚠️ <strong>{listing.credit_price} credits</strong> will be locked in escrow. Released to the teacher after the session is marked complete.
+                    ⚠️ <strong>{listing.credit_price} credits</strong> will be locked in escrow and released to the teacher after the session is complete.
                   </p>
                 </div>
-
                 {bookError && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-xl mb-3">{bookError}</p>}
-
                 <div className="flex gap-3">
-                  <button onClick={() => setBookingStep("form")} className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl text-sm font-bold border-0 cursor-pointer hover:bg-stone-200 transition-colors">← Back</button>
+                  <button onClick={() => setBookingStep("form")}
+                    className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl text-sm font-bold border-0 cursor-pointer hover:bg-stone-200 transition-colors">
+                    ← Back
+                  </button>
                   <button onClick={handleBook} disabled={booking}
                     className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl text-sm font-black border-0 cursor-pointer hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
                     {booking ? "Confirming..." : `🔒 Confirm & Lock ${listing.credit_price} Credits`}
@@ -295,7 +350,7 @@ export default function ListingDetailPage() {
                 <p className="text-stone-500 text-sm mb-1">Your request has been sent to <strong>{listing.profiles?.full_name}</strong>.</p>
                 <p className="text-stone-400 text-sm mb-6"><strong>{listing.credit_price} credits</strong> are now held in escrow.</p>
                 <div className="flex gap-3">
-                  <a href="/dashboard" className="flex-1 py-3 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-bold no-underline text-center hover:bg-emerald-100 transition-colors">Dashboard</a>
+                  <a href="/sessions" className="flex-1 py-3 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-bold no-underline text-center hover:bg-emerald-100 transition-colors">View Sessions</a>
                   <button onClick={() => { setShowBookModal(false); setBookingStep("form"); }}
                     className="flex-1 py-3 bg-emerald-600 text-white rounded-xl text-sm font-black border-0 cursor-pointer hover:bg-emerald-700 transition-colors">
                     Done ✓
@@ -307,8 +362,8 @@ export default function ListingDetailPage() {
         </div>
       )}
 
-      {/* Navbar */}
-      <nav className="bg-white border-b border-stone-200 sticky top-0 z-40 px-8 h-14 flex items-center justify-between">
+      {/* ── NAVBAR ── */}
+      <nav className="bg-white border-b border-stone-200 sticky top-0 z-40 px-8 h-14 flex items-center justify-between shadow-sm">
         <a href="/dashboard" className="flex items-center no-underline">
           <span className="font-fraunces text-xl font-black text-emerald-700">Skill</span>
           <span className="font-fraunces text-xl font-black text-stone-900">Credit</span>
@@ -316,7 +371,9 @@ export default function ListingDetailPage() {
         <div className="flex items-center gap-2">
           <a href="/listings" className="px-3 py-1.5 rounded-lg text-stone-500 text-sm font-semibold hover:bg-stone-100 transition-colors no-underline">← All Listings</a>
           {currentUser && (
-            <span className="bg-emerald-50 text-emerald-700 text-sm font-bold px-3 py-1.5 rounded-full">💰 {currentUser.credits} cr</span>
+            <span className="bg-emerald-50 text-emerald-700 text-sm font-bold px-3 py-1.5 rounded-full border border-emerald-200">
+              💰 {currentUser.credits} cr
+            </span>
           )}
         </div>
       </nav>
@@ -324,17 +381,33 @@ export default function ListingDetailPage() {
       <div className="max-w-5xl mx-auto px-6 py-8">
         <div className="grid grid-cols-[1fr_320px] gap-7 items-start">
 
-          {/* LEFT */}
+          {/* ── LEFT ── */}
           <div className="flex flex-col gap-5">
 
-            {/* Hero */}
+            {/* ── FIX: Thumbnail/hero section ── */}
+            {listing.thumbnail_url ? (
+              // Show actual uploaded thumbnail
+              <div className="rounded-2xl overflow-hidden border border-stone-200 shadow-sm" style={{ height: 280 }}>
+                <img src={listing.thumbnail_url} alt={listing.title} className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              // Fallback: category gradient with icon
+              <div className={`rounded-2xl bg-gradient-to-br ${catGradient} flex items-center justify-center`} style={{ height: 180 }}>
+                <span style={{ fontSize: 72, filter: "drop-shadow(0 4px 20px rgba(0,0,0,0.3))" }}>{catIcon}</span>
+              </div>
+            )}
+
+            {/* Main listing info card */}
             <div className="bg-white rounded-2xl border border-stone-200 p-7">
               <div className="flex gap-2 flex-wrap mb-4">
                 <span className={`text-xs font-bold px-3 py-1 rounded-full ${fmt.bg} ${fmt.color}`}>{fmt.icon} {fmt.label}</span>
                 <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700">{listing.skills?.category}</span>
+                <span className="text-xs font-bold px-3 py-1 rounded-full bg-stone-100 text-stone-600">📌 {listing.skills?.name}</span>
                 <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-50 text-amber-700">⏱ {listing.duration} min</span>
                 {portfolio.length > 0 && (
-                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-violet-50 text-violet-700">📁 {portfolio.length} portfolio sample{portfolio.length > 1 ? "s" : ""}</span>
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-violet-50 text-violet-700">
+                    📁 {portfolio.length} sample{portfolio.length > 1 ? "s" : ""}
+                  </span>
                 )}
               </div>
               <h1 className="font-fraunces text-2xl font-black text-stone-900 mb-4 leading-snug">{listing.title}</h1>
@@ -344,7 +417,7 @@ export default function ListingDetailPage() {
             {/* Portfolio Gallery */}
             <PortfolioGallery items={portfolio} />
 
-            {/* What you'll learn */}
+            {/* Outcomes */}
             {listing.outcomes && (
               <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6">
                 <h3 className="font-fraunces text-base font-black text-emerald-700 mb-2">🎯 What You'll Walk Away With</h3>
@@ -357,10 +430,10 @@ export default function ListingDetailPage() {
               <h3 className="font-fraunces text-base font-black text-stone-900 mb-4">Session Details</h3>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { icon: fmt.icon, label: "Format",        value: `${fmt.label} — ${fmt.desc}` },
-                  { icon: "⏱",     label: "Duration",      value: `${listing.duration} minutes` },
-                  { icon: "📋",    label: "Prerequisites",  value: listing.prerequisites || "None required" },
-                  { icon: "📦",    label: "Materials",      value: listing.materials || "Will be discussed in session" },
+                  { icon: fmt.icon, label: "Format",       value: `${fmt.label} — ${fmt.desc}` },
+                  { icon: "⏱",     label: "Duration",     value: `${listing.duration} minutes` },
+                  { icon: "📋",    label: "Prerequisites", value: listing.prerequisites || "None required" },
+                  { icon: "📦",    label: "Materials",     value: listing.materials || "Discussed during session" },
                 ].map(item => (
                   <div key={item.label} className="bg-stone-50 rounded-xl p-4">
                     <p className="text-[10px] font-black text-stone-400 uppercase tracking-wide mb-1">{item.icon} {item.label}</p>
@@ -378,26 +451,30 @@ export default function ListingDetailPage() {
                   {teacherInitials}
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <h4 className="font-fraunces text-lg font-black text-stone-900">{listing.profiles?.full_name}</h4>
-                    <BadgeChip tier={teacherBadge} size="sm" />
-                  </div>
-                  <p className="text-xs text-stone-400 mb-2">@{listing.profiles?.username}</p>
+                  <h4 className="font-fraunces text-lg font-black text-stone-900 mb-0.5">{listing.profiles?.full_name}</h4>
+                  <p className="text-xs text-stone-400 mb-2">@{listing.profiles?.username} · {listing.profiles?.level || "Seedling"}</p>
                   {listing.profiles?.bio && <p className="text-sm text-stone-500 leading-relaxed">{listing.profiles.bio}</p>}
                 </div>
               </div>
 
-              {/* Reputation mini */}
-              <ReputationMini data={{
-                avgRating:          teacherAvgRating,
-                completedSessions:  teacherSessions,
-                repeatClients:      teacherRepeats,
-                disputes:           teacherDisputes,
-              }} />
+              {/* Teacher stats */}
+              <div className="grid grid-cols-3 gap-3 pt-4 border-t border-stone-100">
+                {[
+                  { icon: "📚", label: "Sessions",  value: teacherSessions },
+                  { icon: "⭐", label: "Avg Rating", value: teacherAvgRating > 0 ? teacherAvgRating.toFixed(1) : "—" },
+                  { icon: "⚡", label: "XP",         value: (listing.profiles?.xp || 0).toLocaleString() },
+                ].map(s => (
+                  <div key={s.label} className="text-center bg-stone-50 rounded-xl p-3">
+                    <div className="text-lg mb-1">{s.icon}</div>
+                    <p className="font-fraunces text-lg font-black text-stone-800">{s.value}</p>
+                    <p className="text-[10px] text-stone-400 font-semibold">{s.label}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* RIGHT — Booking sidebar */}
+          {/* ── RIGHT: Booking sidebar ── */}
           <div className="sticky top-20">
             <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm">
               {/* Price */}
@@ -426,7 +503,10 @@ export default function ListingDetailPage() {
               {/* CTA */}
               {isOwnListing ? (
                 <div className="bg-stone-50 rounded-xl p-4 text-center">
-                  <p className="text-sm text-stone-400">This is your own listing</p>
+                  <p className="text-sm text-stone-400 font-medium">This is your own listing</p>
+                  <a href="/listings" className="text-xs text-emerald-600 font-bold no-underline hover:underline mt-1 block">
+                    Browse other listings →
+                  </a>
                 </div>
               ) : currentUser ? (
                 <>
@@ -449,7 +529,7 @@ export default function ListingDetailPage() {
               )}
 
               <p className="text-[11px] text-stone-300 text-center mt-3 leading-relaxed">
-                Credits are locked in escrow until both parties confirm the session is complete.
+                Credits locked in escrow until both parties confirm session completion.
               </p>
             </div>
           </div>
