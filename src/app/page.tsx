@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 const mockCards = [
   { type: "listing", title: "Python for Absolute Beginners", teacher: "Maria S.", skill: "Programming", credits: 15, rating: 4.9, reviews: 34, verified: true, color: "#e8f4e8", accent: "#2d6a4f", tag: "💻" },
@@ -14,13 +15,6 @@ const mockCards = [
   { type: "community", title: "Best resources for learning React in 2025? Drop your recs 👇", author: "techie_anna", upvotes: 89, answers: 31, skill: "Programming", color: "#f0f4ff", accent: "#3730a3", tag: "💬" },
   { type: "listing", title: "Video Editing with CapCut — Reels, vlogs & transitions", teacher: "Kiko D.", skill: "Media", credits: 14, rating: 4.6, reviews: 29, verified: true, color: "#fdf0f8", accent: "#9d174d", tag: "🎬" },
   { type: "achievement", title: "🎯 Ana won 1st place on a Python bounty!", sub: "Earned 18 credits · Problem Solver badge", color: "#fffbf0", accent: "#92400e", tag: "⭐" },
-];
-
-const stats = [
-  { num: "1,200+", label: "Active Users" },
-  { num: "3,500+", label: "Sessions Done" },
-  { num: "850+", label: "Bounties Solved" },
-  { num: "₱0", label: "To Get Started" },
 ];
 
 const features = [
@@ -68,17 +62,71 @@ const MiniCard = ({ card, onClick }: { card: typeof mockCards[0]; onClick: () =>
   </div>
 );
 
+// ── Animated counter hook ──────────────────────────────────────────────────
+function useCountUp(target: number, duration = 1500) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (target === 0) return;
+    let start = 0;
+    const step = target / (duration / 16);
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= target) { setCount(target); clearInterval(timer); }
+      else setCount(Math.floor(start));
+    }, 16);
+    return () => clearInterval(timer);
+  }, [target, duration]);
+  return count;
+}
+
+function StatNumber({ value, suffix = "+" }: { value: number; suffix?: string }) {
+  const count = useCountUp(value);
+  if (value === 0) return <span>—</span>;
+  return <span>{count.toLocaleString()}{suffix}</span>;
+}
+
 export default function LandingPage() {
   const [showModal, setShowModal] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+
+  // ── LIVE STATS from Supabase ───────────────────────────────────────────────
+  const [liveStats, setLiveStats] = useState({
+    users: 0,
+    sessions: 0,
+    bounties: 0,
+    loaded: false,
+  });
+
+  useEffect(() => {
+    const loadStats = async () => {
+      const [usersRes, sessionsRes, bountiesRes] = await Promise.all([
+        supabase.from("profiles").select("*", { count: "exact", head: true }),
+        supabase.from("sessions").select("*", { count: "exact", head: true }).eq("status", "completed"),
+        supabase.from("bounties").select("*", { count: "exact", head: true }).eq("status", "closed"),
+      ]);
+      setLiveStats({
+        users:    usersRes.count    ?? 0,
+        sessions: sessionsRes.count ?? 0,
+        bounties: bountiesRes.count ?? 0,
+        loaded: true,
+      });
+    };
+    loadStats();
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  const stats = [
+    { value: liveStats.users,    suffix: "+", label: "Active Users"    },
+    { value: liveStats.sessions, suffix: "+", label: "Sessions Done"   },
+    { value: liveStats.bounties, suffix: "+", label: "Bounties Solved" },
+    { value: 0,                  suffix: "",  label: "To Get Started", display: "₱0" },
+  ];
 
   if (guestMode) {
     return (
@@ -134,6 +182,7 @@ export default function LandingPage() {
         @keyframes fadeUp { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
         @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes shimmer { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
         .hero-tag { animation: fadeUp 0.6s ease both; }
         .hero-h1 { animation: fadeUp 0.6s 0.1s ease both; }
@@ -150,9 +199,10 @@ export default function LandingPage() {
         .feature-card:hover { transform: translateY(-4px); box-shadow: 0 12px 36px rgba(0,0,0,0.09) !important; }
         .nav-link { transition: color 0.15s, background 0.15s; }
         .nav-link:hover { color: #2d6a4f !important; background: #f0f8f0 !important; }
-        .dev-badge:hover { opacity: 0.8; }
+        .stat-card { transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); }
+        .stat-loading { animation: shimmer 1.5s ease infinite; }
 
-        /* ── RESPONSIVE ── */
         .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
         .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
         .steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
@@ -262,17 +312,33 @@ export default function LandingPage() {
               </div>
             </div>
 
+            {/* ── LIVE STATS ── */}
             <div className="hero-stats stats-row">
-              {stats.map(s => (
-                <div key={s.label}>
-                  <p style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 900, color: "#2d6a4f", lineHeight: 1 }}>{s.num}</p>
+              {stats.map((s, i) => (
+                <div key={i} className="stat-card">
+                  <p style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 900, color: "#2d6a4f", lineHeight: 1 }}>
+                    {s.display ? (
+                      s.display
+                    ) : !liveStats.loaded ? (
+                      <span className="stat-loading" style={{ display: "inline-block", width: 48, height: 24, background: "#e8f4e8", borderRadius: 6 }} />
+                    ) : (
+                      <StatNumber value={s.value} suffix={s.suffix} />
+                    )}
+                  </p>
                   <p style={{ fontSize: 12, color: "#aaa", fontWeight: 600, marginTop: 3 }}>{s.label}</p>
+                  {/* ✅ live indicator for real stats */}
+                  {!s.display && liveStats.loaded && s.value > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
+                      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2d6a4f", animation: "pulse 2s infinite", display: "inline-block" }} />
+                      <span style={{ fontSize: 9, color: "#aaa", fontWeight: 600 }}>live</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Right */}
+          {/* Right — preview */}
           <div className="preview-col preview-col-wrap" style={{ position: "relative" }}>
             <div style={{ position: "absolute", top: "10%", left: "10%", width: "80%", height: "80%", background: "radial-gradient(ellipse, rgba(45,106,79,0.12) 0%, transparent 70%)", pointerEvents: "none", borderRadius: "50%" }} />
             <div style={{ position: "relative", borderRadius: 24, overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.14), 0 0 0 1.5px #e8e2d9", background: "#fff" }}>
@@ -423,32 +489,21 @@ export default function LandingPage() {
       {/* ── FOOTER ── */}
       <footer style={{ background: "#1a1a1a", padding: "32px 48px" }}>
         <div className="footer-inner">
-          {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
             <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
             <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 900, color: "#fff" }}>Credit</span>
           </div>
-
-          {/* Center — developer credit */}
           <div style={{ textAlign: "center" }}>
             <p style={{ fontSize: 12, color: "#444", marginBottom: 6 }}>Built with ❤️ for Filipino learners and teachers</p>
-            <div className="dev-badge" style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              background: "linear-gradient(135deg, #1a3d2e, #2d6a4f)",
-              border: "1px solid rgba(45,106,79,0.4)",
-              borderRadius: 999, padding: "6px 16px",
-              cursor: "default", transition: "opacity 0.2s"
-            }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "linear-gradient(135deg, #1a3d2e, #2d6a4f)", border: "1px solid rgba(45,106,79,0.4)", borderRadius: 999, padding: "6px 16px" }}>
               <span style={{ fontSize: 12 }}>👨‍💻</span>
               <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 400 }}>Developed by</span>
-              <span style={{ fontSize: 13, color: "#fff", fontWeight: 700, letterSpacing: "0.2px" }}>France Adolf P. Borja</span>
+              <span style={{ fontSize: 13, color: "#fff", fontWeight: 700 }}>France Adolf P. Borja</span>
             </div>
           </div>
-
-          {/* Links */}
           <div className="footer-links" style={{ display: "flex", gap: 16 }}>
             {["Privacy", "Terms", "Contact"].map(l => (
-              <a key={l} href="#" style={{ fontSize: 13, color: "#555", fontWeight: 600, textDecoration: "none", transition: "color 0.15s" }}
+              <a key={l} href="#" style={{ fontSize: 13, color: "#555", fontWeight: 600 }}
                 onMouseOver={e => e.currentTarget.style.color = "#fff"}
                 onMouseOut={e => e.currentTarget.style.color = "#555"}>
                 {l}
@@ -456,7 +511,6 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
-
         <div style={{ borderTop: "1px solid #2a2a2a", marginTop: 24, paddingTop: 20, textAlign: "center" }}>
           <p style={{ fontSize: 11, color: "#333" }}>© 2025 SkillCredit · All rights reserved · Thesis Project</p>
         </div>

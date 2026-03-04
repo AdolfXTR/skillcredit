@@ -2,12 +2,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-// ── REMOVED broken imports ────────────────────────────────────────────────────
-// OLD (BROKEN): import { BadgeChip, BadgeProgressCard, getBadgeTier } from "@/components/BadgeSystem";
-// OLD (BROKEN): import { ReputationCard, ReputationChip, calcReputation } from "@/components/ReputationScore";
-// These files don't exist → always fell back to Seedling / crashed silently
-// ── FIXED: everything is inlined below ───────────────────────────────────────
-
 type Profile = {
   id: string; full_name: string; username: string; bio: string;
   location: string; credits: number; xp: number; level: string;
@@ -18,9 +12,6 @@ type Listing     = { id: string; title: string; format: string; duration: number
 type Transaction = { id: string; amount: number; type: string; description: string; created_at: string };
 type UserSkill   = { id: string; skill_id: string; is_verified: boolean; verified_at: string | null; skills: { name: string; category: string } };
 
-// ── FIXED getBadgeTier ────────────────────────────────────────────────────────
-// OLD BUG: all tiers required xp && sessions && rating simultaneously
-// FIX: walk from top tier downward, return first match
 const BADGE_TIERS = [
   { name: "Seedling", emoji: "🌱", color: "#2d6a4f", bg: "#dcfce7", desc: "Just getting started",  xpReq: 0,    sessionsReq: 0,  ratingReq: 0   },
   { name: "Rising",   emoji: "⭐", color: "#b45309", bg: "#fef3c7", desc: "Building momentum",     xpReq: 100,  sessionsReq: 0,  ratingReq: 0   },
@@ -36,13 +27,11 @@ function getBadgeTier(xp: number, sessions: number, rating: number) {
   }
   return BADGE_TIERS[0];
 }
-
 function getNextBadge(current: typeof BADGE_TIERS[0]) {
   const idx = BADGE_TIERS.findIndex(b => b.name === current.name);
   return idx < BADGE_TIERS.length - 1 ? BADGE_TIERS[idx + 1] : null;
 }
 
-// ── Level helpers ─────────────────────────────────────────────────────────────
 function getLevelFromXP(xp: number) {
   if (xp >= 4000) return "Legend";
   if (xp >= 2000) return "Master";
@@ -52,6 +41,7 @@ function getLevelFromXP(xp: number) {
   if (xp >= 100)  return "Learner";
   return "Seedling";
 }
+
 const LEVEL_COLOR: Record<string, string> = {
   Seedling: "#2d6a4f", Learner: "#1d4ed8", Contributor: "#7c3aed",
   Skilled: "#b45309", Expert: "#dc2626", Master: "#0891b2", Legend: "#d97706",
@@ -61,7 +51,6 @@ const XP_TO_NEXT: Record<string, number> = {
   Expert: 2000, Master: 4000, Legend: 9999,
 };
 
-// ── Reputation calc ───────────────────────────────────────────────────────────
 function calcRep(avgRating: number, sessions: number, repeatClients: number, disputes: number) {
   const r = Math.min(Math.round(avgRating * sessions * 4), 80);
   const s = Math.min(sessions * 2, 15);
@@ -75,14 +64,14 @@ function getInitials(name: string) {
 }
 
 const FORMAT_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  video: { label: "📹 Video", color: "#0369a1", bg: "#e0f2fe" },
-  chat:  { label: "💬 Chat",  color: "#065f46", bg: "#d1fae5" },
-  docs:  { label: "📄 Docs",  color: "#5b21b6", bg: "#ede9fe" },
-  mixed: { label: "🎨 Mixed", color: "#92400e", bg: "#fef3c7" },
+  video: { label: "Video",  color: "#0369a1", bg: "#e0f2fe" },
+  chat:  { label: "Chat",   color: "#065f46", bg: "#d1fae5" },
+  docs:  { label: "Docs",   color: "#5b21b6", bg: "#ede9fe" },
+  mixed: { label: "Mixed",  color: "#92400e", bg: "#fef3c7" },
 };
 const TX_ICONS: Record<string, string> = {
   signup_bonus: "🎁", session_earn: "📚", session_spend: "💳",
-  bounty_earn: "🏆", topup: "💳", challenge: "⚡",
+  bounty_earn: "🏆", topup: "💳", challenge: "⚡", session_refund: "↩️",
 };
 const BADGE_ICONS: Record<string, string> = {
   early_adopter: "🌟", rising_teacher: "🥉", skilled_teacher: "🥈",
@@ -112,7 +101,10 @@ export default function ProfilePage() {
       if (!user) { window.location.href = "/login"; return; }
 
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-      if (prof) { setProfile(prof); setEditForm({ full_name: prof.full_name || "", bio: prof.bio || "", location: prof.location || "" }); }
+      if (prof) {
+        setProfile(prof);
+        setEditForm({ full_name: prof.full_name || "", bio: prof.bio || "", location: prof.location || "" });
+      }
 
       const [
         { data: b }, { data: l }, { data: tx },
@@ -159,11 +151,11 @@ export default function ProfilePage() {
   };
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#faf8f4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&display=swap'); @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}`}</style>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 14, animation: "pulse 1.5s ease infinite" }}>👤</div>
-        <p style={{ color: "#aaa", fontSize: 14 }}>Loading your profile…</p>
+    <div className="min-h-screen bg-[#faf8f4] flex items-center justify-center" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <div className="text-center">
+        <div className="w-8 h-8 rounded-full border-2 border-[#2d6a4f] border-t-transparent mx-auto mb-3" style={{ animation: "spin .8s linear infinite" }} />
+        <p className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Loading profile</p>
       </div>
     </div>
   );
@@ -171,130 +163,154 @@ export default function ProfilePage() {
 
   const verifiedSkills   = userSkills.filter(s => s.is_verified);
   const unverifiedSkills = userSkills.filter(s => !s.is_verified);
-
-  // ✅ FIXED: derive everything from XP directly
-  const displayLevel = getLevelFromXP(profile.xp);
-  const lvlColor     = LEVEL_COLOR[displayLevel] || "#2d6a4f";
-  const badge        = getBadgeTier(profile.xp, sessions, avgRating);
-  const nextBadge    = getNextBadge(badge);
-  const rep          = calcRep(avgRating, sessions, repeatClients, disputes);
-  const repLabel     = rep >= 80 ? "Exceptional" : rep >= 60 ? "Great" : rep >= 40 ? "Good" : rep >= 20 ? "Fair" : "Building";
-  const initials     = getInitials(profile.full_name || "");
-  const xpNext       = XP_TO_NEXT[displayLevel] || 100;
-  const xpPct        = Math.min((profile.xp / xpNext) * 100, 100);
-  const joinDate     = new Date(profile.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "long" });
+  const displayLevel     = getLevelFromXP(profile.xp);
+  const lvlColor         = LEVEL_COLOR[displayLevel] || "#2d6a4f";
+  const badge            = getBadgeTier(profile.xp, sessions, avgRating);
+  const nextBadge        = getNextBadge(badge);
+  const rep              = calcRep(avgRating, sessions, repeatClients, disputes);
+  const repLabel         = rep >= 80 ? "Exceptional" : rep >= 60 ? "Great" : rep >= 40 ? "Good" : rep >= 20 ? "Fair" : "Building";
+  const xpNext           = XP_TO_NEXT[displayLevel] || 100;
+  const xpPct            = Math.min((profile.xp / xpNext) * 100, 100);
+  const joinDate         = new Date(profile.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "long" });
 
   return (
-    <div style={{ minHeight: "100vh", background: "#faf8f4", fontFamily: "'DM Sans',sans-serif" }}>
+    <div className="min-h-screen bg-[#faf8f4]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
-        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
-        a { text-decoration:none; color:inherit; }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
-        .card { background:#fff; border-radius:20px; border:1.5px solid #e8e2d9; }
-        .tab-btn { padding:8px 16px; border-radius:10px; font-size:13px; font-weight:700; border:none; cursor:pointer; font-family:'DM Sans',sans-serif; transition:all .12s; }
-        .nav-a { padding:6px 12px; border-radius:8px; font-size:13px; font-weight:600; color:#666; transition:all .12s; }
-        .nav-a:hover { background:#eee9e0; color:#1a1a1a; }
-        .skill-pill { display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border-radius:999px; border:1.5px solid #e8e2d9; font-size:12px; font-weight:700; }
-        .listing-row { background:#fff; border-radius:16px; border:1.5px solid #e8e2d9; padding:18px 20px; display:flex; align-items:center; gap:16px; justify-content:space-between; flex-wrap:wrap; transition:box-shadow .12s; }
-        .listing-row:hover { box-shadow:0 4px 20px rgba(0,0,0,0.07); }
-        .tx-row { display:flex; align-items:center; gap:12px; padding:14px 20px; justify-content:space-between; transition:background .1s; }
-        .tx-row:hover { background:#faf8f4; }
-        .progress-bar { height:5px; background:#f0ece4; border-radius:999px; overflow:hidden; }
-        .progress-fill { height:100%; border-radius:999px; transition:width .6s; }
+        *,*::before,*::after{box-sizing:border-box}
+        a{text-decoration:none;color:inherit}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+        .fade-up{animation:fadeUp .35s ease both}
+        .card{background:#fff;border-radius:20px;border:1.5px solid #e8e2d9}
+        .navlink{padding:5px 11px;border-radius:7px;font-size:13px;font-weight:600;color:#666;transition:all .12s;display:inline-block}
+        .navlink:hover{background:#f0ece4;color:#1a1a1a}
+        .navlink.active{background:#e8f4e8;color:#2d6a4f}
+        .listing-row{transition:box-shadow .15s,transform .15s}
+        .listing-row:hover{box-shadow:0 4px 16px rgba(0,0,0,.06);transform:translateY(-1px)}
+        .tx-row:hover{background:#faf8f4}
+        .stat-card{transition:all .15s}
+        .stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.07)}
+        .progress-bar{height:4px;background:#f0ece4;border-radius:999px;overflow:hidden}
+        .progress-fill{height:100%;border-radius:999px;transition:width .6s}
+        .quick-link:hover{background:#e8f5ee!important;color:#2d6a4f!important}
       `}</style>
 
       {/* NAVBAR */}
-      <nav style={{ background:"#fff", borderBottom:"1.5px solid #e8e2d9", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 28px", position:"sticky", top:0, zIndex:50 }}>
+      <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-stone-200 px-6 h-14 flex items-center justify-between">
         <a href="/dashboard">
-          <span style={{ fontFamily:"'Fraunces',serif", fontWeight:900, fontSize:20, color:"#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily:"'Fraunces',serif", fontWeight:900, fontSize:20, color:"#1a1a1a" }}>Credit</span>
+          <span style={{ fontFamily: "'Fraunces', serif", fontWeight: 900, fontSize: 19, color: "#2d6a4f" }}>Skill</span>
+          <span style={{ fontFamily: "'Fraunces', serif", fontWeight: 900, fontSize: 19, color: "#1a1a1a" }}>Credit</span>
         </a>
-        <div style={{ display:"flex", gap:2 }}>
-          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h])=>(
-            <a key={l} href={h} className="nav-a">{l}</a>
+        <div className="flex gap-0.5">
+          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
+            <a key={l} href={h} className="navlink">{l}</a>
           ))}
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <a href="/wallet" style={{ fontSize:13, fontWeight:700, color:"#2d6a4f", background:"#e8f5ee", padding:"5px 14px", borderRadius:999, border:"1.5px solid #b7e4c7" }}>💰 {profile.credits} cr</a>
-          <button onClick={async()=>{ await supabase.auth.signOut(); window.location.href="/"; }}
-            style={{ padding:"5px 14px", borderRadius:10, background:"#fef2f2", color:"#dc2626", fontSize:13, fontWeight:600, border:"1.5px solid #fca5a5", cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-            🚪 Log out
+        <div className="flex items-center gap-2">
+          <a href="/wallet" className="text-xs font-800 text-[#2d6a4f] bg-green-50 px-3.5 py-1.5 rounded-full border border-green-200">
+            💰 {profile.credits} cr
+          </a>
+          <button onClick={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
+            className="text-xs font-600 text-red-500 bg-red-50 px-3.5 py-1.5 rounded-full border border-red-200 cursor-pointer hover:bg-red-100 transition-colors"
+            style={{ fontFamily: "'DM Sans', sans-serif" }}>
+            Log out
           </button>
         </div>
       </nav>
 
-      <div style={{ maxWidth:1020, margin:"0 auto", padding:"28px 20px 80px" }}>
+      <div className="max-w-5xl mx-auto px-5 py-8 pb-20">
 
         {/* PROFILE HERO */}
-        <div className="card" style={{ marginBottom:16, overflow:"hidden", animation:"fadeUp 0.4s ease" }}>
-          <div style={{ height:4, background:`linear-gradient(90deg,${lvlColor},${lvlColor}66)` }} />
-          <div style={{ padding:"26px 28px" }}>
+        <div className="card overflow-hidden mb-4 fade-up" style={{ borderLeft: `3px solid ${lvlColor}` }}>
+          <div className="p-6">
             {editing ? (
-              <div style={{ maxWidth:440 }}>
-                <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#1a1a1a", marginBottom:20 }}>Edit Profile</h2>
-                <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              <div className="max-w-md">
+                <h2 className="text-xl font-900 text-stone-900 mb-5" style={{ fontFamily: "'Fraunces', serif" }}>Edit Profile</h2>
+                <div className="flex flex-col gap-4">
                   {[
-                    { key:"full_name", label:"Full Name",  placeholder:"Your full name",                     type:"input"    },
-                    { key:"location",  label:"Location",   placeholder:"e.g. Cebu City, Philippines",        type:"input"    },
-                    { key:"bio",       label:"Bio",        placeholder:"Tell the community about yourself…", type:"textarea" },
-                  ].map(f=>(
+                    { key: "full_name", label: "Full Name",  placeholder: "Your full name",                    type: "input"    },
+                    { key: "location",  label: "Location",   placeholder: "e.g. Cebu City, Philippines",       type: "input"    },
+                    { key: "bio",       label: "Bio",        placeholder: "Tell the community about yourself…", type: "textarea" },
+                  ].map(f => (
                     <div key={f.key}>
-                      <label style={{ fontSize:10, fontWeight:800, color:"#aaa", textTransform:"uppercase", letterSpacing:1.5, display:"block", marginBottom:6 }}>{f.label}</label>
-                      {f.type==="textarea" ? (
+                      <label className="text-xs font-800 text-stone-400 uppercase tracking-widest block mb-1.5">{f.label}</label>
+                      {f.type === "textarea" ? (
                         <textarea value={editForm[f.key as keyof typeof editForm]} rows={3} placeholder={f.placeholder}
-                          onChange={e=>setEditForm(p=>({...p,[f.key]:e.target.value}))}
-                          style={{ width:"100%", padding:"10px 14px", borderRadius:12, border:"1.5px solid #e8e2d9", background:"#faf8f4", fontSize:13, fontFamily:"'DM Sans',sans-serif", resize:"none", outline:"none" }} />
+                          onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
+                          className="w-full p-3 rounded-xl border border-stone-200 bg-stone-50 text-sm outline-none focus:border-[#2d6a4f] transition-colors resize-none"
+                          style={{ fontFamily: "'DM Sans', sans-serif" }} />
                       ) : (
                         <input value={editForm[f.key as keyof typeof editForm]} placeholder={f.placeholder}
-                          onChange={e=>setEditForm(p=>({...p,[f.key]:e.target.value}))}
-                          style={{ width:"100%", padding:"10px 14px", borderRadius:12, border:"1.5px solid #e8e2d9", background:"#faf8f4", fontSize:13, fontFamily:"'DM Sans',sans-serif", outline:"none" }} />
+                          onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
+                          className="w-full p-3 rounded-xl border border-stone-200 bg-stone-50 text-sm outline-none focus:border-[#2d6a4f] transition-colors"
+                          style={{ fontFamily: "'DM Sans', sans-serif" }} />
                       )}
                     </div>
                   ))}
-                  <div style={{ display:"flex", gap:10, marginTop:4 }}>
-                    <button onClick={()=>setEditing(false)} style={{ flex:1, padding:"11px", background:"#f5f0e8", color:"#555", borderRadius:12, border:"none", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>Cancel</button>
-                    <button onClick={handleSave} disabled={saving} style={{ flex:2, padding:"11px", background:"#2d6a4f", color:"#fff", borderRadius:12, border:"none", fontSize:13, fontWeight:800, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", opacity:saving?0.7:1 }}>
+                  <div className="flex gap-2 mt-1">
+                    <button onClick={() => setEditing(false)} className="flex-1 py-2.5 bg-stone-100 text-stone-600 rounded-xl text-sm font-700 hover:bg-stone-200 transition-colors border-0 cursor-pointer" style={{ fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
+                    <button onClick={handleSave} disabled={saving} className="py-2.5 px-8 bg-[#2d6a4f] text-white rounded-xl text-sm font-800 hover:bg-[#1a4a36] transition-colors border-0 cursor-pointer disabled:opacity-60" style={{ fontFamily: "'DM Sans', sans-serif", flex: 2 }}>
                       {saving ? "Saving…" : "Save Changes"}
                     </button>
                   </div>
                 </div>
               </div>
             ) : (
-              <div style={{ display:"flex", alignItems:"flex-start", gap:20, flexWrap:"wrap" }}>
+              <div className="flex items-start gap-5 flex-wrap">
                 {/* Avatar */}
-                <div style={{ width:72, height:72, borderRadius:20, background:`linear-gradient(135deg,${lvlColor},${lvlColor}88)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:900, color:"#fff", flexShrink:0, boxShadow:`0 6px 24px ${lvlColor}44` }}>
-                  {initials}
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-900 shrink-0"
+                  style={{ background: `linear-gradient(135deg,${lvlColor},${lvlColor}99)`, boxShadow: `0 6px 20px ${lvlColor}33` }}>
+                  {getInitials(profile.full_name || "")}
                 </div>
-                <div style={{ flex:1, minWidth:200 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:4 }}>
-                    <h1 style={{ fontFamily:"'Fraunces',serif", fontSize:24, fontWeight:900, color:"#1a1a1a" }}>{profile.full_name || "Unnamed User"}</h1>
-                    {/* ✅ FIXED: badge tier shown correctly, pulled from fixed getBadgeTier */}
-                    <span style={{ fontSize:11, fontWeight:800, padding:"3px 10px", borderRadius:999, background:badge.bg, color:badge.color, border:`1px solid ${badge.color}22` }}>{badge.emoji} {badge.name}</span>
-                    <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:999, background:`${lvlColor}12`, color:lvlColor }}>Lvl: {displayLevel}</span>
-                    {profile.is_verified && <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:999, background:"#e8f5ee", color:"#2d6a4f", border:"1px solid #b7e4c7" }}>✅ Verified</span>}
+
+                <div className="flex-1 min-w-0">
+                  {/* Name row */}
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <h1 className="text-2xl font-900 text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>
+                      {profile.full_name || "Unnamed User"}
+                    </h1>
+                    <span className="text-xs font-800 px-2.5 py-0.5 rounded-full" style={{ background: badge.bg, color: badge.color }}>
+                      {badge.emoji} {badge.name}
+                    </span>
+                    <span className="text-xs font-700 px-2.5 py-0.5 rounded-full" style={{ background: `${lvlColor}15`, color: lvlColor }}>
+                      {displayLevel}
+                    </span>
+                    {profile.is_verified && (
+                      <span className="text-xs font-700 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">✓ Verified</span>
+                    )}
                   </div>
-                  <div style={{ fontSize:13, color:"#aaa", marginBottom:10 }}>@{profile.username}</div>
+
+                  <p className="text-xs text-stone-400 mb-3">@{profile.username}</p>
+
                   {profile.bio
-                    ? <p style={{ fontSize:13, color:"#555", lineHeight:1.7, marginBottom:12, maxWidth:520 }}>{profile.bio}</p>
-                    : <p style={{ fontSize:13, color:"#ccc", fontStyle:"italic", marginBottom:12 }}>No bio yet — add one to stand out!</p>}
+                    ? <p className="text-sm text-stone-500 leading-relaxed mb-3 max-w-lg">{profile.bio}</p>
+                    : <p className="text-sm text-stone-300 italic mb-3">No bio yet — add one to stand out!</p>}
+
+                  {/* Verified skills row */}
                   {verifiedSkills.length > 0 && (
-                    <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:10 }}>
-                      <span style={{ fontSize:10, fontWeight:800, color:"#bbb", textTransform:"uppercase", letterSpacing:1 }}>Verified in:</span>
-                      {verifiedSkills.slice(0,4).map(s=>(
-                        <span key={s.id} className="skill-pill" style={{ background:"#e8f5ee", color:"#2d6a4f", borderColor:"#b7e4c7" }}>✅ {s.skills?.name}</span>
+                    <div className="flex items-center gap-2 flex-wrap mb-3">
+                      <span className="text-xs font-700 text-stone-400">Verified in:</span>
+                      {verifiedSkills.slice(0, 4).map(s => (
+                        <span key={s.id} className="text-xs font-700 px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">
+                          ✓ {s.skills?.name}
+                        </span>
                       ))}
-                      {verifiedSkills.length > 4 && <span style={{ fontSize:11, color:"#aaa" }}>+{verifiedSkills.length-4} more</span>}
+                      {verifiedSkills.length > 4 && <span className="text-xs text-stone-400">+{verifiedSkills.length - 4} more</span>}
                     </div>
                   )}
-                  <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
-                    {profile.location && <span style={{ fontSize:12, color:"#bbb" }}>📍 {profile.location}</span>}
-                    <span style={{ fontSize:12, color:"#bbb" }}>📅 Joined {joinDate}</span>
-                    {avgRating > 0 && <span style={{ fontSize:12, color:"#bbb" }}>⭐ {avgRating.toFixed(1)} avg</span>}
-                    <span style={{ fontSize:12, color:"#bbb" }}>🏅 {badges.length} badge{badges.length!==1?"s":""}</span>
+
+                  {/* Meta row */}
+                  <div className="flex items-center gap-4 flex-wrap text-xs text-stone-400">
+                    {profile.location && <span>📍 {profile.location}</span>}
+                    <span>📅 Joined {joinDate}</span>
+                    {avgRating > 0 && <span>⭐ {avgRating.toFixed(1)} avg rating</span>}
+                    <span>🏅 {badges.length} badge{badges.length !== 1 ? "s" : ""}</span>
                   </div>
                 </div>
-                <button onClick={()=>setEditing(true)} style={{ padding:"8px 18px", background:"#f5f0e8", color:"#555", borderRadius:12, border:"1.5px solid #e8e2d9", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+
+                <button onClick={() => setEditing(true)}
+                  className="px-4 py-2 bg-stone-100 text-stone-600 text-xs font-700 rounded-xl border border-stone-200 hover:bg-stone-200 transition-colors cursor-pointer shrink-0"
+                  style={{ fontFamily: "'DM Sans', sans-serif" }}>
                   ✏️ Edit Profile
                 </button>
               </div>
@@ -302,37 +318,34 @@ export default function ProfilePage() {
 
             {/* XP Bar */}
             {!editing && (
-              <div style={{ marginTop:20, paddingTop:20, borderTop:"1px solid #f0ece4" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                  <span style={{ fontSize:12, fontWeight:700, color:"#888" }}>⚡ {profile.xp} XP — {displayLevel}</span>
-                  <span style={{ fontSize:12, color:"#ccc" }}>{xpNext-profile.xp>0?`${xpNext-profile.xp} XP to next level`:"Max level!"}</span>
+              <div className="mt-5 pt-5 border-t border-stone-100">
+                <div className="flex justify-between mb-2">
+                  <span className="text-xs font-700 text-stone-500">⚡ {profile.xp} XP · {displayLevel}</span>
+                  <span className="text-xs text-stone-300">{xpNext - profile.xp > 0 ? `${xpNext - profile.xp} XP to next level` : "Max level!"}</span>
                 </div>
                 <div className="progress-bar">
-                  <div className="progress-fill" style={{ width:`${xpPct}%`, background:`linear-gradient(90deg,${lvlColor},${lvlColor}88)` }} />
+                  <div className="progress-fill" style={{ width: `${xpPct}%`, background: `linear-gradient(90deg,${lvlColor},${lvlColor}88)` }} />
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* STATS ROW */}
+        {/* STATS STRIP */}
         {!editing && (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:16, animation:"fadeUp 0.4s 0.07s ease both" }}>
+          <div className="grid grid-cols-5 gap-3 mb-4 fade-up" style={{ animationDelay: ".06s" }}>
             {[
-              { label:"Credits",  value:profile.credits, icon:"💰", color:"#2d6a4f", bg:"#e8f5ee", href:"/wallet"          },
-              { label:"XP",       value:profile.xp,      icon:"⚡", color:"#7c3aed", bg:"#f5f3ff", href:"/leaderboard"     },
-              { label:"Sessions", value:sessions,         icon:"📚", color:"#0891b2", bg:"#e0f2fe", href:"/sessions"        },
-              { label:"Listings", value:listings.length,  icon:"📋", color:"#b45309", bg:"#fef3c7", href:"/listings/create" },
-              { label:"Badges",   value:badges.length,    icon:"🏅", color:"#dc2626", bg:"#fee2e2", href:"#badges"          },
-            ].map(s=>(
+              { label: "Credits",  value: profile.credits, icon: "💰", color: "#2d6a4f", href: "/wallet"          },
+              { label: "XP",       value: profile.xp,      icon: "⚡", color: "#7c3aed", href: "/leaderboard"     },
+              { label: "Sessions", value: sessions,         icon: "📚", color: "#0891b2", href: "/sessions"        },
+              { label: "Listings", value: listings.length,  icon: "📋", color: "#b45309", href: "/listings/create" },
+              { label: "Badges",   value: badges.length,    icon: "🏅", color: "#dc2626", href: "#"                },
+            ].map(s => (
               <a key={s.label} href={s.href}
-                onClick={s.href==="badges"?e=>{e.preventDefault();setActiveTab("badges");}:undefined}
-                className="card" style={{ padding:"16px 14px", display:"block", textAlign:"center", transition:"all .12s" }}
-                onMouseOver={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,0.07)"}}
-                onMouseOut={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none"}}>
-                <div style={{ width:38, height:38, borderRadius:11, background:s.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, margin:"0 auto 8px" }}>{s.icon}</div>
-                <div style={{ fontFamily:"'Fraunces',serif", fontSize:24, fontWeight:900, color:s.color, lineHeight:1 }}>{s.value}</div>
-                <div style={{ fontSize:10, color:"#bbb", fontWeight:700, marginTop:4, textTransform:"uppercase" }}>{s.label}</div>
+                onClick={s.label === "Badges" ? e => { e.preventDefault(); setActiveTab("badges"); } : undefined}
+                className="card stat-card p-4 text-center block">
+                <div className="text-2xl font-900 leading-none mb-1" style={{ fontFamily: "'Fraunces', serif", color: s.color }}>{s.value}</div>
+                <div className="text-xs text-stone-400 font-700 uppercase tracking-wider">{s.label}</div>
               </a>
             ))}
           </div>
@@ -340,269 +353,300 @@ export default function ProfilePage() {
 
         {/* MAIN GRID */}
         {!editing && (
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 290px", gap:14, animation:"fadeUp 0.4s 0.12s ease both" }}>
-            <div>
+          <div className="grid gap-4 fade-up" style={{ gridTemplateColumns: "1fr 280px", animationDelay: ".1s" }}>
+
+            {/* LEFT COLUMN */}
+            <div className="flex flex-col gap-4">
 
               {/* SKILLS */}
-              <div className="card" style={{ padding:"20px 22px", marginBottom:14 }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+              <div className="card p-5">
+                <div className="flex items-center justify-between mb-4">
                   <div>
-                    <div style={{ fontFamily:"'Fraunces',serif", fontSize:15, fontWeight:900, color:"#1a1a1a" }}>Skills & Verifications</div>
-                    <div style={{ fontSize:11, color:"#bbb", marginTop:2 }}>Skills you've listed or been verified in</div>
+                    <h3 className="text-sm font-800 text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>Skills & Verifications</h3>
+                    <p className="text-xs text-stone-400 mt-0.5">Skills you've listed or been verified in</p>
                   </div>
-                  <a href="/verify" style={{ fontSize:12, fontWeight:700, color:"#2d6a4f", background:"#e8f5ee", padding:"6px 14px", borderRadius:10, border:"1.5px solid #b7e4c7" }}>+ Get Verified</a>
+                  <a href="/verify" className="text-xs font-700 text-[#2d6a4f] bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 hover:bg-green-100 transition-colors">+ Get Verified</a>
                 </div>
+
                 {verifiedSkills.length > 0 && (
-                  <div style={{ marginBottom:14 }}>
-                    <div style={{ fontSize:9, fontWeight:800, color:"#bbb", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>✅ Verified</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
-                      {verifiedSkills.map(s=>(
-                        <span key={s.id} className="skill-pill" style={{ background:"#e8f5ee", color:"#2d6a4f", borderColor:"#b7e4c7" }}>✅ {s.skills?.name} <span style={{ color:"#aaa", fontWeight:500 }}>· {s.skills?.category}</span></span>
+                  <div className="mb-4">
+                    <p className="text-xs font-800 text-stone-400 uppercase tracking-widest mb-2">✓ Verified</p>
+                    <div className="flex flex-wrap gap-2">
+                      {verifiedSkills.map(s => (
+                        <span key={s.id} className="text-xs font-700 px-3 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">
+                          ✓ {s.skills?.name} <span className="text-green-500 font-500">· {s.skills?.category}</span>
+                        </span>
                       ))}
                     </div>
                   </div>
                 )}
+
                 {unverifiedSkills.length > 0 && (
-                  <div style={{ marginBottom:8 }}>
-                    <div style={{ fontSize:9, fontWeight:800, color:"#bbb", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>🔓 Unverified</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
-                      {unverifiedSkills.map(s=>(
-                        <span key={s.id} className="skill-pill" style={{ background:"#faf8f4", color:"#888" }}>○ {s.skills?.name} <a href="/verify" style={{ color:"#2d6a4f", fontWeight:700, marginLeft:4 }}>verify →</a></span>
+                  <div>
+                    <p className="text-xs font-800 text-stone-400 uppercase tracking-widest mb-2">○ Unverified</p>
+                    <div className="flex flex-wrap gap-2">
+                      {unverifiedSkills.map(s => (
+                        <span key={s.id} className="text-xs font-600 px-3 py-1 rounded-full bg-stone-100 text-stone-500 border border-stone-200">
+                          {s.skills?.name} <a href="/verify" className="text-[#2d6a4f] font-700 ml-1">verify →</a>
+                        </span>
                       ))}
                     </div>
                   </div>
                 )}
+
                 {userSkills.length === 0 && (
-                  <div style={{ background:"linear-gradient(135deg,#e8f5fe,#e8f5ee)", borderRadius:14, padding:"16px", display:"flex", alignItems:"center", gap:14, border:"1.5px solid #b7e4c7" }}>
-                    <span style={{ fontSize:32 }}>✅</span>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a", marginBottom:3 }}>Get your skills verified!</div>
-                      <div style={{ fontSize:12, color:"#555" }}>Verified teachers get <strong>2x more bookings</strong>.</div>
+                  <div className="flex items-center gap-4 bg-green-50 rounded-xl p-4 border border-green-200">
+                    <span className="text-3xl">✅</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-700 text-stone-800 mb-0.5">Get your skills verified!</p>
+                      <p className="text-xs text-stone-500">Verified teachers get <strong>2x more bookings</strong>.</p>
                     </div>
-                    <a href="/verify" style={{ background:"#2d6a4f", color:"#fff", fontSize:12, fontWeight:800, padding:"8px 14px", borderRadius:10, whiteSpace:"nowrap" }}>Verify Now →</a>
+                    <a href="/verify" className="text-xs font-800 text-white bg-[#2d6a4f] px-3 py-2 rounded-lg hover:bg-[#1a4a36] transition-colors whitespace-nowrap">Verify Now →</a>
                   </div>
                 )}
               </div>
 
               {/* TABS */}
-              <div style={{ display:"flex", gap:4, background:"#f0ece4", borderRadius:12, padding:4, width:"fit-content", marginBottom:14 }}>
-                {[{k:"listings",l:"📋 Listings"},{k:"badges",l:"🏅 Badges"},{k:"activity",l:"📊 Activity"}].map(t=>(
-                  <button key={t.k} className="tab-btn" onClick={()=>setActiveTab(t.k as any)}
-                    style={{ background:activeTab===t.k?"#fff":"transparent", color:activeTab===t.k?"#1a1a1a":"#888", boxShadow:activeTab===t.k?"0 1px 4px rgba(0,0,0,0.08)":"none" }}>
-                    {t.l}
-                  </button>
-                ))}
-              </div>
+              <div>
+                <div className="flex bg-stone-100 p-1 rounded-xl gap-0.5 w-fit mb-4">
+                  {[{k:"listings",l:"Listings"},{k:"badges",l:"Badges"},{k:"activity",l:"Activity"}].map(t => (
+                    <button key={t.k} onClick={() => setActiveTab(t.k as any)}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-700 transition-all border-0 cursor-pointer ${activeTab === t.k ? "bg-white text-stone-900 shadow-sm" : "text-stone-400 hover:text-stone-600 bg-transparent"}`}
+                      style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                      {t.l}
+                    </button>
+                  ))}
+                </div>
 
-              {/* LISTINGS */}
-              {activeTab==="listings" && (
-                <div>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-                    <div style={{ fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:900, color:"#1a1a1a" }}>My Skill Listings</div>
-                    <a href="/listings/create" style={{ background:"#2d6a4f", color:"#fff", fontSize:13, fontWeight:700, padding:"8px 18px", borderRadius:12 }}>+ Create Listing</a>
-                  </div>
-                  {listings.length===0 ? (
-                    <div className="card" style={{ padding:"48px", textAlign:"center" }}>
-                      <div style={{ fontSize:48, marginBottom:12 }}>📋</div>
-                      <div style={{ fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:900, color:"#1a1a1a", marginBottom:6 }}>No listings yet</div>
-                      <p style={{ fontSize:13, color:"#aaa", marginBottom:18 }}>Create a skill listing to start teaching!</p>
-                      <a href="/listings/create" style={{ display:"inline-block", background:"#2d6a4f", color:"#fff", fontSize:13, fontWeight:700, padding:"10px 22px", borderRadius:12 }}>Create your first listing →</a>
+                {/* LISTINGS TAB */}
+                {activeTab === "listings" && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-900 text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>My Skill Listings</h3>
+                      <a href="/listings/create" className="text-xs font-700 text-white bg-[#2d6a4f] px-4 py-2 rounded-xl hover:bg-[#1a4a36] transition-colors">+ Create Listing</a>
                     </div>
-                  ) : (
-                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                      {listings.map(listing=>{
-                        const fmt = FORMAT_CONFIG[listing.format] || FORMAT_CONFIG.mixed;
-                        return (
-                          <div key={listing.id} className="listing-row">
-                            <div style={{ flex:1, minWidth:180 }}>
-                              <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap", marginBottom:7 }}>
-                                <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:999, background:fmt.bg, color:fmt.color }}>{fmt.label}</span>
-                                {listing.skills && <span style={{ fontSize:11, color:"#bbb" }}>{listing.skills.name}</span>}
-                                <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:999, background:listing.is_active?"#e8f5ee":"#f5f0e8", color:listing.is_active?"#2d6a4f":"#bbb" }}>
-                                  {listing.is_active?"● Active":"○ Paused"}
-                                </span>
+                    {listings.length === 0 ? (
+                      <div className="card p-12 text-center">
+                        <p className="text-4xl mb-3">📋</p>
+                        <h4 className="text-base font-900 text-stone-900 mb-1" style={{ fontFamily: "'Fraunces', serif" }}>No listings yet</h4>
+                        <p className="text-xs text-stone-400 mb-5">Create a skill listing to start teaching!</p>
+                        <a href="/listings/create" className="inline-block text-xs font-700 text-white bg-[#2d6a4f] px-5 py-2.5 rounded-xl hover:bg-[#1a4a36] transition-colors">Create your first listing →</a>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {listings.map(listing => {
+                          const fmt = FORMAT_CONFIG[listing.format] || FORMAT_CONFIG.mixed;
+                          return (
+                            <div key={listing.id} className="listing-row card px-5 py-4 flex items-center gap-4 justify-between flex-wrap">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                                  <span className="text-xs font-700 px-2.5 py-0.5 rounded-full" style={{ background: fmt.bg, color: fmt.color }}>{fmt.label}</span>
+                                  {listing.skills && <span className="text-xs text-stone-400">{listing.skills.name}</span>}
+                                  <span className={`text-xs font-700 px-2.5 py-0.5 rounded-full ${listing.is_active ? "bg-green-50 text-green-700" : "bg-stone-100 text-stone-400"}`}>
+                                    {listing.is_active ? "● Active" : "○ Paused"}
+                                  </span>
+                                </div>
+                                <p className="text-sm font-800 text-stone-900 mb-0.5" style={{ fontFamily: "'Fraunces', serif" }}>{listing.title}</p>
+                                <p className="text-xs text-stone-400">{listing.duration} min session</p>
                               </div>
-                              <div style={{ fontFamily:"'Fraunces',serif", fontSize:15, fontWeight:900, color:"#1a1a1a", marginBottom:2 }}>{listing.title}</div>
-                              <div style={{ fontSize:11, color:"#bbb" }}>{listing.duration} min session</div>
+                              <div className="text-right shrink-0">
+                                <div className="text-xl font-900 text-[#2d6a4f]" style={{ fontFamily: "'Fraunces', serif" }}>{listing.credit_price} cr</div>
+                                <div className="text-xs text-stone-400">per session</div>
+                              </div>
                             </div>
-                            <div style={{ textAlign:"right", flexShrink:0 }}>
-                              <div style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#2d6a4f" }}>{listing.credit_price} cr</div>
-                              <div style={{ fontSize:11, color:"#bbb" }}>per session</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-              {/* BADGES */}
-              {activeTab==="badges" && (
-                <div>
-                  <div style={{ fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:900, color:"#1a1a1a", marginBottom:14 }}>Earned Badges</div>
-                  {badges.length===0 ? (
-                    <div className="card" style={{ padding:"48px", textAlign:"center" }}>
-                      <div style={{ fontSize:48, marginBottom:12 }}>🏅</div>
-                      <div style={{ fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:900, color:"#1a1a1a", marginBottom:6 }}>No badges yet</div>
-                      <p style={{ fontSize:13, color:"#aaa" }}>Complete sessions, answer bounties, and participate!</p>
-                    </div>
-                  ) : (
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                      {badges.map(b=>(
-                        <div key={b.id} className="card" style={{ padding:"18px", textAlign:"center" }}>
-                          <div style={{ fontSize:36, marginBottom:8 }}>{BADGE_ICONS[b.badge_type]||"🏅"}</div>
-                          <div style={{ fontFamily:"'Fraunces',serif", fontSize:14, fontWeight:800, color:"#1a1a1a", marginBottom:4 }}>{b.badge_name}</div>
-                          <div style={{ fontSize:11, color:"#aaa", lineHeight:1.5, marginBottom:6 }}>{b.description}</div>
-                          <div style={{ fontSize:10, color:"#ccc" }}>{new Date(b.earned_at).toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                {/* BADGES TAB */}
+                {activeTab === "badges" && (
+                  <div>
+                    <h3 className="text-base font-900 text-stone-900 mb-3" style={{ fontFamily: "'Fraunces', serif" }}>Earned Badges</h3>
+                    {badges.length === 0 ? (
+                      <div className="card p-12 text-center">
+                        <p className="text-4xl mb-3">🏅</p>
+                        <h4 className="text-base font-900 text-stone-900 mb-1" style={{ fontFamily: "'Fraunces', serif" }}>No badges yet</h4>
+                        <p className="text-xs text-stone-400">Complete sessions, answer bounties, and participate!</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3">
+                        {badges.map(b => (
+                          <div key={b.id} className="card p-5 text-center">
+                            <div className="text-4xl mb-3">{BADGE_ICONS[b.badge_type] || "🏅"}</div>
+                            <p className="text-sm font-800 text-stone-900 mb-1" style={{ fontFamily: "'Fraunces', serif" }}>{b.badge_name}</p>
+                            <p className="text-xs text-stone-400 leading-relaxed mb-2">{b.description}</p>
+                            <p className="text-xs text-stone-300">{new Date(b.earned_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-              {/* ACTIVITY */}
-              {activeTab==="activity" && (
-                <div>
-                  <div style={{ fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:900, color:"#1a1a1a", marginBottom:14 }}>Credit Activity</div>
-                  {transactions.length===0 ? (
-                    <div className="card" style={{ padding:"48px", textAlign:"center" }}>
-                      <div style={{ fontSize:48, marginBottom:12 }}>📊</div>
-                      <div style={{ fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:900, color:"#1a1a1a", marginBottom:6 }}>No transactions yet</div>
-                      <p style={{ fontSize:13, color:"#aaa" }}>Your credit history will appear here.</p>
-                    </div>
-                  ) : (
-                    <div className="card" style={{ overflow:"hidden" }}>
-                      {transactions.map((tx,i)=>(
-                        <div key={tx.id} className="tx-row" style={{ borderBottom:i<transactions.length-1?"1px solid #f5f0e8":"none" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                            <div style={{ width:36, height:36, borderRadius:10, background:tx.amount>0?"#e8f5ee":"#fef2f2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
-                              {TX_ICONS[tx.type]||"💳"}
+                {/* ACTIVITY TAB */}
+                {activeTab === "activity" && (
+                  <div>
+                    <h3 className="text-base font-900 text-stone-900 mb-3" style={{ fontFamily: "'Fraunces', serif" }}>Credit Activity</h3>
+                    {transactions.length === 0 ? (
+                      <div className="card p-12 text-center">
+                        <p className="text-4xl mb-3">📊</p>
+                        <h4 className="text-base font-900 text-stone-900 mb-1" style={{ fontFamily: "'Fraunces', serif" }}>No transactions yet</h4>
+                        <p className="text-xs text-stone-400">Your credit history will appear here.</p>
+                      </div>
+                    ) : (
+                      <div className="card overflow-hidden">
+                        {transactions.map((tx, i) => (
+                          <div key={tx.id} className="tx-row flex items-center justify-between gap-3 px-5 py-3.5" style={{ borderBottom: i < transactions.length - 1 ? "1px solid #f5f0e8" : "none" }}>
+                            <div className="flex items-center gap-3">
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 ${tx.amount > 0 ? "bg-green-50" : "bg-red-50"}`}>
+                                {TX_ICONS[tx.type] || "💳"}
+                              </div>
+                              <div>
+                                <p className="text-sm font-600 text-stone-700">{tx.description || tx.type.replace(/_/g, " ")}</p>
+                                <p className="text-xs text-stone-400">{new Date(tx.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                              </div>
                             </div>
-                            <div>
-                              <div style={{ fontSize:13, fontWeight:600, color:"#333" }}>{tx.description||tx.type.replace(/_/g," ")}</div>
-                              <div style={{ fontSize:11, color:"#ccc" }}>{new Date(tx.created_at).toLocaleDateString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+                            <div className="text-base font-900 shrink-0" style={{ fontFamily: "'Fraunces', serif", color: tx.amount > 0 ? "#2d6a4f" : "#dc2626" }}>
+                              {tx.amount > 0 ? "+" : ""}{tx.amount} cr
                             </div>
                           </div>
-                          <div style={{ fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:900, color:tx.amount>0?"#2d6a4f":"#dc2626", flexShrink:0 }}>
-                            {tx.amount>0?"+":""}{tx.amount} cr
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* RIGHT SIDEBAR */}
-            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            <div className="flex flex-col gap-3">
 
-              {/* BADGE PROGRESS CARD */}
-              <div className="card" style={{ padding:"18px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                  <div style={{ fontSize:10, fontWeight:800, color:"#bbb", textTransform:"uppercase", letterSpacing:1.5 }}>Your Badge</div>
-                  {/* ✅ FIXED: one badge pill only */}
-                  <span style={{ fontSize:10, fontWeight:800, padding:"3px 10px", borderRadius:999, background:badge.bg, color:badge.color, border:`1px solid ${badge.color}22` }}>{badge.emoji} {badge.name}</span>
+              {/* BADGE PROGRESS */}
+              <div className="card p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-800 text-stone-400 uppercase tracking-widest">Badge Tier</p>
+                  <span className="text-xs font-800 px-2.5 py-0.5 rounded-full" style={{ background: badge.bg, color: badge.color }}>{badge.emoji} {badge.name}</span>
                 </div>
-                <div style={{ background:badge.bg, borderRadius:12, padding:"12px 14px", marginBottom:12, display:"flex", alignItems:"center", gap:10, border:`1px solid ${badge.color}22` }}>
-                  <span style={{ fontSize:28 }}>{badge.emoji}</span>
+
+                <div className="rounded-xl p-3 mb-4 flex items-center gap-3 border" style={{ background: badge.bg, borderColor: `${badge.color}22` }}>
+                  <span className="text-3xl">{badge.emoji}</span>
                   <div>
-                    <div style={{ fontFamily:"'Fraunces',serif", fontSize:16, fontWeight:900, color:badge.color }}>{badge.name}</div>
-                    <div style={{ fontSize:11, color:badge.color, opacity:0.75 }}>{badge.desc}</div>
+                    <p className="text-sm font-900" style={{ fontFamily: "'Fraunces', serif", color: badge.color }}>{badge.name}</p>
+                    <p className="text-xs font-500" style={{ color: badge.color, opacity: 0.75 }}>{badge.desc}</p>
                   </div>
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6, marginBottom:nextBadge?12:0 }}>
-                  {[{icon:"⚡",val:profile.xp,label:"XP"},{icon:"📚",val:sessions,label:"Sessions"},{icon:"⭐",val:avgRating.toFixed(1),label:"Rating"}].map(s=>(
-                    <div key={s.label} style={{ background:"#faf8f4", borderRadius:10, padding:"9px 6px", textAlign:"center" }}>
-                      <div style={{ fontSize:13, marginBottom:2 }}>{s.icon}</div>
-                      <div style={{ fontFamily:"'Fraunces',serif", fontSize:15, fontWeight:900, color:"#1a1a1a" }}>{s.val}</div>
-                      <div style={{ fontSize:9, color:"#bbb", fontWeight:700, textTransform:"uppercase" }}>{s.label}</div>
+
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {[
+                    { icon: "⚡", val: profile.xp,            label: "XP"       },
+                    { icon: "📚", val: sessions,               label: "Sessions" },
+                    { icon: "⭐", val: avgRating.toFixed(1),   label: "Rating"   },
+                  ].map(s => (
+                    <div key={s.label} className="bg-stone-50 rounded-xl p-2.5 text-center">
+                      <div className="text-sm mb-1">{s.icon}</div>
+                      <div className="text-base font-900 text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>{s.val}</div>
+                      <div className="text-xs text-stone-400 font-600 uppercase tracking-wide" style={{ fontSize: 9 }}>{s.label}</div>
                     </div>
                   ))}
                 </div>
+
                 {nextBadge && (
                   <div>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8, fontSize:11 }}>
-                      <span style={{ fontWeight:700, color:"#555" }}>Next: {nextBadge.emoji} {nextBadge.name}</span>
-                      <span style={{ color:"#aaa" }}>{nextBadge.desc}</span>
-                    </div>
+                    <p className="text-xs font-700 text-stone-600 mb-3">Next: {nextBadge.emoji} {nextBadge.name}</p>
                     {[
-                      {icon:"⚡",label:"XP",current:profile.xp,req:nextBadge.xpReq},
-                      {icon:"📚",label:"Sessions",current:sessions,req:nextBadge.sessionsReq},
-                      {icon:"⭐",label:"Rating",current:avgRating,req:nextBadge.ratingReq},
-                    ].filter(r=>r.req>0).map(r=>{
-                      const done = r.current>=r.req;
-                      const pct  = Math.min((r.current/r.req)*100,100);
+                      { label: "XP",       current: profile.xp, req: nextBadge.xpReq       },
+                      { label: "Sessions", current: sessions,    req: nextBadge.sessionsReq  },
+                      { label: "Rating",   current: avgRating,   req: nextBadge.ratingReq    },
+                    ].filter(r => r.req > 0).map(r => {
+                      const done = r.current >= r.req;
+                      const pct  = Math.min((r.current / r.req) * 100, 100);
                       return (
-                        <div key={r.label} style={{ marginBottom:8 }}>
-                          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3, fontSize:11 }}>
-                            <span style={{ color:"#666", fontWeight:600 }}>{r.icon} {r.label}</span>
-                            <span style={{ color:done?"#2d6a4f":"#aaa", fontWeight:700 }}>
-                              {done?"✓ Done":`${typeof r.current==="number"&&r.current%1!==0?r.current.toFixed(1):r.current} / ${r.req}`}
+                        <div key={r.label} className="mb-2.5">
+                          <div className="flex justify-between mb-1">
+                            <span className="text-xs text-stone-500 font-600">{r.label}</span>
+                            <span className={`text-xs font-700 ${done ? "text-[#2d6a4f]" : "text-stone-400"}`}>
+                              {done ? "✓" : `${typeof r.current === "number" && r.current % 1 !== 0 ? r.current.toFixed(1) : r.current} / ${r.req}`}
                             </span>
                           </div>
-                          <div className="progress-bar"><div className="progress-fill" style={{ width:`${pct}%`, background:done?"#2d6a4f":"#d4cec7" }} /></div>
+                          <div className="progress-bar"><div className="progress-fill" style={{ width: `${pct}%`, background: done ? "#2d6a4f" : "#cbd5e1" }} /></div>
                         </div>
                       );
                     })}
                   </div>
                 )}
+
                 {/* All tiers */}
-                <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:12, paddingTop:12, borderTop:"1px solid #f0ece4" }}>
-                  <div style={{ fontSize:9, fontWeight:800, color:"#ccc", width:"100%", textTransform:"uppercase", letterSpacing:1.5, marginBottom:4 }}>All Tiers</div>
-                  {BADGE_TIERS.map(t=>(
-                    <span key={t.name} style={{ fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:999, background:t.name===badge.name?t.bg:"#f5f0e8", color:t.name===badge.name?t.color:"#bbb", border:t.name===badge.name?`1px solid ${t.color}33`:"none" }}>
-                      {t.emoji} {t.name}
-                    </span>
-                  ))}
+                <div className="pt-3 mt-1 border-t border-stone-100">
+                  <p className="text-xs font-700 text-stone-300 uppercase tracking-widest mb-2" style={{ fontSize: 9 }}>All Tiers</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {BADGE_TIERS.map(t => (
+                      <span key={t.name} className="text-xs font-700 px-2 py-0.5 rounded-full" style={{
+                        background: t.name === badge.name ? t.bg : "#f5f0e8",
+                        color: t.name === badge.name ? t.color : "#ccc",
+                      }}>
+                        {t.emoji} {t.name}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {/* REPUTATION */}
-              <div className="card" style={{ padding:"18px" }}>
-                <div style={{ fontSize:10, fontWeight:800, color:"#bbb", textTransform:"uppercase", letterSpacing:1.5, marginBottom:12 }}>Reputation Score</div>
-                <div style={{ background:"linear-gradient(135deg,#fffbeb,#fef3c7)", borderRadius:12, padding:"12px 14px", marginBottom:12, display:"flex", alignItems:"center", justifyContent:"space-between", border:"1px solid #fde68a" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <span style={{ fontSize:22 }}>💫</span>
+              <div className="card p-5">
+                <p className="text-xs font-800 text-stone-400 uppercase tracking-widest mb-3">Reputation Score</p>
+
+                <div className="bg-amber-50 rounded-xl p-3 mb-4 flex items-center justify-between border border-amber-200">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">💫</span>
                     <div>
-                      <div style={{ fontFamily:"'Fraunces',serif", fontSize:24, fontWeight:900, color:"#b45309", lineHeight:1 }}>{rep}<span style={{ fontSize:12, color:"#daa520" }}>/100</span></div>
-                      <div style={{ fontSize:11, fontWeight:700, color:"#b45309" }}>{repLabel}</div>
+                      <div className="text-2xl font-900 text-amber-700 leading-none" style={{ fontFamily: "'Fraunces', serif" }}>
+                        {rep}<span className="text-sm text-amber-400">/100</span>
+                      </div>
+                      <div className="text-xs font-700 text-amber-700">{repLabel}</div>
                     </div>
                   </div>
-                  <svg viewBox="0 0 52 52" style={{ width:48, height:48, transform:"rotate(-90deg)", flexShrink:0 }}>
+                  <svg viewBox="0 0 52 52" className="w-11 h-11 shrink-0" style={{ transform: "rotate(-90deg)" }}>
                     <circle cx="26" cy="26" r="21" fill="none" stroke="#fde68a" strokeWidth="5" />
-                    <circle cx="26" cy="26" r="21" fill="none" stroke="#f59e0b" strokeWidth="5" strokeDasharray={`${(Math.min(rep,100)/100)*131.9} 131.9`} strokeLinecap="round" />
+                    <circle cx="26" cy="26" r="21" fill="none" stroke="#f59e0b" strokeWidth="5" strokeDasharray={`${(Math.min(rep, 100) / 100) * 131.9} 131.9`} strokeLinecap="round" />
                   </svg>
                 </div>
+
                 {[
-                  {icon:"⭐",label:"Rating",  pts:Math.min(Math.round(avgRating*sessions*4),80), max:80,  detail:`${avgRating.toFixed(1)} avg × ${sessions} sessions`, color:"#f59e0b"},
-                  {icon:"📚",label:"Sessions",pts:Math.min(sessions*2,15),                        max:15,  detail:`${sessions} × 2 pts`,                               color:"#2d6a4f"},
-                  {icon:"🔄",label:"Repeats", pts:Math.min(repeatClients*5,10),                   max:10,  detail:`${repeatClients} repeat clients × 5`,               color:"#6366f1"},
-                  {icon:"⚠️",label:"Disputes",pts:disputes*-15,                                   max:0,   detail:disputes===0?"No disputes ✓":`${disputes} × -15`,   color:disputes>0?"#dc2626":"#aaa"},
-                ].map(r=>(
-                  <div key={r.label} style={{ marginBottom:10 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3, fontSize:12 }}>
-                      <span style={{ fontWeight:700, color:"#333" }}>{r.icon} {r.label}</span>
-                      <span style={{ fontWeight:800, color:r.pts>0?"#2d6a4f":r.pts<0?"#dc2626":"#aaa" }}>
-                        {r.pts>0?`+${r.pts}`:r.pts<0?`${r.pts}`:"✓"}{r.pts!==0?" pts":""}
+                  { icon: "⭐", label: "Rating",   pts: Math.min(Math.round(avgRating * sessions * 4), 80), max: 80,  detail: `${avgRating.toFixed(1)} avg × ${sessions} sessions` },
+                  { icon: "📚", label: "Sessions", pts: Math.min(sessions * 2, 15),                         max: 15,  detail: `${sessions} × 2 pts`                               },
+                  { icon: "🔄", label: "Repeats",  pts: Math.min(repeatClients * 5, 10),                    max: 10,  detail: `${repeatClients} repeat clients × 5`               },
+                  { icon: "⚠️", label: "Disputes", pts: disputes * -15,                                     max: 0,   detail: disputes === 0 ? "No disputes ✓" : `${disputes} × -15` },
+                ].map(r => (
+                  <div key={r.label} className="mb-3">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-xs font-700 text-stone-600">{r.icon} {r.label}</span>
+                      <span className={`text-xs font-800 ${r.pts > 0 ? "text-[#2d6a4f]" : r.pts < 0 ? "text-red-500" : "text-stone-400"}`}>
+                        {r.pts > 0 ? `+${r.pts}` : r.pts < 0 ? `${r.pts}` : "✓"}{r.pts !== 0 ? " pts" : ""}
                       </span>
                     </div>
-                    <div style={{ fontSize:10, color:"#bbb", marginBottom:r.max>0?4:0 }}>{r.detail}</div>
-                    {r.max>0&&<div className="progress-bar"><div className="progress-fill" style={{ width:`${Math.min((r.pts/r.max)*100,100)}%`, background:r.color }} /></div>}
+                    <p className="text-xs text-stone-400 mb-1">{r.detail}</p>
+                    {r.max > 0 && <div className="progress-bar"><div className="progress-fill" style={{ width: `${Math.min((r.pts / r.max) * 100, 100)}%`, background: "#f59e0b" }} /></div>}
                   </div>
                 ))}
               </div>
 
               {/* QUICK LINKS */}
-              <div className="card" style={{ padding:"16px" }}>
-                <div style={{ fontSize:9, fontWeight:800, color:"#bbb", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Quick Links</div>
-                {[["✅","Get Verified","/verify"],["🎓","Create Listing","/listings/create"],["⭐","My Ratings","/ratings"],["🏆","Leaderboard","/leaderboard"],["💰","Wallet","/wallet"]].map(([icon,label,href])=>(
-                  <a key={label} href={href} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 10px", borderRadius:10, color:"#555", fontSize:13, fontWeight:600, transition:"all .1s" }}
-                    onMouseOver={e=>{e.currentTarget.style.background="#e8f5ee";e.currentTarget.style.color="#2d6a4f"}}
-                    onMouseOut={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#555"}}>
-                    <span>{icon}</span><span style={{ flex:1 }}>{label}</span><span style={{ color:"#ccc" }}>›</span>
+              <div className="card p-4">
+                <p className="text-xs font-800 text-stone-400 uppercase tracking-widest mb-2">Quick Links</p>
+                {[
+                  ["✅", "Get Verified",    "/verify"],
+                  ["🎓", "Create Listing",  "/listings/create"],
+                  ["⭐", "My Ratings",      "/ratings"],
+                  ["🏆", "Leaderboard",     "/leaderboard"],
+                  ["💰", "Wallet",          "/wallet"],
+                ].map(([icon, label, href]) => (
+                  <a key={label} href={href} className="quick-link flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-stone-500 text-xs font-600 transition-all">
+                    <span>{icon}</span>
+                    <span className="flex-1">{label}</span>
+                    <span className="text-stone-300">›</span>
                   </a>
                 ))}
               </div>

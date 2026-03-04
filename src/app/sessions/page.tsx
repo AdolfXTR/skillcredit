@@ -39,16 +39,15 @@ type RatingForm = {
   review: string;
 };
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; icon: string; dot: string }> = {
-  pending:   { label: "Pending",   color: "#92400e", bg: "#fffbeb", border: "#fde68a", icon: "⏳", dot: "#f59e0b" },
-  confirmed: { label: "Confirmed", color: "#1e40af", bg: "#eff6ff", border: "#bfdbfe", icon: "📅", dot: "#3b82f6" },
-  completed: { label: "Completed", color: "#166534", bg: "#f0fdf4", border: "#bbf7d0", icon: "✅", dot: "#22c55e" },
-  cancelled: { label: "Cancelled", color: "#991b1b", bg: "#fef2f2", border: "#fecaca", icon: "✕",  dot: "#ef4444" },
-  disputed:  { label: "Disputed",  color: "#6d28d9", bg: "#faf5ff", border: "#e9d5ff", icon: "⚠️", dot: "#a855f7" },
+const STATUS_CONFIG: Record<string, { label: string; dot: string; textColor: string; badgeBg: string; badgeText: string }> = {
+  pending:   { label: "Pending",   dot: "#f59e0b", textColor: "#92400e", badgeBg: "#fef3c7", badgeText: "#92400e" },
+  confirmed: { label: "Upcoming",  dot: "#3b82f6", textColor: "#1e40af", badgeBg: "#dbeafe", badgeText: "#1e40af" },
+  completed: { label: "Completed", dot: "#22c55e", textColor: "#166534", badgeBg: "#dcfce7", badgeText: "#166534" },
+  cancelled: { label: "Cancelled", dot: "#ef4444", textColor: "#991b1b", badgeBg: "#fee2e2", badgeText: "#991b1b" },
+  disputed:  { label: "Disputed",  dot: "#a855f7", textColor: "#6d28d9", badgeBg: "#ede9fe", badgeText: "#6d28d9" },
 };
 
-const FORMAT_ICONS: Record<string, string> = { video: "🎥", chat: "💬", docs: "📄", mixed: "🔀" };
-const FORMAT_LABELS: Record<string, string> = { video: "Video Call", chat: "Live Chat", docs: "Async Docs", mixed: "Mixed" };
+const FORMAT_LABELS: Record<string, string> = { video: "Video", chat: "Chat", docs: "Docs", mixed: "Mixed" };
 const LEVEL_COLORS: Record<string, string> = {
   Seedling: "#2d6a4f", Learner: "#1d4ed8", Contributor: "#7c3aed",
   Skilled: "#b45309", Expert: "#dc2626", Master: "#0891b2", Legend: "#d97706",
@@ -58,49 +57,76 @@ function getInitials(name: string) {
   return name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?";
 }
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-PH", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+  return new Date(iso).toLocaleString("en-PH", {
+    weekday: "short", month: "short", day: "numeric",
+    hour: "numeric", minute: "2-digit", hour12: true,
+  });
 }
 function timeFromNow(iso: string) {
   const diff = new Date(iso).getTime() - Date.now();
-  const abs = Math.abs(diff); const isPast = diff < 0;
-  if (abs < 3600000) return `${isPast ? "" : "in "}${Math.round(abs / 60000)}m${isPast ? " ago" : ""}`;
-  if (abs < 86400000) return `${isPast ? "" : "in "}${Math.round(abs / 3600000)}h${isPast ? " ago" : ""}`;
-  return `${isPast ? "" : "in "}${Math.round(abs / 86400000)}d${isPast ? " ago" : ""}`;
+  const abs = Math.abs(diff); const past = diff < 0;
+  if (abs < 3_600_000)  return `${past ? "" : "in "}${Math.round(abs / 60_000)}m${past ? " ago" : ""}`;
+  if (abs < 86_400_000) return `${past ? "" : "in "}${Math.round(abs / 3_600_000)}h${past ? " ago" : ""}`;
+  return `${past ? "" : "in "}${Math.round(abs / 86_400_000)}d${past ? " ago" : ""}`;
 }
 
-function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const [hover, setHover] = useState(0);
   return (
-    <div style={{ display: "flex", gap: 3 }}>
+    <div className="flex gap-1">
       {[1,2,3,4,5].map(i => (
-        <button key={i} onClick={() => onChange(i)} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(0)}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 24, color: (hover || value) >= i ? "#f59e0b" : "#e5e7eb" }}>★</button>
+        <button key={i} onClick={() => onChange(i)}
+          onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(0)}
+          className="bg-transparent border-0 cursor-pointer p-0.5 text-3xl leading-none transition-transform hover:scale-110"
+          style={{ color: (hover || value) >= i ? "#f59e0b" : "#e5e7eb" }}>★</button>
       ))}
     </div>
   );
 }
 
+function Stars({ value }: { value: number }) {
+  return (
+    <span>{[1,2,3,4,5].map(i => (
+      <span key={i} className="text-sm" style={{ color: i <= Math.round(value) ? "#f59e0b" : "#e5e7eb" }}>★</span>
+    ))}</span>
+  );
+}
+
+const TEACHER_RATES_LEARNER = [
+  { key: "overall",        label: "Overall Experience",  hint: "How was the session overall?"       },
+  { key: "preparedness",   label: "Preparedness",        hint: "Did they come ready to learn?"      },
+  { key: "respectfulness", label: "Respectfulness",      hint: "Were they respectful of your time?" },
+  { key: "communication",  label: "Communication",       hint: "Did they engage clearly?"           },
+];
+const LEARNER_RATES_TEACHER = [
+  { key: "overall",       label: "Overall Experience", hint: "How was the session overall?"         },
+  { key: "knowledge",     label: "Knowledge",          hint: "Did they know their subject well?"    },
+  { key: "communication", label: "Communication",      hint: "Were they clear and responsive?"      },
+  { key: "punctuality",   label: "Punctuality",        hint: "Did they show up on time?"            },
+];
+
 export default function SessionsPage() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [tab, setTab] = useState<"all"|"teaching"|"learning">("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ msg: string; type: "success"|"error" } | null>(null);
-  const [ratingSession, setRatingSession] = useState<Session | null>(null);
-  const [ratingForm, setRatingForm] = useState<RatingForm>({ overall:0, knowledge:0, communication:0, punctuality:0, preparedness:0, respectfulness:0, review:"" });
-  const [ratingSubmitted, setRatingSubmitted] = useState(false);
-  const [alreadyRated, setAlreadyRated] = useState<Set<string>>(new Set());
-  const [disputeSession, setDisputeSession] = useState<Session | null>(null);
-  const [disputeReason, setDisputeReason] = useState("");
+  const [profile,           setProfile]           = useState<Profile | null>(null);
+  const [sessions,          setSessions]          = useState<Session[]>([]);
+  const [tab,               setTab]               = useState<"all"|"teaching"|"learning">("all");
+  const [statusFilter,      setStatusFilter]      = useState("all");
+  const [loading,           setLoading]           = useState(true);
+  const [actionLoading,     setActionLoading]     = useState<string | null>(null);
+  const [expandedId,        setExpandedId]        = useState<string | null>(null);
+  const [toast,             setToast]             = useState<{ msg: string; type: "success"|"error" } | null>(null);
+  const [ratingSession,     setRatingSession]     = useState<Session | null>(null);
+  const [ratingForm,        setRatingForm]        = useState<RatingForm>({ overall:0, knowledge:0, communication:0, punctuality:0, preparedness:0, respectfulness:0, review:"" });
+  const [ratingSubmitted,   setRatingSubmitted]   = useState(false);
+  const [ratingError,       setRatingError]       = useState("");
+  const [alreadyRated,      setAlreadyRated]      = useState<Set<string>>(new Set());
+  const [disputeSession,    setDisputeSession]    = useState<Session | null>(null);
+  const [disputeReason,     setDisputeReason]     = useState("");
   const [rescheduleSession, setRescheduleSession] = useState<Session | null>(null);
-  const [newTime, setNewTime] = useState("");
+  const [newTime,           setNewTime]           = useState("");
 
   const showToast = (msg: string, type: "success"|"error" = "success") => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
+    setTimeout(() => setToast(null), 4000);
   };
 
   useEffect(() => { loadData(); }, []);
@@ -109,14 +135,21 @@ export default function SessionsPage() {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { window.location.href = "/login"; return; }
+
     const [profRes, sessRes, ratingsRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
-      supabase.from("sessions").select(`*, listing:listings(title, format, description), teacher:profiles!sessions_teacher_id_fkey(id, full_name, username, level), learner:profiles!sessions_learner_id_fkey(id, full_name, username, level)`).or(`teacher_id.eq.${user.id},learner_id.eq.${user.id}`).order("created_at", { ascending: false }),
+      supabase.from("sessions")
+        .select(`*, listing:listings(title, format, description),
+          teacher:profiles!sessions_teacher_id_fkey(id, full_name, username, level),
+          learner:profiles!sessions_learner_id_fkey(id, full_name, username, level)`)
+        .or(`teacher_id.eq.${user.id},learner_id.eq.${user.id}`)
+        .order("created_at", { ascending: false }),
       supabase.from("ratings").select("session_id").eq("rater_id", user.id),
     ]);
+
     if (profRes.data) setProfile(profRes.data);
     setSessions(sessRes.data || []);
-    setAlreadyRated(new Set((ratingsRes.data || []).map((r: any) => r.session_id)));
+    setAlreadyRated(new Set((ratingsRes.data || []).map((r: any) => r.session_id).filter(Boolean)));
     setLoading(false);
   }
 
@@ -129,49 +162,34 @@ export default function SessionsPage() {
     setActionLoading(session.id + "-accept");
     await supabase.from("sessions").update({ status: "confirmed", confirmed_time: session.proposed_time }).eq("id", session.id);
     try { await supabase.from("notifications").insert({ user_id: session.learner_id, type: "session", title: "Session Confirmed! 🎉", body: `Your session for "${session.listing?.title}" has been confirmed!`, link: "/sessions" }); } catch (_) {}
-    showToast("Session accepted! Learner has been notified. 🎉");
+    showToast("Session accepted! Learner notified.");
     await loadData(); setActionLoading(null);
   }
 
   async function handleDecline(session: Session) {
     setActionLoading(session.id + "-decline");
-    const { data: learnerProf } = await supabase.from("profiles").select("credits").eq("id", session.learner_id).single();
-    await supabase.from("profiles").update({ credits: (learnerProf?.credits || 0) + session.credit_amount }).eq("id", session.learner_id);
+    const { data: lp } = await supabase.from("profiles").select("credits").eq("id", session.learner_id).single();
+    await supabase.from("profiles").update({ credits: (lp?.credits || 0) + session.credit_amount }).eq("id", session.learner_id);
     await supabase.from("sessions").update({ status: "cancelled" }).eq("id", session.id);
     await supabase.from("escrow").update({ status: "refunded" }).eq("session_id", session.id);
     try {
       await supabase.from("credit_transactions").insert({ user_id: session.learner_id, amount: session.credit_amount, type: "session_refund", reference_id: session.id, description: "Session declined — credits refunded" });
-      await supabase.from("notifications").insert({ user_id: session.learner_id, type: "session", title: "Session Declined", body: `${session.credit_amount} credits have been refunded to your wallet.`, link: "/sessions" });
+      await supabase.from("notifications").insert({ user_id: session.learner_id, type: "session", title: "Session Declined", body: `${session.credit_amount} credits refunded.`, link: "/sessions" });
     } catch (_) {}
-    showToast(`Session declined. ${session.credit_amount} credits refunded to learner.`);
+    showToast(`Session declined. ${session.credit_amount} cr refunded.`);
     await loadData(); setActionLoading(null);
   }
 
-  // ✅ THE FIX: use .select().single() to get FRESH data, not stale React state
   async function handleMarkComplete(session: Session) {
     setActionLoading(session.id + "-complete");
     const isTeacher = profile?.id === session.teacher_id;
-    const update = isTeacher ? { teacher_completed: true } : { learner_completed: true };
-
-    const { data: updated, error } = await supabase
-      .from("sessions")
-      .update(update)
-      .eq("id", session.id)
-      .select()
-      .single();
-
-    if (error || !updated) {
-      showToast("Something went wrong. Please try again.", "error");
-      setActionLoading(null); return;
-    }
-
-    // ✅ Check FRESH DB values — not stale session from state
+    const { data: updated, error } = await supabase.from("sessions").update(isTeacher ? { teacher_completed: true } : { learner_completed: true }).eq("id", session.id).select().single();
+    if (error || !updated) { showToast("Something went wrong.", "error"); setActionLoading(null); return; }
     const bothDone = updated.teacher_completed && updated.learner_completed;
-
     if (bothDone) {
-      const { data: teacherProf } = await supabase.from("profiles").select("credits").eq("id", session.teacher_id).single();
-      const { error: creditError } = await supabase.from("profiles").update({ credits: (teacherProf?.credits || 0) + session.credit_amount }).eq("id", session.teacher_id);
-      if (creditError) { showToast("Error releasing credits. Please contact support.", "error"); setActionLoading(null); return; }
+      const { data: tp } = await supabase.from("profiles").select("credits").eq("id", session.teacher_id).single();
+      const { error: ce } = await supabase.from("profiles").update({ credits: (tp?.credits || 0) + session.credit_amount }).eq("id", session.teacher_id);
+      if (ce) { showToast("Error releasing credits.", "error"); setActionLoading(null); return; }
       await supabase.from("sessions").update({ status: "completed" }).eq("id", session.id);
       await supabase.from("escrow").update({ status: "released" }).eq("session_id", session.id);
       try {
@@ -179,32 +197,41 @@ export default function SessionsPage() {
         await supabase.rpc("increment_xp", { user_id: session.learner_id, amount: 20 });
         await supabase.from("credit_transactions").insert({ user_id: session.teacher_id, amount: session.credit_amount, type: "session_earn", reference_id: session.id, description: `Session completed — ${session.credit_amount} credits released from escrow` });
         await supabase.from("notifications").insert([
-          { user_id: session.teacher_id, type: "credit", title: `💰 ${session.credit_amount} credits received!`, body: `Credits released for completing "${session.listing?.title}". Check your wallet!`, link: "/wallet" },
-          { user_id: session.learner_id, type: "session", title: "Session Complete! ⭐ Rate your teacher", body: `Leave a review for your session on "${session.listing?.title}"`, link: "/sessions" },
+          { user_id: session.teacher_id, type: "credit", title: `💰 ${session.credit_amount} credits received!`, body: `Credits released for "${session.listing?.title}".`, link: "/wallet" },
+          { user_id: session.learner_id, type: "session", title: "Session Complete! Rate your teacher", body: `Leave a review for "${session.listing?.title}"`, link: "/sessions" },
         ]);
       } catch (_) {}
-      showToast(`🎉 Session complete! ${session.credit_amount} credits released to teacher!`);
+      showToast(`Session complete! ${session.credit_amount} cr released.`);
     } else {
-      const otherUserId = isTeacher ? session.learner_id : session.teacher_id;
-      try { await supabase.from("notifications").insert({ user_id: otherUserId, type: "session", title: "Please confirm session complete ✅", body: `The ${isTeacher ? "teacher" : "learner"} has marked the session as done. Confirm to release credits!`, link: "/sessions" }); } catch (_) {}
-      showToast(`✅ Marked as complete! Waiting for ${isTeacher ? "learner" : "teacher"} to confirm...`);
+      const otherId = isTeacher ? session.learner_id : session.teacher_id;
+      try { await supabase.from("notifications").insert({ user_id: otherId, type: "session", title: "Please confirm session complete ✅", body: `The ${isTeacher ? "teacher" : "learner"} marked it done. Confirm to release credits!`, link: "/sessions" }); } catch (_) {}
+      showToast(`Marked complete! Waiting for ${isTeacher ? "learner" : "teacher"} to confirm.`);
     }
-
     await loadData(); setActionLoading(null);
-    if (bothDone) { setRatingSession(updated as Session); setRatingSubmitted(false); setRatingForm({ overall:0, knowledge:0, communication:0, punctuality:0, preparedness:0, respectfulness:0, review:"" }); }
+    if (bothDone) { setRatingSession(updated as Session); setRatingSubmitted(false); setRatingError(""); setRatingForm({ overall:0, knowledge:0, communication:0, punctuality:0, preparedness:0, respectfulness:0, review:"" }); }
   }
 
   async function handleSubmitRating() {
     if (!ratingSession || !profile || ratingForm.overall === 0) return;
-    setActionLoading("rating");
+    setActionLoading("rating"); setRatingError("");
     const isTeacher = profile.id === ratingSession.teacher_id;
     const ratedId = isTeacher ? ratingSession.learner_id : ratingSession.teacher_id;
-    try {
-      await supabase.from("ratings").insert({ session_id: ratingSession.id, rater_id: profile.id, rated_id: ratedId, overall: ratingForm.overall, knowledge: !isTeacher ? ratingForm.knowledge : null, communication: ratingForm.communication, punctuality: !isTeacher ? ratingForm.punctuality : null, preparedness: isTeacher ? ratingForm.preparedness : null, respectfulness: isTeacher ? ratingForm.respectfulness : null, review: ratingForm.review, is_revealed: false });
-      setAlreadyRated(prev => new Set([...prev, ratingSession.id]));
-      setRatingSubmitted(true);
-    } catch (_) {}
-    setActionLoading(null);
+    const payload = {
+      session_id: ratingSession.id, rater_id: profile.id, rated_id: ratedId,
+      role_rated: isTeacher ? "learner" : "teacher",
+      overall: ratingForm.overall, communication: ratingForm.communication || null,
+      preparedness: isTeacher ? (ratingForm.preparedness || null) : null,
+      respectfulness: isTeacher ? (ratingForm.respectfulness || null) : null,
+      knowledge: null, punctuality: null,
+      ...(!isTeacher ? { knowledge: ratingForm.knowledge || null, punctuality: ratingForm.punctuality || null } : {}),
+      review: ratingForm.review || null, is_revealed: true, is_flagged: false,
+    };
+    const { error } = await supabase.from("ratings").insert(payload);
+    if (error) { setRatingError(`Failed to submit: ${error.message}`); setActionLoading(null); return; }
+    try { await supabase.rpc("increment_xp", { user_id: profile.id, amount: 5 }); } catch (_) {}
+    setAlreadyRated(prev => new Set([...prev, ratingSession.id]));
+    setRatingSubmitted(true); setActionLoading(null);
+    await loadData();
   }
 
   async function handleDispute() {
@@ -213,9 +240,12 @@ export default function SessionsPage() {
     await supabase.from("sessions").update({ status: "disputed" }).eq("id", disputeSession.id);
     await supabase.from("escrow").update({ status: "disputed" }).eq("session_id", disputeSession.id);
     const otherId = disputeSession.teacher_id === profile.id ? disputeSession.learner_id : disputeSession.teacher_id;
-    try { await supabase.from("notifications").insert([{ user_id: otherId, type: "dispute", title: "⚠️ Dispute Raised", body: "A dispute has been raised for your session.", link: "/sessions" }, { user_id: profile.id, type: "dispute", title: "Dispute Submitted", body: "Your dispute is under review.", link: "/sessions" }]); } catch (_) {}
+    try { await supabase.from("notifications").insert([
+      { user_id: otherId, type: "dispute", title: "⚠️ Dispute Raised", body: "A dispute has been raised for your session.", link: "/sessions" },
+      { user_id: profile.id, type: "dispute", title: "Dispute Submitted", body: "Your dispute is under review.", link: "/sessions" },
+    ]); } catch (_) {}
     setDisputeSession(null); setDisputeReason("");
-    showToast("Dispute submitted. A moderator will review within 48 hours.");
+    showToast("Dispute submitted. A moderator will review within 48h.");
     await loadData(); setActionLoading(null);
   }
 
@@ -223,9 +253,12 @@ export default function SessionsPage() {
     if (!rescheduleSession || !newTime) return;
     setActionLoading("reschedule");
     await supabase.from("sessions").update({ proposed_time: newTime, status: "pending", confirmed_time: null, teacher_completed: false, learner_completed: false }).eq("id", rescheduleSession.id);
-    try { const otherId = rescheduleSession.teacher_id === profile?.id ? rescheduleSession.learner_id : rescheduleSession.teacher_id; await supabase.from("notifications").insert({ user_id: otherId, type: "session", title: "Session Rescheduled 📅", body: `Your session "${rescheduleSession.listing?.title}" has been rescheduled. Please re-confirm.`, link: "/sessions" }); } catch (_) {}
+    try {
+      const otherId = rescheduleSession.teacher_id === profile?.id ? rescheduleSession.learner_id : rescheduleSession.teacher_id;
+      await supabase.from("notifications").insert({ user_id: otherId, type: "session", title: "Session Rescheduled 📅", body: `"${rescheduleSession.listing?.title}" rescheduled. Please re-confirm.`, link: "/sessions" });
+    } catch (_) {}
     setRescheduleSession(null); setNewTime("");
-    showToast("Session rescheduled! The other party has been notified.");
+    showToast("Rescheduled! The other party has been notified.");
     await loadData(); setActionLoading(null);
   }
 
@@ -234,198 +267,336 @@ export default function SessionsPage() {
     const statusOk = statusFilter === "all" || s.status === statusFilter;
     return roleOk && statusOk;
   });
-  const stats = { total: sessions.length, pending: sessions.filter(s => s.status === "pending").length, upcoming: sessions.filter(s => s.status === "confirmed").length, completed: sessions.filter(s => s.status === "completed").length, disputed: sessions.filter(s => s.status === "disputed").length };
+
+  const counts = {
+    total: sessions.length,
+    pending: sessions.filter(s => s.status === "pending").length,
+    upcoming: sessions.filter(s => s.status === "confirmed").length,
+    completed: sessions.filter(s => s.status === "completed").length,
+    disputed: sessions.filter(s => s.status === "disputed").length,
+  };
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#faf8f4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="min-h-screen bg-[#faf8f4] flex items-center justify-center" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ width: 32, height: 32, border: "2.5px solid #2d6a4f", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
-        <p style={{ color: "#aaa", fontSize: 13 }}>Loading sessions...</p>
+      <div className="text-center">
+        <div className="w-8 h-8 rounded-full border-2 border-[#2d6a4f] border-t-transparent mx-auto mb-3" style={{ animation: "spin .8s linear infinite" }} />
+        <p className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Loading sessions</p>
       </div>
     </div>
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#faf8f4", fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="min-h-screen bg-[#faf8f4]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; } a { text-decoration: none; }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
-        @keyframes spin { to{transform:rotate(360deg)} }
-        .session-card { transition: box-shadow 0.15s, transform 0.15s; }
-        .session-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.08); transform: translateY(-1px); }
-        .action-btn { transition: all 0.12s; cursor: pointer; font-family: 'DM Sans', sans-serif; }
-        .action-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
-        .tab-btn { transition: all 0.12s; cursor: pointer; border: none; font-family: 'DM Sans', sans-serif; }
-        .nav-link { padding: 6px 12px; border-radius: 8px; color: #555; font-size: 13px; font-weight: 600; transition: background 0.12s; text-decoration: none; display: inline-block; }
-        .nav-link:hover { background: #f5f0e8; color: #333; }
-        .nav-link.active { background: #e8f4e8; color: #2d6a4f; }
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,700;0,800;0,900;1,800&family=DM+Sans:wght@400;500;600;700&display=swap');
+        *,*::before,*::after{box-sizing:border-box}
+        a{text-decoration:none;color:inherit}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+        .fade-up{animation:fadeUp .35s ease both}
+        .session-card{transition:box-shadow .2s,transform .2s}
+        .session-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.07);transform:translateY(-1px)}
+        .navlink{padding:5px 11px;border-radius:7px;font-size:13px;font-weight:600;color:#666;transition:all .12s;display:inline-block}
+        .navlink:hover{background:#f0ece4;color:#1a1a1a}
+        .navlink.active{background:#e8f4e8;color:#2d6a4f}
+        .modal-anim{animation:slideUp .22s ease}
+        .overlay-anim{animation:fadeIn .15s ease}
       `}</style>
 
+      {/* TOAST */}
       {toast && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, background: toast.type === "success" ? "#2d6a4f" : "#dc2626", color: "white", padding: "14px 20px", borderRadius: 12, fontSize: 14, fontWeight: 600, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", maxWidth: 360, animation: "fadeUp 0.3s ease" }}>
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl text-white text-sm font-semibold shadow-2xl fade-up"
+          style={{ background: toast.type === "success" ? "linear-gradient(135deg,#1a4a36,#2d6a4f)" : "linear-gradient(135deg,#991b1b,#dc2626)", maxWidth: 360 }}>
+          <span>{toast.type === "success" ? "✓" : "!"}</span>
           {toast.msg}
         </div>
       )}
 
-      <nav style={{ background: "#fff", borderBottom: "1.5px solid #e8e2d9", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <a href="/dashboard" style={{ display: "flex", alignItems: "center" }}>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
-        </a>
-        <div style={{ display: "flex", gap: 2 }}>
+      {/* NAVBAR */}
+      <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-stone-200 px-6 h-14 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <a href="/dashboard" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 text-xs font-700 text-stone-500 border border-stone-200 hover:bg-stone-200 transition-colors">
+            ← Dashboard
+          </a>
+          <div className="w-px h-5 bg-stone-200" />
+          <a href="/dashboard">
+            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
+            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
+          </a>
+        </div>
+
+        <div className="flex gap-0.5">
           {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
-            <a key={l} href={h} className={`nav-link ${h === "/sessions" ? "active" : ""}`}>{l}</a>
+            <a key={l} href={h} className={`navlink${h === "/sessions" ? " active" : ""}`}>{l}</a>
           ))}
         </div>
-        <a href="/profile" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 12px", borderRadius: 10, background: "#f5f0e8" }}>
-          <div style={{ width: 26, height: 26, borderRadius: "50%", background: LEVEL_COLORS[profile?.level || "Seedling"], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff" }}>{getInitials(profile?.full_name || "")}</div>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>@{profile?.username}</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#2d6a4f", background: "#e8f4e8", padding: "2px 8px", borderRadius: 20 }}>{profile?.credits} cr</span>
+
+        <a href="/profile" className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-stone-50 border border-stone-200 hover:bg-stone-100 transition-colors">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-800"
+            style={{ background: LEVEL_COLORS[profile?.level || "Seedling"] || "#2d6a4f" }}>
+            {getInitials(profile?.full_name || "")}
+          </div>
+          <span className="text-sm font-600 text-stone-700">@{profile?.username}</span>
+          <span className="text-xs font-800 text-[#2d6a4f] bg-green-50 px-2.5 py-0.5 rounded-full border border-green-200">
+            {profile?.credits} cr
+          </span>
         </a>
       </nav>
 
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "32px 20px" }}>
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 34, fontWeight: 900, color: "#1a1a1a", letterSpacing: "-0.5px" }}>My Sessions</h1>
-          <p style={{ color: "#aaa", marginTop: 6, fontSize: 14 }}>Manage your bookings, confirm completion, and communicate with your partner.</p>
+      {/* MAIN */}
+      <div className="max-w-4xl mx-auto px-5 py-10 pb-20">
+
+        {/* Page header */}
+        <div className="flex items-start justify-between gap-4 mb-8 fade-up">
+          <div>
+            <p className="text-xs font-800 text-[#2d6a4f] tracking-widest uppercase mb-2">My Sessions</p>
+            <h1 className="text-4xl font-900 text-stone-900 leading-none tracking-tight mb-2" style={{ fontFamily: "'Fraunces', serif" }}>
+              Manage Bookings
+            </h1>
+            <p className="text-sm text-stone-400 font-500">Accept requests, confirm sessions, and rate your partners.</p>
+          </div>
+          <a href="/listings" className="flex items-center gap-2 px-5 py-2.5 bg-[#2d6a4f] text-white rounded-xl text-sm font-700 hover:bg-[#1a4a36] transition-colors whitespace-nowrap shadow-sm">
+            + Book a Session
+          </a>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 24 }}>
-          {[{label:"Total",val:stats.total,color:"#555",bg:"#fff"},{label:"Pending",val:stats.pending,color:"#92400e",bg:"#fffbeb"},{label:"Upcoming",val:stats.upcoming,color:"#1e40af",bg:"#eff6ff"},{label:"Completed",val:stats.completed,color:"#166534",bg:"#f0fdf4"},{label:"Disputed",val:stats.disputed,color:"#6d28d9",bg:"#faf5ff"}].map(s => (
-            <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: "14px 16px", border: "1.5px solid #e8e2d9", textAlign: "center", cursor: "pointer" }}
-              onClick={() => setStatusFilter(s.label.toLowerCase() === "upcoming" ? "confirmed" : s.label.toLowerCase() === "total" ? "all" : s.label.toLowerCase())}>
-              <div style={{ fontSize: 22, fontWeight: 900, color: s.color, fontFamily: "'Fraunces', serif", lineHeight: 1 }}>{s.val}</div>
-              <div style={{ fontSize: 10, color: "#aaa", fontWeight: 600, marginTop: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
-            </div>
+        {/* Stats strip */}
+        <div className="grid grid-cols-5 gap-3 mb-6 fade-up" style={{ animationDelay: ".05s" }}>
+          {[
+            { label: "Total",     val: counts.total,     filter: "all",       accent: "#1a1a1a" },
+            { label: "Pending",   val: counts.pending,   filter: "pending",   accent: "#f59e0b" },
+            { label: "Upcoming",  val: counts.upcoming,  filter: "confirmed", accent: "#3b82f6" },
+            { label: "Completed", val: counts.completed, filter: "completed", accent: "#22c55e" },
+            { label: "Disputed",  val: counts.disputed,  filter: "disputed",  accent: "#a855f7" },
+          ].map(s => (
+            <button key={s.label} onClick={() => setStatusFilter(s.filter)}
+              className={`bg-white rounded-2xl p-4 border text-center cursor-pointer hover:-translate-y-0.5 hover:shadow-md transition-all ${statusFilter === s.filter ? "border-stone-900 shadow-sm" : "border-stone-200"}`}>
+              <div className="text-3xl font-900 leading-none mb-1.5" style={{ fontFamily: "'Fraunces', serif", color: s.accent }}>{s.val}</div>
+              <div className="text-xs text-stone-400 font-700 tracking-wider uppercase">{s.label}</div>
+            </button>
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", background: "#f0ece4", padding: 3, borderRadius: 10, gap: 2 }}>
+        {/* Filter bar */}
+        <div className="flex gap-3 mb-5 items-center flex-wrap fade-up" style={{ animationDelay: ".1s" }}>
+          {/* Role tabs */}
+          <div className="flex bg-stone-100 p-1 rounded-xl gap-0.5">
             {(["all","teaching","learning"] as const).map(t => (
-              <button key={t} className="tab-btn" onClick={() => setTab(t)} style={{ padding: "7px 16px", borderRadius: 8, fontSize: 12, fontWeight: 700, background: tab === t ? "#fff" : "transparent", color: tab === t ? "#1a1a1a" : "#888", boxShadow: tab === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
-                {t === "all" ? "All" : t === "teaching" ? "🎓 Teaching" : "📚 Learning"}
+              <button key={t} onClick={() => setTab(t)}
+                className={`px-4 py-1.5 rounded-lg text-xs font-700 transition-all ${tab === t ? "bg-white text-stone-900 shadow-sm" : "text-stone-400 hover:text-stone-600"}`}>
+                {t === "all" ? "All" : t === "teaching" ? "Teaching" : "Learning"}
               </button>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {/* Status pills */}
+          <div className="flex gap-1.5 flex-wrap">
             {["all","pending","confirmed","completed","cancelled","disputed"].map(s => (
-              <button key={s} className="tab-btn" onClick={() => setStatusFilter(s)} style={{ padding: "5px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: statusFilter === s ? "#1a1a1a" : "#fff", color: statusFilter === s ? "#fff" : "#888", border: `1.5px solid ${statusFilter === s ? "#1a1a1a" : "#e8e2d9"}` }}>
-                {s === "all" ? "All Status" : s === "confirmed" ? "Upcoming" : s.charAt(0).toUpperCase() + s.slice(1)}
+              <button key={s} onClick={() => setStatusFilter(s)}
+                className={`px-3.5 py-1 rounded-full text-xs font-700 border transition-all ${statusFilter === s ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-400 border-stone-200 hover:border-stone-400 hover:text-stone-600"}`}>
+                {s === "all" ? "All" : s === "confirmed" ? "Upcoming" : s.charAt(0).toUpperCase() + s.slice(1)}
               </button>
             ))}
           </div>
         </div>
 
-        {stats.pending > 0 && tab !== "learning" && (
-          <div style={{ background: "#fffbeb", border: "1.5px solid #fde68a", borderRadius: 12, padding: "12px 18px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-            <span>⏳</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#92400e" }}>You have {stats.pending} pending session request{stats.pending > 1 ? "s" : ""} — Accept or decline below</span>
+        {/* Pending alert */}
+        {counts.pending > 0 && tab !== "learning" && (
+          <div className="flex items-center justify-between gap-4 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 mb-5 fade-up">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 font-800 text-sm">{counts.pending}</div>
+              <div>
+                <p className="text-sm font-800 text-amber-800">Pending request{counts.pending > 1 ? "s" : ""} waiting for your response</p>
+                <p className="text-xs text-amber-600 font-500">Accept or decline to keep learners informed.</p>
+              </div>
+            </div>
+            <button onClick={() => setStatusFilter("pending")}
+              className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-800 hover:bg-amber-600 transition-colors whitespace-nowrap">
+              View Pending →
+            </button>
           </div>
         )}
 
+        {/* Empty state */}
         {filtered.length === 0 && (
-          <div style={{ textAlign: "center", padding: "56px 20px", background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9" }}>
-            <div style={{ fontSize: 44, marginBottom: 14 }}>📭</div>
-            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 800, color: "#1a1a1a", marginBottom: 8 }}>No sessions found</div>
-            <p style={{ color: "#aaa", fontSize: 13, marginBottom: 20 }}>{tab === "teaching" ? "No one has booked a session with you yet." : tab === "learning" ? "You haven't booked any sessions yet." : "No sessions match your filters."}</p>
-            <a href="/listings" style={{ display: "inline-block", padding: "10px 24px", background: "#2d6a4f", color: "#fff", borderRadius: 10, fontWeight: 700, fontSize: 13 }}>Browse Skills →</a>
+          <div className="text-center py-20 bg-white rounded-3xl border border-stone-200 fade-up">
+            <p className="text-5xl mb-5">📭</p>
+            <h3 className="text-2xl font-900 text-stone-900 mb-2" style={{ fontFamily: "'Fraunces', serif" }}>No sessions found</h3>
+            <p className="text-sm text-stone-400 mb-7 max-w-xs mx-auto">
+              {tab === "teaching" ? "No learners have booked you yet." : tab === "learning" ? "You haven't booked any sessions yet." : "No sessions match your current filters."}
+            </p>
+            <a href="/listings" className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#2d6a4f] text-white rounded-xl font-700 text-sm hover:bg-[#1a4a36] transition-colors">
+              Browse Skills →
+            </a>
           </div>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* SESSION CARDS */}
+        <div className="flex flex-col gap-3">
           {filtered.map((session, idx) => {
-            const isTeacher = session.teacher_id === profile?.id;
-            const other = isTeacher ? session.learner : session.teacher;
-            const otherId = isTeacher ? session.learner_id : session.teacher_id;
-            const cfg = STATUS_CONFIG[session.status] || STATUS_CONFIG.pending;
-            const myDone = isTeacher ? session.teacher_completed : session.learner_completed;
-            const otherDone = isTeacher ? session.learner_completed : session.teacher_completed;
+            const isTeacher  = session.teacher_id === profile?.id;
+            const other      = isTeacher ? session.learner  : session.teacher;
+            const otherId    = isTeacher ? session.learner_id : session.teacher_id;
+            const cfg        = STATUS_CONFIG[session.status] || STATUS_CONFIG.pending;
+            const myDone     = isTeacher ? session.teacher_completed : session.learner_completed;
+            const otherDone  = isTeacher ? session.learner_completed : session.teacher_completed;
             const isExpanded = expandedId === session.id;
-            const hasRated = alreadyRated.has(session.id);
+            const hasRated   = alreadyRated.has(session.id);
+            const levelColor = LEVEL_COLORS[other?.level || "Seedling"] || "#2d6a4f";
 
             return (
-              <div key={session.id} className="session-card" style={{ background: "#fff", borderRadius: 16, border: "1.5px solid #e8e2d9", overflow: "hidden", animation: `fadeUp 0.4s ${idx * 0.04}s ease both` }}>
-                <div style={{ height: 3, background: cfg.dot }} />
-                <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid #f5f0e8" }}>
-                  <div style={{ width: 44, height: 44, borderRadius: "50%", background: LEVEL_COLORS[other?.level || "Seedling"] || "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{getInitials(other?.full_name || "?")}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{other?.full_name || "Unknown"}</span>
-                      <span style={{ fontSize: 11, color: "#aaa" }}>@{other?.username}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: isTeacher ? "#e0f2fe" : "#f0fdf4", color: isTeacher ? "#0369a1" : "#166534" }}>{isTeacher ? "Your Learner" : "Your Teacher"}</span>
+              <div key={session.id} className="session-card bg-white rounded-2xl border border-stone-200 overflow-hidden fade-up" style={{ animationDelay: `${idx * .04}s`, borderLeft: `3px solid ${cfg.dot}` }}>
+
+                {/* Card header */}
+                <div className="px-5 py-4 flex items-center gap-4">
+                  {/* Avatar */}
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-800"
+                      style={{ background: levelColor }}>
+                      {getInitials(other?.full_name || "?")}
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#333", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.listing?.title || "Untitled Session"}</div>
+                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white" style={{ background: cfg.dot }} />
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                    <span style={{ fontSize: 12, color: "#888" }}>{FORMAT_ICONS[session.listing?.format || "mixed"]} {FORMAT_LABELS[session.listing?.format || "mixed"]}</span>
-                    <span style={{ fontSize: 16, fontWeight: 800, color: "#2d6a4f", fontFamily: "'Fraunces', serif" }}>{session.credit_amount} cr</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>{cfg.icon} {cfg.label}</span>
-                    <button onClick={() => setExpandedId(isExpanded ? null : session.id)} style={{ width: 28, height: 28, borderRadius: "50%", background: "#f5f0e8", border: "none", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", color: "#888", transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "none" }}>▾</button>
+
+                  {/* Name + listing */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                      <span className="text-sm font-800 text-stone-900">{other?.full_name || "Unknown"}</span>
+                      <span className="text-xs text-stone-400">@{other?.username}</span>
+                      <span className={`text-xs font-700 px-2 py-0.5 rounded-full ${isTeacher ? "bg-blue-50 text-blue-600" : "bg-green-50 text-green-700"}`}>
+                        {isTeacher ? "Learner" : "Teacher"}
+                      </span>
+                    </div>
+                    <p className="text-xs font-600 text-stone-500 truncate max-w-xs">{session.listing?.title || "Untitled Session"}</p>
+                  </div>
+
+                  {/* Right meta */}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-stone-400 font-500">{FORMAT_LABELS[session.listing?.format || "mixed"]}</span>
+                    <div className="text-right">
+                      <div className="text-lg font-900 text-[#2d6a4f] leading-none" style={{ fontFamily: "'Fraunces', serif" }}>{session.credit_amount} cr</div>
+                      <div className="text-xs text-stone-400">₱{session.credit_amount * 10}</div>
+                    </div>
+                    <span className="text-xs font-700 px-2.5 py-1 rounded-full" style={{ background: cfg.badgeBg, color: cfg.badgeText }}>
+                      {cfg.label}
+                    </span>
+                    <button onClick={() => setExpandedId(isExpanded ? null : session.id)}
+                      className="w-7 h-7 rounded-full bg-stone-100 flex items-center justify-center text-stone-400 text-xs hover:bg-stone-200 transition-all"
+                      style={{ transform: isExpanded ? "rotate(180deg)" : "none" }}>▾</button>
                   </div>
                 </div>
 
-                <div style={{ padding: "14px 20px", display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-                  <div style={{ flex: 1, minWidth: 200 }}>
-                    <div style={{ fontSize: 12, color: "#aaa", fontWeight: 600, marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.5 }}>Scheduled</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>
+                {/* Card footer — time + actions */}
+                <div className="px-5 pb-4 flex items-center gap-4 flex-wrap border-t border-stone-50">
+                  <div className="flex-1 min-w-0 pt-3">
+                    <p className="text-xs font-600 text-stone-400 mb-1">
                       📅 {formatDate(session.proposed_time)}
-                      {session.status === "confirmed" && <span style={{ marginLeft: 8, fontSize: 11, color: "#2d6a4f", fontWeight: 700, background: "#e8f4e8", padding: "1px 7px", borderRadius: 999 }}>{timeFromNow(session.proposed_time)}</span>}
-                    </div>
-                    {session.learner_note && <div style={{ fontSize: 12, color: "#888", marginTop: 4, fontStyle: "italic" }}>💬 "{session.learner_note}"</div>}
+                      {session.status === "confirmed" && (
+                        <span className="ml-2 text-[#2d6a4f] font-800 bg-green-50 px-2 py-0.5 rounded-full text-xs">{timeFromNow(session.proposed_time)}</span>
+                      )}
+                    </p>
+                    {session.learner_note && (
+                      <p className="text-xs text-stone-400 italic border-l-2 border-stone-200 pl-2 mt-1">"{session.learner_note}"</p>
+                    )}
                   </div>
 
+                  {/* Completion indicators */}
                   {(session.status === "confirmed" || session.status === "completed") && (
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <span style={{ fontSize: 11, color: "#aaa", fontWeight: 600 }}>Confirmed by:</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: session.teacher_completed ? "#f0fdf4" : "#f5f0e8", color: session.teacher_completed ? "#166534" : "#bbb", border: `1px solid ${session.teacher_completed ? "#bbf7d0" : "#e8e2d9"}` }}>Teacher {session.teacher_completed ? "✓" : "○"}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: session.learner_completed ? "#f0fdf4" : "#f5f0e8", color: session.learner_completed ? "#166534" : "#bbb", border: `1px solid ${session.learner_completed ? "#bbf7d0" : "#e8e2d9"}` }}>Learner {session.learner_completed ? "✓" : "○"}</span>
+                    <div className="flex gap-1.5 items-center pt-3">
+                      {[{ done: session.teacher_completed, lbl: "T" }, { done: session.learner_completed, lbl: "L" }].map(({ done, lbl }) => (
+                        <span key={lbl} className={`text-xs font-800 w-6 h-6 rounded-full flex items-center justify-center border ${done ? "bg-green-50 text-green-700 border-green-200" : "bg-stone-50 text-stone-300 border-stone-200"}`}>
+                          {done ? "✓" : lbl}
+                        </span>
+                      ))}
                     </div>
                   )}
 
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <button onClick={() => openMessageWith(otherId)} className="action-btn" style={{ padding: "8px 16px", borderRadius: 9, background: "#2d6a4f", color: "#fff", fontSize: 12, fontWeight: 700, border: "none" }}>
-                      💬 Message {isTeacher ? "Learner" : "Teacher"}
+                  {/* Actions */}
+                  <div className="flex gap-2 items-center flex-wrap pt-3">
+                    <button onClick={() => openMessageWith(otherId)}
+                      className="px-3.5 py-1.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-700 hover:bg-stone-200 transition-colors border border-stone-200">
+                      Message
                     </button>
+
                     {session.status === "pending" && isTeacher && (<>
-                      <button onClick={() => handleAccept(session)} disabled={!!actionLoading} className="action-btn" style={{ padding: "8px 16px", borderRadius: 9, background: "#166534", color: "#fff", fontSize: 12, fontWeight: 700, border: "none" }}>{actionLoading === session.id + "-accept" ? "..." : "✅ Accept"}</button>
-                      <button onClick={() => handleDecline(session)} disabled={!!actionLoading} className="action-btn" style={{ padding: "8px 16px", borderRadius: 9, background: "#fee2e2", color: "#991b1b", fontSize: 12, fontWeight: 700, border: "none" }}>{actionLoading === session.id + "-decline" ? "..." : "✕ Decline"}</button>
+                      <button onClick={() => handleAccept(session)} disabled={!!actionLoading}
+                        className="px-4 py-1.5 rounded-xl bg-[#2d6a4f] text-white text-xs font-800 hover:bg-[#1a4a36] transition-colors disabled:opacity-50">
+                        {actionLoading === session.id + "-accept" ? "…" : "Accept"}
+                      </button>
+                      <button onClick={() => handleDecline(session)} disabled={!!actionLoading}
+                        className="px-3.5 py-1.5 rounded-xl bg-red-50 text-red-600 text-xs font-700 hover:bg-red-100 transition-colors border border-red-200">
+                        {actionLoading === session.id + "-decline" ? "…" : "Decline"}
+                      </button>
                     </>)}
-                    {session.status === "pending" && !isTeacher && (<span style={{ fontSize: 11, fontWeight: 600, color: "#92400e", background: "#fffbeb", padding: "6px 12px", borderRadius: 9, border: "1px solid #fde68a" }}>⏳ Awaiting teacher response</span>)}
+
+                    {session.status === "pending" && !isTeacher && (
+                      <span className="text-xs font-600 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">Awaiting teacher</span>
+                    )}
+
                     {session.status === "confirmed" && !myDone && (
-                      <button onClick={() => handleMarkComplete(session)} disabled={!!actionLoading} className="action-btn" style={{ padding: "8px 16px", borderRadius: 9, background: "#1e40af", color: "#fff", fontSize: 12, fontWeight: 700, border: "none" }}>{actionLoading === session.id + "-complete" ? "..." : "✓ Mark Complete"}</button>
+                      <button onClick={() => handleMarkComplete(session)} disabled={!!actionLoading}
+                        className="px-4 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-800 hover:bg-blue-700 transition-colors disabled:opacity-50">
+                        {actionLoading === session.id + "-complete" ? "…" : "Mark Complete"}
+                      </button>
                     )}
-                    {session.status === "confirmed" && myDone && !otherDone && (<span style={{ fontSize: 11, fontWeight: 600, color: "#166534", background: "#f0fdf4", padding: "6px 12px", borderRadius: 9, border: "1px solid #bbf7d0" }}>✅ Waiting for other party</span>)}
+                    {session.status === "confirmed" && myDone && !otherDone && (
+                      <span className="text-xs font-600 text-green-700 bg-green-50 px-3 py-1.5 rounded-xl border border-green-200">
+                        Waiting for {isTeacher ? "learner" : "teacher"}
+                      </span>
+                    )}
+
                     {session.status === "confirmed" && (<>
-                      <button onClick={() => { setRescheduleSession(session); setNewTime(session.proposed_time.slice(0, 16)); }} className="action-btn" style={{ padding: "8px 12px", borderRadius: 9, background: "#f5f0e8", color: "#555", fontSize: 12, fontWeight: 600, border: "1.5px solid #e8e2d9" }}>📅 Reschedule</button>
-                      <button onClick={() => setDisputeSession(session)} className="action-btn" style={{ padding: "8px 12px", borderRadius: 9, background: "#faf5ff", color: "#7c3aed", fontSize: 12, fontWeight: 700, border: "1.5px solid #e9d5ff" }}>⚠️ Dispute</button>
+                      <button onClick={() => { setRescheduleSession(session); setNewTime(session.proposed_time.slice(0, 16)); }}
+                        className="px-3.5 py-1.5 rounded-xl bg-stone-100 text-stone-500 text-xs font-600 hover:bg-stone-200 transition-colors border border-stone-200">
+                        Reschedule
+                      </button>
+                      <button onClick={() => setDisputeSession(session)}
+                        className="px-3.5 py-1.5 rounded-xl bg-violet-50 text-violet-600 text-xs font-700 hover:bg-violet-100 transition-colors border border-violet-200">
+                        Dispute
+                      </button>
                     </>)}
+
                     {session.status === "completed" && !hasRated && (
-                      <button onClick={() => { setRatingSession(session); setRatingSubmitted(false); setRatingForm({ overall:0, knowledge:0, communication:0, punctuality:0, preparedness:0, respectfulness:0, review:"" }); }} className="action-btn" style={{ padding: "8px 16px", borderRadius: 9, background: "#f59e0b", color: "#fff", fontSize: 12, fontWeight: 700, border: "none" }}>⭐ Leave Review</button>
+                      <button onClick={() => { setRatingSession(session); setRatingSubmitted(false); setRatingError(""); setRatingForm({ overall:0, knowledge:0, communication:0, punctuality:0, preparedness:0, respectfulness:0, review:"" }); }}
+                        className="px-4 py-1.5 rounded-xl text-white text-xs font-800 hover:opacity-90 transition-opacity"
+                        style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)" }}>
+                        ★ Leave Review
+                      </button>
                     )}
-                    {session.status === "completed" && hasRated && (<span style={{ fontSize: 11, fontWeight: 600, color: "#166634", background: "#f0fdf4", padding: "6px 12px", borderRadius: 9, border: "1px solid #bbf7d0" }}>⭐ Reviewed</span>)}
+                    {session.status === "completed" && hasRated && (
+                      <span className="text-xs font-700 text-green-700 bg-green-50 px-3 py-1.5 rounded-xl border border-green-200">★ Reviewed</span>
+                    )}
                   </div>
                 </div>
 
+                {/* Expanded details */}
                 {isExpanded && (
-                  <div style={{ padding: "14px 20px", borderTop: "1px solid #f5f0e8", background: "#fafdf8" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <div className="px-5 py-4 border-t border-stone-100 bg-stone-50/50">
+                    <div className="grid grid-cols-2 gap-6">
                       <div>
-                        <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Session Details</div>
-                        <div style={{ fontSize: 12, color: "#555", lineHeight: 1.7 }}>
-                          <div>📋 <b>Format:</b> {FORMAT_LABELS[session.listing?.format || "mixed"]}</div>
-                          <div>💰 <b>Credits:</b> {session.credit_amount} cr (₱{session.credit_amount * 10})</div>
-                          <div>🕐 <b>Booked:</b> {formatDate(session.created_at)}</div>
-                          <div>🔖 <b>Status:</b> {cfg.label}</div>
-                        </div>
+                        <p className="text-xs font-800 text-stone-400 uppercase tracking-wider mb-3">Details</p>
+                        {[
+                          ["Format",  FORMAT_LABELS[session.listing?.format || "mixed"]],
+                          ["Credits", `${session.credit_amount} cr (₱${session.credit_amount * 10})`],
+                          ["Booked",  formatDate(session.created_at)],
+                          ["Status",  cfg.label],
+                        ].map(([k, v]) => (
+                          <div key={k} className="flex gap-3 text-xs mb-1.5">
+                            <span className="text-stone-400 w-14 shrink-0">{k}</span>
+                            <span className="font-600 text-stone-600">{v}</span>
+                          </div>
+                        ))}
                       </div>
                       <div>
-                        <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Quick Actions</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          <a href={`/listings/${session.listing_id}`} style={{ fontSize: 12, color: "#2d6a4f", fontWeight: 600 }}>📚 View Listing →</a>
-                          <button onClick={() => openMessageWith(otherId)} style={{ fontSize: 12, color: "#7c3aed", fontWeight: 600, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>💬 Open full conversation →</button>
+                        <p className="text-xs font-800 text-stone-400 uppercase tracking-wider mb-3">Quick Links</p>
+                        <div className="flex flex-col gap-2">
+                          <a href={`/listings/${session.listing_id}`} className="text-xs font-700 text-[#2d6a4f] hover:underline">View listing →</a>
+                          <button onClick={() => openMessageWith(otherId)}
+                            className="text-xs font-700 text-violet-600 hover:underline text-left bg-transparent border-0 cursor-pointer p-0">
+                            Open full conversation →
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -437,76 +608,137 @@ export default function SessionsPage() {
         </div>
       </div>
 
+      {/* RATING MODAL */}
       {ratingSession && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 28, maxWidth: 460, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div className="overlay-anim fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5 backdrop-blur-sm">
+          <div className="modal-anim bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
             {ratingSubmitted ? (
-              <div style={{ textAlign: "center", padding: "20px 0" }}>
-                <div style={{ fontSize: 52, marginBottom: 12 }}>🌟</div>
-                <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 900, marginBottom: 8 }}>Review Submitted!</h2>
-                <p style={{ color: "#888", fontSize: 13, marginBottom: 20 }}>Both ratings reveal once the other party submits.</p>
-                <button onClick={() => setRatingSession(null)} style={{ padding: "10px 28px", background: "#2d6a4f", color: "#fff", borderRadius: 10, border: "none", fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Done</button>
+              <div className="text-center py-14 px-8">
+                <p className="text-5xl mb-4">🌟</p>
+                <h2 className="text-2xl font-900 text-stone-900 mb-2" style={{ fontFamily: "'Fraunces', serif" }}>Review Submitted!</h2>
+                <p className="text-sm text-stone-400 mb-1">Your review is now live on the community.</p>
+                <div className="flex justify-center my-5"><Stars value={ratingForm.overall} /></div>
+                <button onClick={() => { setRatingSession(null); setRatingSubmitted(false); }}
+                  className="px-8 py-2.5 bg-[#2d6a4f] text-white rounded-xl font-800 text-sm hover:bg-[#1a4a36] transition-colors">
+                  Done
+                </button>
               </div>
             ) : (
               <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 900 }}>Rate this Session</h2>
-                  <button onClick={() => setRatingSession(null)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#bbb" }}>✕</button>
-                </div>
-                <p style={{ color: "#aaa", fontSize: 12, marginBottom: 20 }}>🔒 Double-blind — neither party sees ratings until both submit.</p>
-                {(profile?.id === ratingSession.teacher_id
-                  ? [{key:"overall",label:"Overall Experience"},{key:"preparedness",label:"Learner Preparedness"},{key:"respectfulness",label:"Respectfulness"},{key:"communication",label:"Communication"}]
-                  : [{key:"overall",label:"Overall Experience"},{key:"knowledge",label:"Knowledge & Expertise"},{key:"communication",label:"Communication"},{key:"punctuality",label:"Punctuality"}]
-                ).map(({ key, label }) => (
-                  <div key={key} style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#333", marginBottom: 6 }}>{label}</div>
-                    <StarRating value={ratingForm[key as keyof RatingForm] as number} onChange={v => setRatingForm(f => ({ ...f, [key]: v }))} />
+                <div className="flex justify-between items-start p-6 pb-0">
+                  <div>
+                    <h2 className="text-xl font-900 text-stone-900 mb-1" style={{ fontFamily: "'Fraunces', serif" }}>Rate this Session</h2>
+                    <p className="text-xs text-stone-400">Honest reviews help the community grow</p>
                   </div>
-                ))}
-                <div style={{ marginBottom: 18 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#333", marginBottom: 6 }}>Written Review <span style={{ color: "#aaa", fontWeight: 400 }}>(optional)</span></div>
-                  <textarea value={ratingForm.review} onChange={e => setRatingForm(f => ({ ...f, review: e.target.value.slice(0, 300) }))} placeholder="Share your experience…" style={{ width: "100%", minHeight: 80, padding: "10px 12px", borderRadius: 10, border: "1.5px solid #e8e2d9", fontSize: 13, fontFamily: "'DM Sans', sans-serif", resize: "vertical" }} />
-                  <div style={{ fontSize: 10, color: "#bbb", textAlign: "right" }}>{ratingForm.review.length}/300</div>
+                  <button onClick={() => setRatingSession(null)} className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-400 hover:bg-stone-200 transition-colors text-sm">✕</button>
                 </div>
-                <button onClick={handleSubmitRating} disabled={ratingForm.overall === 0 || !!actionLoading} style={{ width: "100%", padding: "12px", borderRadius: 11, background: ratingForm.overall === 0 ? "#e8e2d9" : "#2d6a4f", color: ratingForm.overall === 0 ? "#aaa" : "#fff", fontWeight: 700, fontSize: 14, border: "none", cursor: ratingForm.overall === 0 ? "not-allowed" : "pointer", fontFamily: "'DM Sans', sans-serif" }}>
-                  {actionLoading === "rating" ? "Submitting…" : "Submit Review ⭐"}
-                </button>
+
+                <div className="mx-6 mt-4 p-3 rounded-xl border text-xs font-600"
+                  style={{ background: profile?.id === ratingSession.teacher_id ? "#dbeafe" : "#dcfce7", borderColor: profile?.id === ratingSession.teacher_id ? "#bfdbfe" : "#bbf7d0", color: profile?.id === ratingSession.teacher_id ? "#1e40af" : "#166534" }}>
+                  Rating {profile?.id === ratingSession.teacher_id ? "learner" : "teacher"}:{" "}
+                  <span className="font-800">
+                    {profile?.id === ratingSession.teacher_id ? ratingSession.learner?.full_name : ratingSession.teacher?.full_name}
+                  </span>
+                </div>
+
+                <div className="p-6 flex flex-col gap-5">
+                  {(profile?.id === ratingSession.teacher_id ? TEACHER_RATES_LEARNER : LEARNER_RATES_TEACHER).map(({ key, label, hint }) => (
+                    <div key={key}>
+                      <div className="flex justify-between items-baseline mb-2">
+                        <span className="text-sm font-700 text-stone-800">{label}</span>
+                        <span className="text-xs text-stone-400">{hint}</span>
+                      </div>
+                      <StarPicker value={ratingForm[key as keyof RatingForm] as number} onChange={v => setRatingForm(f => ({ ...f, [key]: v }))} />
+                      {(ratingForm[key as keyof RatingForm] as number) > 0 && (
+                        <p className="text-xs text-amber-500 font-700 mt-1">{["","Poor","Fair","Good","Great","Excellent!"][(ratingForm[key as keyof RatingForm] as number)]}</p>
+                      )}
+                    </div>
+                  ))}
+
+                  <div>
+                    <p className="text-sm font-700 text-stone-800 mb-2">Written Review <span className="font-400 text-stone-400">(optional)</span></p>
+                    <textarea value={ratingForm.review} onChange={e => setRatingForm(f => ({ ...f, review: e.target.value.slice(0, 300) }))}
+                      placeholder="Share your experience…"
+                      className="w-full min-h-20 p-3 rounded-xl border border-stone-200 text-sm resize-none outline-none focus:border-[#2d6a4f] transition-colors"
+                      style={{ fontFamily: "'DM Sans', sans-serif" }} />
+                    <p className="text-xs text-stone-400 text-right mt-1">{ratingForm.review.length}/300</p>
+                  </div>
+
+                  {ratingError && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-600 font-600">{ratingError}</div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button onClick={() => setRatingSession(null)}
+                      className="flex-1 py-3 rounded-xl bg-stone-100 text-stone-600 font-700 text-sm hover:bg-stone-200 transition-colors">
+                      Cancel
+                    </button>
+                    <button onClick={handleSubmitRating} disabled={ratingForm.overall === 0 || !!actionLoading}
+                      className="flex-2 py-3 px-6 rounded-xl font-800 text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{ background: ratingForm.overall > 0 ? "linear-gradient(135deg,#2d6a4f,#1a4a36)" : "#e5e7eb", color: ratingForm.overall > 0 ? "#fff" : "#9ca3af", flex: 2 }}>
+                      {actionLoading === "rating" ? "Submitting…" : "Submit Review ★"}
+                    </button>
+                  </div>
+                </div>
               </>
             )}
           </div>
         </div>
       )}
 
+      {/* RESCHEDULE MODAL */}
       {rescheduleSession && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 28, maxWidth: 400, width: "100%" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900 }}>📅 Reschedule Session</h2>
-              <button onClick={() => setRescheduleSession(null)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#bbb" }}>✕</button>
+        <div className="overlay-anim fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5 backdrop-blur-sm">
+          <div className="modal-anim bg-white rounded-3xl p-7 w-full max-w-sm shadow-2xl">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-xl font-900 text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>Reschedule</h2>
+              <button onClick={() => setRescheduleSession(null)} className="text-stone-400 hover:text-stone-600 text-xl">✕</button>
             </div>
-            <p style={{ color: "#888", fontSize: 12, marginBottom: 16 }}>Rescheduling resets the session to pending and notifies the other party.</p>
-            <label style={{ fontSize: 13, fontWeight: 700, color: "#333", display: "block", marginBottom: 8 }}>New Date & Time</label>
-            <input type="datetime-local" value={newTime} onChange={e => setNewTime(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid #e8e2d9", fontSize: 13, fontFamily: "'DM Sans', sans-serif", marginBottom: 16 }} />
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setRescheduleSession(null)} style={{ flex: 1, padding: "10px", borderRadius: 10, background: "#f5f0e8", color: "#555", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
-              <button onClick={handleReschedule} disabled={!newTime || !!actionLoading} style={{ flex: 1, padding: "10px", borderRadius: 10, background: newTime ? "#2d6a4f" : "#e8e2d9", color: newTime ? "#fff" : "#aaa", fontWeight: 700, fontSize: 13, border: "none", cursor: newTime ? "pointer" : "not-allowed", fontFamily: "'DM Sans', sans-serif" }}>{actionLoading === "reschedule" ? "Saving..." : "Confirm Reschedule"}</button>
+            <p className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-xl p-3 mb-5 font-600 leading-relaxed">
+              Rescheduling resets to <strong>pending</strong> and notifies the other party to re-confirm.
+            </p>
+            <label className="text-xs font-700 text-stone-700 block mb-2">New Date & Time</label>
+            <input type="datetime-local" value={newTime} onChange={e => setNewTime(e.target.value)}
+              className="w-full p-3 rounded-xl border border-stone-200 text-sm outline-none focus:border-[#2d6a4f] transition-colors mb-5"
+              style={{ fontFamily: "'DM Sans', sans-serif" }} />
+            <div className="flex gap-2">
+              <button onClick={() => setRescheduleSession(null)} className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 font-700 text-sm hover:bg-stone-200 transition-colors">Cancel</button>
+              <button onClick={handleReschedule} disabled={!newTime || !!actionLoading}
+                className="flex-2 py-2.5 px-5 rounded-xl font-800 text-sm transition-all disabled:opacity-40"
+                style={{ flex: 2, background: newTime ? "#2d6a4f" : "#e5e7eb", color: newTime ? "#fff" : "#9ca3af" }}>
+                {actionLoading === "reschedule" ? "Saving…" : "Confirm Reschedule"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* DISPUTE MODAL */}
       {disputeSession && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 28, maxWidth: 440, width: "100%" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#6d28d9" }}>⚠️ Raise a Dispute</h2>
-              <button onClick={() => setDisputeSession(null)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#bbb" }}>✕</button>
+        <div className="overlay-anim fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5 backdrop-blur-sm">
+          <div className="modal-anim bg-white rounded-3xl p-7 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-xl font-900 text-violet-700" style={{ fontFamily: "'Fraunces', serif" }}>Raise a Dispute</h2>
+              <button onClick={() => setDisputeSession(null)} className="text-stone-400 hover:text-stone-600 text-xl">✕</button>
             </div>
-            <p style={{ color: "#888", fontSize: 12, marginBottom: 16 }}>Credits will be frozen in escrow until a moderator resolves this within 48 hours.</p>
-            <textarea value={disputeReason} onChange={e => setDisputeReason(e.target.value)} placeholder="Describe what went wrong in detail…" style={{ width: "100%", minHeight: 100, padding: "10px 12px", borderRadius: 10, border: "1.5px solid #e8e2d9", fontSize: 13, fontFamily: "'DM Sans', sans-serif", resize: "vertical", marginBottom: 16 }} />
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setDisputeSession(null)} style={{ flex: 1, padding: "10px", borderRadius: 10, background: "#f5f0e8", color: "#555", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
-              <button onClick={handleDispute} disabled={disputeReason.length < 10 || !!actionLoading} style={{ flex: 1, padding: "10px", borderRadius: 10, background: disputeReason.length < 10 ? "#e8e2d9" : "#7c3aed", color: disputeReason.length < 10 ? "#aaa" : "#fff", fontWeight: 700, fontSize: 13, border: "none", cursor: disputeReason.length < 10 ? "not-allowed" : "pointer", fontFamily: "'DM Sans', sans-serif" }}>{actionLoading === "dispute" ? "Submitting…" : "Submit Dispute"}</button>
+            <p className="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-xl p-3 mb-5 font-600 leading-relaxed">
+              Credits will be <strong>frozen in escrow</strong> until a moderator resolves this within 48 hours.
+            </p>
+            <label className="text-xs font-700 text-stone-700 block mb-2">Describe what went wrong</label>
+            <textarea value={disputeReason} onChange={e => setDisputeReason(e.target.value)}
+              placeholder="Provide as much detail as possible…"
+              className="w-full min-h-28 p-3 rounded-xl border border-stone-200 text-sm resize-y outline-none focus:border-violet-400 transition-colors mb-2"
+              style={{ fontFamily: "'DM Sans', sans-serif" }} />
+            <p className={`text-xs font-700 mb-5 ${disputeReason.length < 10 ? "text-red-400" : "text-green-600"}`}>
+              {disputeReason.length < 10 ? `${10 - disputeReason.length} more characters needed` : "✓ Ready to submit"}
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setDisputeSession(null)} className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 font-700 text-sm hover:bg-stone-200 transition-colors">Cancel</button>
+              <button onClick={handleDispute} disabled={disputeReason.length < 10 || !!actionLoading}
+                className="flex-2 py-2.5 px-5 rounded-xl font-800 text-sm transition-all disabled:opacity-40"
+                style={{ flex: 2, background: disputeReason.length >= 10 ? "#7c3aed" : "#e5e7eb", color: disputeReason.length >= 10 ? "#fff" : "#9ca3af" }}>
+                {actionLoading === "dispute" ? "Submitting…" : "Submit Dispute"}
+              </button>
             </div>
           </div>
         </div>
