@@ -12,6 +12,17 @@ type Listing     = { id: string; title: string; format: string; duration: number
 type Transaction = { id: string; amount: number; type: string; description: string; created_at: string };
 type UserSkill   = { id: string; skill_id: string; is_verified: boolean; verified_at: string | null; skills: { name: string; category: string } };
 
+// ── BAYESIAN AVERAGE ──────────────────────────────────────────────────────────
+// C = confidence weight (5 reviews needed to fully trust score)
+// m = global prior mean (3.5 = midpoint of 1-5 scale)
+// Formula: (C×m + sum) / (C + count)
+function bayesianAvg(ratings: number[]): number {
+  if (ratings.length === 0) return 0;
+  const C = 5, m = 3.5;
+  const sum = ratings.reduce((s, r) => s + r, 0);
+  return (C * m + sum) / (C + ratings.length);
+}
+
 const BADGE_TIERS = [
   { name: "Seedling", emoji: "🌱", color: "#2d6a4f", bg: "#dcfce7", desc: "Just getting started",  xpReq: 0,    sessionsReq: 0,  ratingReq: 0   },
   { name: "Rising",   emoji: "⭐", color: "#b45309", bg: "#fef3c7", desc: "Building momentum",     xpReq: 100,  sessionsReq: 0,  ratingReq: 0   },
@@ -127,10 +138,12 @@ export default function ProfilePage() {
       setSessions(sCount || 0);
       setUserSkills((skillsData as UserSkill[]) || []);
 
+      // ── BAYESIAN AVG (replaces raw average) ──
       if (ratingData && ratingData.length > 0) {
-        const avg = ratingData.reduce((s: number, r: { overall: number }) => s + r.overall, 0) / ratingData.length;
-        setAvgRating(parseFloat(avg.toFixed(1)));
+        const bayes = bayesianAvg(ratingData.map((r: { overall: number }) => r.overall));
+        setAvgRating(parseFloat(bayes.toFixed(2)));
       }
+
       if (sessionData) {
         const counts: Record<string, number> = {};
         sessionData.forEach((s: { learner_id: string }) => { counts[s.learner_id] = (counts[s.learner_id] || 0) + 1; });
@@ -299,11 +312,11 @@ export default function ProfilePage() {
                     </div>
                   )}
 
-                  {/* Meta row */}
+                  {/* Meta row — shows Bayesian rating */}
                   <div className="flex items-center gap-4 flex-wrap text-xs text-stone-400">
                     {profile.location && <span>📍 {profile.location}</span>}
                     <span>📅 Joined {joinDate}</span>
-                    {avgRating > 0 && <span>⭐ {avgRating.toFixed(1)} avg rating</span>}
+                    {avgRating > 0 && <span>⭐ {avgRating.toFixed(2)} avg rating</span>}
                     <span>🏅 {badges.length} badge{badges.length !== 1 ? "s" : ""}</span>
                   </div>
                 </div>
@@ -541,9 +554,9 @@ export default function ProfilePage() {
 
                 <div className="grid grid-cols-3 gap-2 mb-4">
                   {[
-                    { icon: "⚡", val: profile.xp,            label: "XP"       },
-                    { icon: "📚", val: sessions,               label: "Sessions" },
-                    { icon: "⭐", val: avgRating.toFixed(1),   label: "Rating"   },
+                    { icon: "⚡", val: profile.xp,              label: "XP"       },
+                    { icon: "📚", val: sessions,                 label: "Sessions" },
+                    { icon: "⭐", val: avgRating.toFixed(2),     label: "Rating"   },
                   ].map(s => (
                     <div key={s.label} className="bg-stone-50 rounded-xl p-2.5 text-center">
                       <div className="text-sm mb-1">{s.icon}</div>
@@ -568,7 +581,7 @@ export default function ProfilePage() {
                           <div className="flex justify-between mb-1">
                             <span className="text-xs text-stone-500 font-600">{r.label}</span>
                             <span className={`text-xs font-700 ${done ? "text-[#2d6a4f]" : "text-stone-400"}`}>
-                              {done ? "✓" : `${typeof r.current === "number" && r.current % 1 !== 0 ? r.current.toFixed(1) : r.current} / ${r.req}`}
+                              {done ? "✓" : `${typeof r.current === "number" && r.current % 1 !== 0 ? r.current.toFixed(2) : r.current} / ${r.req}`}
                             </span>
                           </div>
                           <div className="progress-bar"><div className="progress-fill" style={{ width: `${pct}%`, background: done ? "#2d6a4f" : "#cbd5e1" }} /></div>
@@ -615,7 +628,7 @@ export default function ProfilePage() {
                 </div>
 
                 {[
-                  { icon: "⭐", label: "Rating",   pts: Math.min(Math.round(avgRating * sessions * 4), 80), max: 80,  detail: `${avgRating.toFixed(1)} avg × ${sessions} sessions` },
+                  { icon: "⭐", label: "Rating",   pts: Math.min(Math.round(avgRating * sessions * 4), 80), max: 80,  detail: `${avgRating.toFixed(2)} avg × ${sessions} sessions` },
                   { icon: "📚", label: "Sessions", pts: Math.min(sessions * 2, 15),                         max: 15,  detail: `${sessions} × 2 pts`                               },
                   { icon: "🔄", label: "Repeats",  pts: Math.min(repeatClients * 5, 10),                    max: 10,  detail: `${repeatClients} repeat clients × 5`               },
                   { icon: "⚠️", label: "Disputes", pts: disputes * -15,                                     max: 0,   detail: disputes === 0 ? "No disputes ✓" : `${disputes} × -15` },

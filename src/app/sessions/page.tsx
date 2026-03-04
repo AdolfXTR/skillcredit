@@ -124,6 +124,9 @@ export default function SessionsPage() {
   const [rescheduleSession, setRescheduleSession] = useState<Session | null>(null);
   const [newTime,           setNewTime]           = useState("");
 
+  // FIX #14: computed once, used as min for the reschedule datetime input
+  const minRescheduleTime = new Date().toISOString().slice(0, 16);
+
   const showToast = (msg: string, type: "success"|"error" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
@@ -158,6 +161,15 @@ export default function SessionsPage() {
     window.location.href = "/messages";
   }
 
+  // FIX #8 helper: try RPC first (atomic), fallback to safe read-then-write
+  async function safeIncrementCredits(userId: string, amount: number) {
+    const { error } = await supabase.rpc("increment_credits", { user_id: userId, amount });
+    if (error) {
+      const { data: profile } = await supabase.from("profiles").select("credits").eq("id", userId).single();
+      await supabase.from("profiles").update({ credits: (profile?.credits || 0) + amount }).eq("id", userId);
+    }
+  }
+
   async function handleAccept(session: Session) {
     setActionLoading(session.id + "-accept");
     await supabase.from("sessions").update({ status: "confirmed", confirmed_time: session.proposed_time }).eq("id", session.id);
@@ -168,8 +180,8 @@ export default function SessionsPage() {
 
   async function handleDecline(session: Session) {
     setActionLoading(session.id + "-decline");
-    const { data: lp } = await supabase.from("profiles").select("credits").eq("id", session.learner_id).single();
-    await supabase.from("profiles").update({ credits: (lp?.credits || 0) + session.credit_amount }).eq("id", session.learner_id);
+    // FIX #8: atomic credit increment
+    await safeIncrementCredits(session.learner_id, session.credit_amount);
     await supabase.from("sessions").update({ status: "cancelled" }).eq("id", session.id);
     await supabase.from("escrow").update({ status: "refunded" }).eq("session_id", session.id);
     try {
@@ -180,18 +192,57 @@ export default function SessionsPage() {
     await loadData(); setActionLoading(null);
   }
 
+  // FIX #10: Learner can cancel their own pending booking and get refunded
+  async function handleCancelPending(session: Session) {
+    if (!profile) return;
+    setActionLoading(session.id + "-cancel");
+    // FIX #8: atomic credit increment
+    await safeIncrementCredits(session.learner_id, session.credit_amount);
+    await supabase.from("sessions").update({ status: "cancelled" }).eq("id", session.id);
+    await supabase.from("escrow").update({ status: "refunded" }).eq("session_id", session.id);
+    try {
+      await supabase.from("credit_transactions").insert({ user_id: session.learner_id, amount: session.credit_amount, type: "session_refund", reference_id: session.id, description: "Session cancelled by learner — credits refunded" });
+      await supabase.from("notifications").insert({ user_id: session.teacher_id, type: "session", title: "Session Cancelled", body: `${profile.full_name} cancelled their booking for "${session.listing?.title}".`, link: "/sessions" });
+    } catch (_) {}
+    showToast(`Booking cancelled. ${session.credit_amount} cr refunded.`);
+    await loadData(); setActionLoading(null);
+  }
+
   async function handleMarkComplete(session: Session) {
     setActionLoading(session.id + "-complete");
     const isTeacher = profile?.id === session.teacher_id;
-    const { data: updated, error } = await supabase.from("sessions").update(isTeacher ? { teacher_completed: true } : { learner_completed: true }).eq("id", session.id).select().single();
+    const { data: updated, error } = await supabase
+      .from("sessions")
+      .update(isTeacher ? { teacher_completed: true } : { learner_completed: true })
+      .eq("id", session.id)
+      .select()
+      .single();
+
     if (error || !updated) { showToast("Something went wrong.", "error"); setActionLoading(null); return; }
+
     const bothDone = updated.teacher_completed && updated.learner_completed;
+
     if (bothDone) {
-      const { data: tp } = await supabase.from("profiles").select("credits").eq("id", session.teacher_id).single();
-      const { error: ce } = await supabase.from("profiles").update({ credits: (tp?.credits || 0) + session.credit_amount }).eq("id", session.teacher_id);
-      if (ce) { showToast("Error releasing credits.", "error"); setActionLoading(null); return; }
-      await supabase.from("sessions").update({ status: "completed" }).eq("id", session.id);
+      // FIX #2: Re-read status from DB to detect if other party already triggered release
+      const { data: freshSession } = await supabase
+        .from("sessions").select("status").eq("id", session.id).single();
+
+      if (freshSession?.status === "completed") {
+        showToast("Session already completed!");
+        await loadData(); setActionLoading(null);
+        return;
+      }
+
+      // Mark completed first to "claim" the release before doing any credit work
+      const { error: statusErr } = await supabase
+        .from("sessions").update({ status: "completed" }).eq("id", session.id);
+
+      if (statusErr) { showToast("Error completing session.", "error"); setActionLoading(null); return; }
+
+      // FIX #8: atomic credit release
+      await safeIncrementCredits(session.teacher_id, session.credit_amount);
       await supabase.from("escrow").update({ status: "released" }).eq("session_id", session.id);
+
       try {
         await supabase.rpc("increment_xp", { user_id: session.teacher_id, amount: 50 });
         await supabase.rpc("increment_xp", { user_id: session.learner_id, amount: 20 });
@@ -201,14 +252,34 @@ export default function SessionsPage() {
           { user_id: session.learner_id, type: "session", title: "Session Complete! Rate your teacher", body: `Leave a review for "${session.listing?.title}"`, link: "/sessions" },
         ]);
       } catch (_) {}
+
       showToast(`Session complete! ${session.credit_amount} cr released.`);
+
+      // FIX #9: Re-fetch the session with the correct completed status before opening rating modal
+      const { data: completedSession } = await supabase
+        .from("sessions")
+        .select(`*, listing:listings(title, format, description),
+          teacher:profiles!sessions_teacher_id_fkey(id, full_name, username, level),
+          learner:profiles!sessions_learner_id_fkey(id, full_name, username, level)`)
+        .eq("id", session.id)
+        .single();
+
+      await loadData();
+      setActionLoading(null);
+
+      if (completedSession) {
+        setRatingSession(completedSession as Session);
+        setRatingSubmitted(false);
+        setRatingError("");
+        setRatingForm({ overall:0, knowledge:0, communication:0, punctuality:0, preparedness:0, respectfulness:0, review:"" });
+      }
     } else {
       const otherId = isTeacher ? session.learner_id : session.teacher_id;
       try { await supabase.from("notifications").insert({ user_id: otherId, type: "session", title: "Please confirm session complete ✅", body: `The ${isTeacher ? "teacher" : "learner"} marked it done. Confirm to release credits!`, link: "/sessions" }); } catch (_) {}
       showToast(`Marked complete! Waiting for ${isTeacher ? "learner" : "teacher"} to confirm.`);
+      await loadData();
+      setActionLoading(null);
     }
-    await loadData(); setActionLoading(null);
-    if (bothDone) { setRatingSession(updated as Session); setRatingSubmitted(false); setRatingError(""); setRatingForm({ overall:0, knowledge:0, communication:0, punctuality:0, preparedness:0, respectfulness:0, review:"" }); }
   }
 
   async function handleSubmitRating() {
@@ -269,11 +340,11 @@ export default function SessionsPage() {
   });
 
   const counts = {
-    total: sessions.length,
-    pending: sessions.filter(s => s.status === "pending").length,
-    upcoming: sessions.filter(s => s.status === "confirmed").length,
+    total:     sessions.length,
+    pending:   sessions.filter(s => s.status === "pending").length,
+    upcoming:  sessions.filter(s => s.status === "confirmed").length,
     completed: sessions.filter(s => s.status === "completed").length,
-    disputed: sessions.filter(s => s.status === "disputed").length,
+    disputed:  sessions.filter(s => s.status === "disputed").length,
   };
 
   if (loading) return (
@@ -306,7 +377,6 @@ export default function SessionsPage() {
         .overlay-anim{animation:fadeIn .15s ease}
       `}</style>
 
-      {/* TOAST */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl text-white text-sm font-semibold shadow-2xl fade-up"
           style={{ background: toast.type === "success" ? "linear-gradient(135deg,#1a4a36,#2d6a4f)" : "linear-gradient(135deg,#991b1b,#dc2626)", maxWidth: 360 }}>
@@ -315,55 +385,40 @@ export default function SessionsPage() {
         </div>
       )}
 
-      {/* NAVBAR */}
       <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-stone-200 px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <a href="/dashboard" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 text-xs font-700 text-stone-500 border border-stone-200 hover:bg-stone-200 transition-colors">
-            ← Dashboard
-          </a>
+          <a href="/dashboard" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 text-xs font-700 text-stone-500 border border-stone-200 hover:bg-stone-200 transition-colors">← Dashboard</a>
           <div className="w-px h-5 bg-stone-200" />
           <a href="/dashboard">
             <span style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
             <span style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
           </a>
         </div>
-
         <div className="flex gap-0.5">
           {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
             <a key={l} href={h} className={`navlink${h === "/sessions" ? " active" : ""}`}>{l}</a>
           ))}
         </div>
-
         <a href="/profile" className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-stone-50 border border-stone-200 hover:bg-stone-100 transition-colors">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-800"
-            style={{ background: LEVEL_COLORS[profile?.level || "Seedling"] || "#2d6a4f" }}>
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-800" style={{ background: LEVEL_COLORS[profile?.level || "Seedling"] || "#2d6a4f" }}>
             {getInitials(profile?.full_name || "")}
           </div>
           <span className="text-sm font-600 text-stone-700">@{profile?.username}</span>
-          <span className="text-xs font-800 text-[#2d6a4f] bg-green-50 px-2.5 py-0.5 rounded-full border border-green-200">
-            {profile?.credits} cr
-          </span>
+          <span className="text-xs font-800 text-[#2d6a4f] bg-green-50 px-2.5 py-0.5 rounded-full border border-green-200">{profile?.credits} cr</span>
         </a>
       </nav>
 
-      {/* MAIN */}
       <div className="max-w-4xl mx-auto px-5 py-10 pb-20">
 
-        {/* Page header */}
         <div className="flex items-start justify-between gap-4 mb-8 fade-up">
           <div>
             <p className="text-xs font-800 text-[#2d6a4f] tracking-widest uppercase mb-2">My Sessions</p>
-            <h1 className="text-4xl font-900 text-stone-900 leading-none tracking-tight mb-2" style={{ fontFamily: "'Fraunces', serif" }}>
-              Manage Bookings
-            </h1>
+            <h1 className="text-4xl font-900 text-stone-900 leading-none tracking-tight mb-2" style={{ fontFamily: "'Fraunces', serif" }}>Manage Bookings</h1>
             <p className="text-sm text-stone-400 font-500">Accept requests, confirm sessions, and rate your partners.</p>
           </div>
-          <a href="/listings" className="flex items-center gap-2 px-5 py-2.5 bg-[#2d6a4f] text-white rounded-xl text-sm font-700 hover:bg-[#1a4a36] transition-colors whitespace-nowrap shadow-sm">
-            + Book a Session
-          </a>
+          <a href="/listings" className="flex items-center gap-2 px-5 py-2.5 bg-[#2d6a4f] text-white rounded-xl text-sm font-700 hover:bg-[#1a4a36] transition-colors whitespace-nowrap shadow-sm">+ Book a Session</a>
         </div>
 
-        {/* Stats strip */}
         <div className="grid grid-cols-5 gap-3 mb-6 fade-up" style={{ animationDelay: ".05s" }}>
           {[
             { label: "Total",     val: counts.total,     filter: "all",       accent: "#1a1a1a" },
@@ -380,9 +435,7 @@ export default function SessionsPage() {
           ))}
         </div>
 
-        {/* Filter bar */}
         <div className="flex gap-3 mb-5 items-center flex-wrap fade-up" style={{ animationDelay: ".1s" }}>
-          {/* Role tabs */}
           <div className="flex bg-stone-100 p-1 rounded-xl gap-0.5">
             {(["all","teaching","learning"] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
@@ -391,7 +444,6 @@ export default function SessionsPage() {
               </button>
             ))}
           </div>
-          {/* Status pills */}
           <div className="flex gap-1.5 flex-wrap">
             {["all","pending","confirmed","completed","cancelled","disputed"].map(s => (
               <button key={s} onClick={() => setStatusFilter(s)}
@@ -402,7 +454,6 @@ export default function SessionsPage() {
           </div>
         </div>
 
-        {/* Pending alert */}
         {counts.pending > 0 && tab !== "learning" && (
           <div className="flex items-center justify-between gap-4 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 mb-5 fade-up">
             <div className="flex items-center gap-3">
@@ -412,14 +463,10 @@ export default function SessionsPage() {
                 <p className="text-xs text-amber-600 font-500">Accept or decline to keep learners informed.</p>
               </div>
             </div>
-            <button onClick={() => setStatusFilter("pending")}
-              className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-800 hover:bg-amber-600 transition-colors whitespace-nowrap">
-              View Pending →
-            </button>
+            <button onClick={() => setStatusFilter("pending")} className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-800 hover:bg-amber-600 transition-colors whitespace-nowrap">View Pending →</button>
           </div>
         )}
 
-        {/* Empty state */}
         {filtered.length === 0 && (
           <div className="text-center py-20 bg-white rounded-3xl border border-stone-200 fade-up">
             <p className="text-5xl mb-5">📭</p>
@@ -427,13 +474,10 @@ export default function SessionsPage() {
             <p className="text-sm text-stone-400 mb-7 max-w-xs mx-auto">
               {tab === "teaching" ? "No learners have booked you yet." : tab === "learning" ? "You haven't booked any sessions yet." : "No sessions match your current filters."}
             </p>
-            <a href="/listings" className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#2d6a4f] text-white rounded-xl font-700 text-sm hover:bg-[#1a4a36] transition-colors">
-              Browse Skills →
-            </a>
+            <a href="/listings" className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#2d6a4f] text-white rounded-xl font-700 text-sm hover:bg-[#1a4a36] transition-colors">Browse Skills →</a>
           </div>
         )}
 
-        {/* SESSION CARDS */}
         <div className="flex flex-col gap-3">
           {filtered.map((session, idx) => {
             const isTeacher  = session.teacher_id === profile?.id;
@@ -449,18 +493,13 @@ export default function SessionsPage() {
             return (
               <div key={session.id} className="session-card bg-white rounded-2xl border border-stone-200 overflow-hidden fade-up" style={{ animationDelay: `${idx * .04}s`, borderLeft: `3px solid ${cfg.dot}` }}>
 
-                {/* Card header */}
                 <div className="px-5 py-4 flex items-center gap-4">
-                  {/* Avatar */}
                   <div className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-800"
-                      style={{ background: levelColor }}>
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-800" style={{ background: levelColor }}>
                       {getInitials(other?.full_name || "?")}
                     </div>
                     <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white" style={{ background: cfg.dot }} />
                   </div>
-
-                  {/* Name + listing */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className="text-sm font-800 text-stone-900">{other?.full_name || "Unknown"}</span>
@@ -471,24 +510,19 @@ export default function SessionsPage() {
                     </div>
                     <p className="text-xs font-600 text-stone-500 truncate max-w-xs">{session.listing?.title || "Untitled Session"}</p>
                   </div>
-
-                  {/* Right meta */}
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="text-xs text-stone-400 font-500">{FORMAT_LABELS[session.listing?.format || "mixed"]}</span>
                     <div className="text-right">
                       <div className="text-lg font-900 text-[#2d6a4f] leading-none" style={{ fontFamily: "'Fraunces', serif" }}>{session.credit_amount} cr</div>
                       <div className="text-xs text-stone-400">₱{session.credit_amount * 10}</div>
                     </div>
-                    <span className="text-xs font-700 px-2.5 py-1 rounded-full" style={{ background: cfg.badgeBg, color: cfg.badgeText }}>
-                      {cfg.label}
-                    </span>
+                    <span className="text-xs font-700 px-2.5 py-1 rounded-full" style={{ background: cfg.badgeBg, color: cfg.badgeText }}>{cfg.label}</span>
                     <button onClick={() => setExpandedId(isExpanded ? null : session.id)}
                       className="w-7 h-7 rounded-full bg-stone-100 flex items-center justify-center text-stone-400 text-xs hover:bg-stone-200 transition-all"
                       style={{ transform: isExpanded ? "rotate(180deg)" : "none" }}>▾</button>
                   </div>
                 </div>
 
-                {/* Card footer — time + actions */}
                 <div className="px-5 pb-4 flex items-center gap-4 flex-wrap border-t border-stone-50">
                   <div className="flex-1 min-w-0 pt-3">
                     <p className="text-xs font-600 text-stone-400 mb-1">
@@ -502,7 +536,6 @@ export default function SessionsPage() {
                     )}
                   </div>
 
-                  {/* Completion indicators */}
                   {(session.status === "confirmed" || session.status === "completed") && (
                     <div className="flex gap-1.5 items-center pt-3">
                       {[{ done: session.teacher_completed, lbl: "T" }, { done: session.learner_completed, lbl: "L" }].map(({ done, lbl }) => (
@@ -513,12 +546,8 @@ export default function SessionsPage() {
                     </div>
                   )}
 
-                  {/* Actions */}
                   <div className="flex gap-2 items-center flex-wrap pt-3">
-                    <button onClick={() => openMessageWith(otherId)}
-                      className="px-3.5 py-1.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-700 hover:bg-stone-200 transition-colors border border-stone-200">
-                      Message
-                    </button>
+                    <button onClick={() => openMessageWith(otherId)} className="px-3.5 py-1.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-700 hover:bg-stone-200 transition-colors border border-stone-200">Message</button>
 
                     {session.status === "pending" && isTeacher && (<>
                       <button onClick={() => handleAccept(session)} disabled={!!actionLoading}
@@ -531,8 +560,15 @@ export default function SessionsPage() {
                       </button>
                     </>)}
 
+                    {/* FIX #10: Learner can cancel pending — credits refunded automatically */}
                     {session.status === "pending" && !isTeacher && (
-                      <span className="text-xs font-600 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">Awaiting teacher</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-600 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">Awaiting teacher</span>
+                        <button onClick={() => handleCancelPending(session)} disabled={!!actionLoading}
+                          className="px-3.5 py-1.5 rounded-xl bg-red-50 text-red-600 text-xs font-700 hover:bg-red-100 transition-colors border border-red-200 disabled:opacity-50">
+                          {actionLoading === session.id + "-cancel" ? "…" : "Cancel"}
+                        </button>
+                      </div>
                     )}
 
                     {session.status === "confirmed" && !myDone && (
@@ -558,6 +594,14 @@ export default function SessionsPage() {
                       </button>
                     </>)}
 
+                    {/* FIX #15: Dispute also available on completed sessions */}
+                    {session.status === "completed" && (
+                      <button onClick={() => setDisputeSession(session)}
+                        className="px-3.5 py-1.5 rounded-xl bg-violet-50 text-violet-600 text-xs font-700 hover:bg-violet-100 transition-colors border border-violet-200">
+                        Dispute
+                      </button>
+                    )}
+
                     {session.status === "completed" && !hasRated && (
                       <button onClick={() => { setRatingSession(session); setRatingSubmitted(false); setRatingError(""); setRatingForm({ overall:0, knowledge:0, communication:0, punctuality:0, preparedness:0, respectfulness:0, review:"" }); }}
                         className="px-4 py-1.5 rounded-xl text-white text-xs font-800 hover:opacity-90 transition-opacity"
@@ -571,7 +615,6 @@ export default function SessionsPage() {
                   </div>
                 </div>
 
-                {/* Expanded details */}
                 {isExpanded && (
                   <div className="px-5 py-4 border-t border-stone-100 bg-stone-50/50">
                     <div className="grid grid-cols-2 gap-6">
@@ -593,10 +636,7 @@ export default function SessionsPage() {
                         <p className="text-xs font-800 text-stone-400 uppercase tracking-wider mb-3">Quick Links</p>
                         <div className="flex flex-col gap-2">
                           <a href={`/listings/${session.listing_id}`} className="text-xs font-700 text-[#2d6a4f] hover:underline">View listing →</a>
-                          <button onClick={() => openMessageWith(otherId)}
-                            className="text-xs font-700 text-violet-600 hover:underline text-left bg-transparent border-0 cursor-pointer p-0">
-                            Open full conversation →
-                          </button>
+                          <button onClick={() => openMessageWith(otherId)} className="text-xs font-700 text-violet-600 hover:underline text-left bg-transparent border-0 cursor-pointer p-0">Open full conversation →</button>
                         </div>
                       </div>
                     </div>
@@ -619,9 +659,7 @@ export default function SessionsPage() {
                 <p className="text-sm text-stone-400 mb-1">Your review is now live on the community.</p>
                 <div className="flex justify-center my-5"><Stars value={ratingForm.overall} /></div>
                 <button onClick={() => { setRatingSession(null); setRatingSubmitted(false); }}
-                  className="px-8 py-2.5 bg-[#2d6a4f] text-white rounded-xl font-800 text-sm hover:bg-[#1a4a36] transition-colors">
-                  Done
-                </button>
+                  className="px-8 py-2.5 bg-[#2d6a4f] text-white rounded-xl font-800 text-sm hover:bg-[#1a4a36] transition-colors">Done</button>
               </div>
             ) : (
               <>
@@ -632,15 +670,11 @@ export default function SessionsPage() {
                   </div>
                   <button onClick={() => setRatingSession(null)} className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-400 hover:bg-stone-200 transition-colors text-sm">✕</button>
                 </div>
-
                 <div className="mx-6 mt-4 p-3 rounded-xl border text-xs font-600"
                   style={{ background: profile?.id === ratingSession.teacher_id ? "#dbeafe" : "#dcfce7", borderColor: profile?.id === ratingSession.teacher_id ? "#bfdbfe" : "#bbf7d0", color: profile?.id === ratingSession.teacher_id ? "#1e40af" : "#166534" }}>
                   Rating {profile?.id === ratingSession.teacher_id ? "learner" : "teacher"}:{" "}
-                  <span className="font-800">
-                    {profile?.id === ratingSession.teacher_id ? ratingSession.learner?.full_name : ratingSession.teacher?.full_name}
-                  </span>
+                  <span className="font-800">{profile?.id === ratingSession.teacher_id ? ratingSession.learner?.full_name : ratingSession.teacher?.full_name}</span>
                 </div>
-
                 <div className="p-6 flex flex-col gap-5">
                   {(profile?.id === ratingSession.teacher_id ? TEACHER_RATES_LEARNER : LEARNER_RATES_TEACHER).map(({ key, label, hint }) => (
                     <div key={key}>
@@ -654,7 +688,6 @@ export default function SessionsPage() {
                       )}
                     </div>
                   ))}
-
                   <div>
                     <p className="text-sm font-700 text-stone-800 mb-2">Written Review <span className="font-400 text-stone-400">(optional)</span></p>
                     <textarea value={ratingForm.review} onChange={e => setRatingForm(f => ({ ...f, review: e.target.value.slice(0, 300) }))}
@@ -663,16 +696,9 @@ export default function SessionsPage() {
                       style={{ fontFamily: "'DM Sans', sans-serif" }} />
                     <p className="text-xs text-stone-400 text-right mt-1">{ratingForm.review.length}/300</p>
                   </div>
-
-                  {ratingError && (
-                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-600 font-600">{ratingError}</div>
-                  )}
-
+                  {ratingError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-600 font-600">{ratingError}</div>}
                   <div className="flex gap-2">
-                    <button onClick={() => setRatingSession(null)}
-                      className="flex-1 py-3 rounded-xl bg-stone-100 text-stone-600 font-700 text-sm hover:bg-stone-200 transition-colors">
-                      Cancel
-                    </button>
+                    <button onClick={() => setRatingSession(null)} className="flex-1 py-3 rounded-xl bg-stone-100 text-stone-600 font-700 text-sm hover:bg-stone-200 transition-colors">Cancel</button>
                     <button onClick={handleSubmitRating} disabled={ratingForm.overall === 0 || !!actionLoading}
                       className="flex-2 py-3 px-6 rounded-xl font-800 text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                       style={{ background: ratingForm.overall > 0 ? "linear-gradient(135deg,#2d6a4f,#1a4a36)" : "#e5e7eb", color: ratingForm.overall > 0 ? "#fff" : "#9ca3af", flex: 2 }}>
@@ -698,7 +724,8 @@ export default function SessionsPage() {
               Rescheduling resets to <strong>pending</strong> and notifies the other party to re-confirm.
             </p>
             <label className="text-xs font-700 text-stone-700 block mb-2">New Date & Time</label>
-            <input type="datetime-local" value={newTime} onChange={e => setNewTime(e.target.value)}
+            {/* FIX #14: min prevents picking a past time */}
+            <input type="datetime-local" value={newTime} min={minRescheduleTime} onChange={e => setNewTime(e.target.value)}
               className="w-full p-3 rounded-xl border border-stone-200 text-sm outline-none focus:border-[#2d6a4f] transition-colors mb-5"
               style={{ fontFamily: "'DM Sans', sans-serif" }} />
             <div className="flex gap-2">

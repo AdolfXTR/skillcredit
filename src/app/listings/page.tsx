@@ -15,8 +15,9 @@ type Listing = {
   created_at: string;
   teacher_id: string;
   thumbnail_url?: string;
+  avg_rating?: number; // FIX #1: top-level computed field, not nested in profiles
   skills: { name: string; category: string };
-  profiles: { full_name: string; username: string; level: string; avg_rating?: number };
+  profiles: { full_name: string; username: string; level: string; xp: number };
 };
 
 type Profile = {
@@ -25,6 +26,7 @@ type Profile = {
   username: string;
   credits: number;
   level: string;
+  xp: number;
 };
 
 const FORMAT_CONFIG: Record<string, { bg: string; accent: string; icon: string; label: string }> = {
@@ -57,6 +59,7 @@ function getInitials(name: string) {
   return (name || "??").split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
+// FIX #11: getLevelFromXP is now actually used in rendering
 function getLevelFromXP(xp: number): string {
   if (xp >= 4000) return "Legend";
   if (xp >= 2000) return "Master";
@@ -68,14 +71,14 @@ function getLevelFromXP(xp: number): string {
 }
 
 export default function ListingsPage() {
-  const [listings, setListings]     = useState<Listing[]>([]);
-  const [profile, setProfile]       = useState<Profile | null>(null);
-  const [loading, setLoading]       = useState(true);
-  const [search, setSearch]         = useState("");
-  const [category, setCategory]     = useState("All");
-  const [format, setFormat]         = useState("All");
-  const [sortBy, setSortBy]         = useState("newest");
-  const [maxPrice, setMaxPrice]     = useState(100);
+  const [listings, setListings]       = useState<Listing[]>([]);
+  const [profile, setProfile]         = useState<Profile | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [search, setSearch]           = useState("");
+  const [category, setCategory]       = useState("All");
+  const [format, setFormat]           = useState("All");
+  const [sortBy, setSortBy]           = useState("newest");
+  const [maxPrice, setMaxPrice]       = useState(100);
   const [maxDuration, setMaxDuration] = useState("all");
   const [showSidebar, setShowSidebar] = useState(true);
 
@@ -90,7 +93,6 @@ export default function ListingsPage() {
         if (prof) setProfile(prof);
       }
 
-      // ── FIX: Never fall back to MOCK — always show real DB data ──────────────
       const { data, error } = await supabase
         .from("listings")
         .select(`*, skills(name, category), profiles(full_name, username, level, xp)`)
@@ -99,9 +101,41 @@ export default function ListingsPage() {
 
       if (error) {
         console.error("Listings fetch error:", error.message);
+        setLoading(false);
+        return;
       }
 
-      setListings((data as Listing[]) || []);
+      const rows = (data || []) as Listing[];
+
+      // FIX #1: Fetch ratings for all teachers and compute avg per teacher
+      const teacherIds = [...new Set(rows.map(l => l.teacher_id))];
+      let avgMap: Record<string, number> = {};
+
+      if (teacherIds.length > 0) {
+        const { data: ratingsData } = await supabase
+          .from("ratings")
+          .select("rated_id, overall")
+          .in("rated_id", teacherIds);
+
+        if (ratingsData && ratingsData.length > 0) {
+          const grouped: Record<string, number[]> = {};
+          ratingsData.forEach((r: any) => {
+            if (!grouped[r.rated_id]) grouped[r.rated_id] = [];
+            grouped[r.rated_id].push(r.overall);
+          });
+          Object.entries(grouped).forEach(([id, vals]) => {
+            avgMap[id] = parseFloat((vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(1));
+          });
+        }
+      }
+
+      // Merge avg_rating into each listing
+      const listingsWithRatings = rows.map(l => ({
+        ...l,
+        avg_rating: avgMap[l.teacher_id] || 0,
+      }));
+
+      setListings(listingsWithRatings);
       setLoading(false);
     };
     init();
@@ -136,9 +170,10 @@ export default function ListingsPage() {
       maxDuration === "2hr"   ? l.duration <= 120 : true;
     return matchSearch && matchCat && matchFmt && matchPrice && matchDur;
   }).sort((a, b) => {
-    if (sortBy === "price_low")  return a.credit_price - b.credit_price;
-    if (sortBy === "price_high") return b.credit_price - a.credit_price;
+    if (sortBy === "price_low")    return a.credit_price - b.credit_price;
+    if (sortBy === "price_high")   return b.credit_price - a.credit_price;
     if (sortBy === "duration_low") return a.duration - b.duration;
+    if (sortBy === "top_rated")    return (b.avg_rating || 0) - (a.avg_rating || 0);
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
@@ -183,7 +218,8 @@ export default function ListingsPage() {
               <span>+</span> Create Listing
             </a>
             <a href="/profile" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 12px 5px 6px", borderRadius: 10, background: "#f5f0e8" }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", background: LEVEL_COLORS[profile.level] || "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff" }}>
+              {/* FIX #11/#6: Compute level from XP instead of stale DB field */}
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: LEVEL_COLORS[getLevelFromXP(profile.xp || 0)] || "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff" }}>
                 {getInitials(profile.full_name)}
               </div>
               <span style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>@{profile.username}</span>
@@ -265,6 +301,7 @@ export default function ListingsPage() {
                 <select value={sortBy} onChange={e => setSortBy(e.target.value)}
                   style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: "1.5px solid #e8e2d9", fontSize: 13, fontFamily: "'DM Sans', sans-serif", background: "#fff", color: "#333", cursor: "pointer" }}>
                   <option value="newest">⭐ Newest first</option>
+                  <option value="top_rated">★ Top rated</option>
                   <option value="price_low">💰 Price: Low → High</option>
                   <option value="price_high">💰 Price: High → Low</option>
                   <option value="duration_low">⏱ Shortest first</option>
@@ -344,6 +381,7 @@ export default function ListingsPage() {
                 <select value={sortBy} onChange={e => setSortBy(e.target.value)}
                   style={{ padding: "7px 12px", borderRadius: 10, border: "1.5px solid #e8e2d9", fontSize: 13, fontFamily: "'DM Sans', sans-serif", background: "#fff", cursor: "pointer" }}>
                   <option value="newest">Newest first</option>
+                  <option value="top_rated">★ Top rated</option>
                   <option value="price_low">Price: Low → High</option>
                   <option value="price_high">Price: High → Low</option>
                   <option value="duration_low">Shortest first</option>
@@ -351,7 +389,6 @@ export default function ListingsPage() {
               )}
             </div>
 
-            {/* Loading */}
             {loading && (
               <div style={{ textAlign: "center", padding: "80px 0" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>🌱</div>
@@ -359,7 +396,6 @@ export default function ListingsPage() {
               </div>
             )}
 
-            {/* ── FIX: Empty state shows "no listings yet" NOT mock data ── */}
             {!loading && listings.length === 0 && (
               <div style={{ textAlign: "center", padding: "60px 20px", background: "#fff", borderRadius: 20, border: "1.5px solid #e8e2d9" }}>
                 <div style={{ fontSize: 48, marginBottom: 14 }}>📋</div>
@@ -372,7 +408,6 @@ export default function ListingsPage() {
               </div>
             )}
 
-            {/* No filter results */}
             {!loading && listings.length > 0 && filtered.length === 0 && (
               <div style={{ textAlign: "center", padding: "60px 20px", background: "#fff", borderRadius: 20, border: "1.5px solid #e8e2d9" }}>
                 <div style={{ fontSize: 48, marginBottom: 14 }}>🔍</div>
@@ -391,15 +426,17 @@ export default function ListingsPage() {
                 {filtered.map((listing, i) => {
                   const fmt = FORMAT_CONFIG[listing.format] || FORMAT_CONFIG.mixed;
                   const cat = CATEGORY_CONFIG[listing.skills?.category] || CATEGORY_CONFIG.Other;
-                  const rating = listing.profiles?.avg_rating || 0;
+                  // FIX #1: Use computed avg_rating instead of profiles.avg_rating (which was never fetched)
+                  const rating = listing.avg_rating || 0;
                   const hasThumbnail = !!listing.thumbnail_url;
+                  // FIX #6/#11: Compute level from XP instead of stale DB field
+                  const teacherLevel = getLevelFromXP(listing.profiles?.xp || 0);
 
                   return (
                     <div key={listing.id} className="listing-card card-appear"
                       style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8e2d9", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", animationDelay: `${i * 0.04}s` }}
                       onClick={() => window.location.href = profile ? `/listings/${listing.id}` : "/login"}>
 
-                      {/* ── THUMBNAIL ── FIX: shows real uploaded photo if available ── */}
                       <div style={{ position: "relative", height: 140, background: hasThumbnail ? "#f0f0f0" : cat.thumb, overflow: "hidden" }}>
                         {hasThumbnail ? (
                           <img src={listing.thumbnail_url!} alt={listing.title} className="thumb-img" />
@@ -409,19 +446,17 @@ export default function ListingsPage() {
                           </div>
                         )}
 
-                        {/* Price tag */}
                         <div style={{ position: "absolute", bottom: 12, right: 12, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(10px)", borderRadius: 20, padding: "5px 12px", display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ fontFamily: "'Fraunces', serif", fontSize: 15, fontWeight: 900, color: "#fff" }}>{listing.credit_price} cr</span>
                           <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.3)" }} />
                           <span style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>⏱ {listing.duration}m</span>
                         </div>
 
-                        {/* Format badge */}
                         <div style={{ position: "absolute", top: 12, left: 12, background: "rgba(255,255,255,0.92)", backdropFilter: "blur(8px)", borderRadius: 20, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: fmt.accent, display: "flex", alignItems: "center", gap: 4 }}>
                           {fmt.icon} {fmt.label}
                         </div>
 
-                        {/* Rating */}
+                        {/* FIX #1: Rating now shows correctly because avg_rating is properly fetched */}
                         {rating > 0 && (
                           <div style={{ position: "absolute", top: 12, right: 12, background: "rgba(255,255,255,0.92)", backdropFilter: "blur(8px)", borderRadius: 20, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#b45309", display: "flex", alignItems: "center", gap: 3 }}>
                             ★ {rating.toFixed(1)}
@@ -429,7 +464,6 @@ export default function ListingsPage() {
                         )}
                       </div>
 
-                      {/* ── CARD BODY ── */}
                       <div style={{ padding: "18px 20px 20px" }}>
                         <div style={{ marginBottom: 10 }}>
                           <span style={{ background: cat.bg, color: cat.color, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>
@@ -452,18 +486,17 @@ export default function ListingsPage() {
                           </div>
                         )}
 
-                        {/* Teacher row */}
+                        {/* Teacher row — FIX #6: level derived from XP */}
                         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#fafaf8", borderRadius: 12, marginBottom: 14 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: LEVEL_COLORS[listing.profiles?.level] || "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: LEVEL_COLORS[teacherLevel] || "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
                             {getInitials(listing.profiles?.full_name || "?")}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <p style={{ fontSize: 12, fontWeight: 700, color: "#222", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{listing.profiles?.full_name}</p>
-                            <p style={{ fontSize: 11, color: "#aaa" }}>@{listing.profiles?.username} · {listing.profiles?.level || "Seedling"}</p>
+                            <p style={{ fontSize: 11, color: "#aaa" }}>@{listing.profiles?.username} · {teacherLevel}</p>
                           </div>
                         </div>
 
-                        {/* CTA */}
                         <button className="book-btn"
                           style={{ width: "100%", padding: "11px 0", borderRadius: 12, background: "#2d6a4f", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "background 0.15s" }}>
                           {profile ? "Book Now →" : "Login to Book"}

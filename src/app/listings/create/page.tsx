@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabase";
 
 type Skill = { id: string; name: string; category: string };
 
-// ── Simple inline image uploader (no external component dependency) ────────────
 type UploadedFile = {
   url: string;
   path: string;
@@ -46,7 +45,7 @@ function useImageUpload(bucket: string) {
   return { upload, uploading, progress, error };
 }
 
-// ── Thumbnail uploader component ──────────────────────────────────────────────
+// ── Thumbnail uploader ────────────────────────────────────────────────────────
 function ThumbnailUploader({ userId, onUpload }: { userId: string; onUpload: (url: string) => void }) {
   const [preview, setPreview] = useState<string | null>(null);
   const [uploaded, setUploaded] = useState(false);
@@ -56,15 +55,10 @@ function ThumbnailUploader({ userId, onUpload }: { userId: string; onUpload: (ur
   const handleFile = async (file: File) => {
     if (!file.type.startsWith("image/")) { alert("Please select an image file."); return; }
     if (file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB."); return; }
-
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
-
     const result = await upload(file, `thumbnails/${userId}`);
-    if (result) {
-      onUpload(result.url);
-      setUploaded(true);
-    }
+    if (result) { onUpload(result.url); setUploaded(true); }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -113,13 +107,14 @@ function ThumbnailUploader({ userId, onUpload }: { userId: string; onUpload: (ur
 
       <input ref={inputRef} type="file" accept="image/*" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-
       {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
     </div>
   );
 }
 
-// ── Portfolio uploader component ──────────────────────────────────────────────
+// ── Portfolio uploader ────────────────────────────────────────────────────────
+const MAX_PORTFOLIO_ITEMS = 10;
+
 function PortfolioUploader({ userId, onChange }: {
   userId: string;
   onChange: (items: UploadedFile[]) => void;
@@ -129,12 +124,25 @@ function PortfolioUploader({ userId, onChange }: {
   const [uploadErr, setUploadErr] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // FIX #13: Hard cap at MAX_PORTFOLIO_ITEMS
   const addFiles = async (files: FileList) => {
+    if (items.length >= MAX_PORTFOLIO_ITEMS) {
+      setUploadErr(`Maximum ${MAX_PORTFOLIO_ITEMS} portfolio samples allowed.`);
+      return;
+    }
+
     setUploading(true);
     setUploadErr("");
     const newItems: UploadedFile[] = [];
 
-    for (const file of Array.from(files)) {
+    const remaining = MAX_PORTFOLIO_ITEMS - items.length;
+    const filesToProcess = Array.from(files).slice(0, remaining);
+
+    if (Array.from(files).length > remaining) {
+      setUploadErr(`Only ${remaining} more sample${remaining !== 1 ? "s" : ""} can be added (max ${MAX_PORTFOLIO_ITEMS}).`);
+    }
+
+    for (const file of filesToProcess) {
       if (file.size > 10 * 1024 * 1024) { setUploadErr(`${file.name} is too large (max 10MB).`); continue; }
 
       const ext = file.name.split(".").pop();
@@ -203,26 +211,36 @@ function PortfolioUploader({ userId, onChange }: {
           </div>
         ))}
 
-        <div
-          className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${uploading ? "border-emerald-400 bg-emerald-50" : "border-stone-300 hover:border-emerald-400 hover:bg-emerald-50"}`}
-          onClick={() => !uploading && inputRef.current?.click()}
-          onDrop={e => { e.preventDefault(); if (!uploading) addFiles(e.dataTransfer.files); }}
-          onDragOver={e => e.preventDefault()}>
-          {uploading ? (
-            <>
-              <div className="text-3xl mb-2 animate-pulse">⬆️</div>
-              <p className="text-sm font-bold text-emerald-600">Uploading...</p>
-            </>
-          ) : (
-            <>
-              <div className="text-3xl mb-2">📁</div>
-              <p className="text-sm font-bold text-stone-600 mb-1">
-                {items.length > 0 ? "Add more samples" : "Upload portfolio samples"}
-              </p>
-              <p className="text-xs text-stone-400">Images, videos, or documents · Max 10MB each</p>
-            </>
-          )}
-        </div>
+        {/* Only show upload zone if under the limit */}
+        {items.length < MAX_PORTFOLIO_ITEMS ? (
+          <div
+            className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${uploading ? "border-emerald-400 bg-emerald-50" : "border-stone-300 hover:border-emerald-400 hover:bg-emerald-50"}`}
+            onClick={() => !uploading && inputRef.current?.click()}
+            onDrop={e => { e.preventDefault(); if (!uploading) addFiles(e.dataTransfer.files); }}
+            onDragOver={e => e.preventDefault()}>
+            {uploading ? (
+              <>
+                <div className="text-3xl mb-2 animate-pulse">⬆️</div>
+                <p className="text-sm font-bold text-emerald-600">Uploading...</p>
+              </>
+            ) : (
+              <>
+                <div className="text-3xl mb-2">📁</div>
+                <p className="text-sm font-bold text-stone-600 mb-1">
+                  {items.length > 0 ? "Add more samples" : "Upload portfolio samples"}
+                </p>
+                <p className="text-xs text-stone-400">
+                  Images, videos, or documents · Max 10MB each · {MAX_PORTFOLIO_ITEMS - items.length} slot{MAX_PORTFOLIO_ITEMS - items.length !== 1 ? "s" : ""} remaining
+                </p>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-stone-50 border border-stone-200 p-4 text-center">
+            <p className="text-sm font-bold text-stone-500">Maximum {MAX_PORTFOLIO_ITEMS} samples reached</p>
+            <p className="text-xs text-stone-400 mt-1">Remove a sample to add a different one</p>
+          </div>
+        )}
 
         <input ref={inputRef} type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx"
           className="hidden" onChange={e => { if (e.target.files) addFiles(e.target.files); }} />
@@ -257,7 +275,6 @@ const FORMAT_TW: Record<string, { bg: string; text: string; border: string }> = 
 };
 
 const OTHER_SKILL_ID = "__other__";
-
 const CATEGORIES = ["Programming","Design","Language","Academic","Music","Arts","Media","Science","Sports","Lifestyle","Other"];
 
 export default function CreateListingPage() {
@@ -269,11 +286,9 @@ export default function CreateListingPage() {
   const [doneListingId, setDoneListingId] = useState<string | null>(null);
   const [error, setError]       = useState("");
 
-  // Uploads
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [thumbnailUrl, setThumbnailUrl]     = useState<string | null>(null);
   const [portfolioItems, setPortfolioItems] = useState<UploadedFile[]>([]);
 
-  // Custom skill
   const [isCustomSkill, setIsCustomSkill]     = useState(false);
   const [customSkillName, setCustomSkillName] = useState("");
   const [customSkillCat, setCustomSkillCat]   = useState("");
@@ -327,19 +342,15 @@ export default function CreateListingPage() {
     }
   };
 
-  // ── SUBMIT ────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!userId) return;
     setSubmitting(true);
     setError("");
 
-    // 1. Resolve skill ID
     let finalSkillId = form.skill_id;
     if (isCustomSkill && customSkillName.trim()) {
-      // Try to find existing skill first
       const { data: existing } = await supabase
         .from("skills").select("id").ilike("name", customSkillName.trim()).maybeSingle();
-
       if (existing) {
         finalSkillId = existing.id;
       } else {
@@ -347,7 +358,6 @@ export default function CreateListingPage() {
           .from("skills")
           .insert({ name: customSkillName.trim(), category: customSkillCat.trim() || "Other" })
           .select().single();
-
         if (skillErr || !newSkill) {
           setError("Could not create custom skill. Please try again.");
           setSubmitting(false);
@@ -357,7 +367,6 @@ export default function CreateListingPage() {
       }
     }
 
-    // 2. Create the listing
     const { data: listing, error: listingErr } = await supabase
       .from("listings")
       .insert({
@@ -372,7 +381,6 @@ export default function CreateListingPage() {
         duration:      form.duration,
         credit_price:  form.credit_price,
         is_active:     true,
-        // FIX: save thumbnail url directly on listing
         thumbnail_url: thumbnailUrl || null,
       })
       .select()
@@ -385,11 +393,10 @@ export default function CreateListingPage() {
       return;
     }
 
-    // 3. Save portfolio items with the real listing_id
     if (portfolioItems.length > 0) {
       const { error: portErr } = await supabase.from("portfolio_items").insert(
         portfolioItems.map(item => ({
-          listing_id: listing.id,   // ← FIX: now we have the real ID
+          listing_id: listing.id,
           user_id:    userId,
           url:        item.url,
           type:       item.type,
@@ -399,13 +406,11 @@ export default function CreateListingPage() {
       if (portErr) console.warn("Portfolio insert warning:", portErr.message);
     }
 
-    // 4. Add skill to teacher's user_skills if not already there
     await supabase.from("user_skills").upsert(
       { user_id: userId, skill_id: finalSkillId, type: "teach", is_verified: false },
       { onConflict: "user_id,skill_id" }
     );
 
-    // 5. Award XP for first listing
     try { await supabase.rpc("increment_xp", { user_id: userId, amount: 10 }); } catch {}
 
     setDoneListingId(listing.id);
@@ -420,7 +425,6 @@ export default function CreateListingPage() {
     setError("");
   };
 
-  // ── DONE SCREEN ────────────────────────────────────────────────────────────
   if (done) return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center">
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap'); .font-fraunces{font-family:'Fraunces',serif}`}</style>
@@ -455,7 +459,6 @@ export default function CreateListingPage() {
     </div>
   );
 
-  // ── MAIN ────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-stone-50">
       <style>{`
@@ -506,12 +509,10 @@ export default function CreateListingPage() {
                 <p className="text-stone-400 text-sm">Tell learners what you're offering.</p>
               </div>
 
-              {/* Thumbnail upload — at the top */}
               {userId && (
                 <ThumbnailUploader userId={userId} onUpload={(url) => setThumbnailUrl(url)} />
               )}
 
-              {/* Skill picker */}
               <div>
                 <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-2">What skill are you teaching? *</label>
                 <select value={form.skill_id} onChange={e => handleSkillChange(e.target.value)}
@@ -556,7 +557,6 @@ export default function CreateListingPage() {
                 )}
               </div>
 
-              {/* Title */}
               <div>
                 <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-2">
                   Listing Title * <span className="text-stone-300 font-normal normal-case">{form.title.length}/80</span>
@@ -567,7 +567,6 @@ export default function CreateListingPage() {
                   className={`w-full p-3 rounded-xl border text-sm bg-stone-50 outline-none transition-colors ${form.title.length >= 5 ? "border-emerald-400" : "border-stone-200"}`} />
               </div>
 
-              {/* Description */}
               <div>
                 <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-2">
                   Description * <span className="text-stone-300 font-normal normal-case">{form.description.length}/600</span>
@@ -578,7 +577,6 @@ export default function CreateListingPage() {
                   className={`w-full p-3 rounded-xl border text-sm bg-stone-50 outline-none resize-vertical transition-colors ${form.description.length >= 20 ? "border-emerald-400" : "border-stone-200"}`} />
               </div>
 
-              {/* Prerequisites */}
               <div>
                 <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-2">
                   Prerequisites <span className="font-normal text-stone-300 normal-case">(optional)</span>
@@ -588,7 +586,6 @@ export default function CreateListingPage() {
                   className="w-full p-3 rounded-xl border border-stone-200 text-sm bg-stone-50 outline-none" />
               </div>
 
-              {/* Outcomes */}
               <div>
                 <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-2">
                   What will learners walk away with? <span className="font-normal text-stone-300 normal-case">(optional)</span>
@@ -608,7 +605,6 @@ export default function CreateListingPage() {
                 <p className="text-stone-400 text-sm">Set how you'll teach, how long, and what it costs.</p>
               </div>
 
-              {/* Format */}
               <div>
                 <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-3">Teaching Format *</label>
                 <div className="grid grid-cols-2 gap-3">
@@ -627,7 +623,6 @@ export default function CreateListingPage() {
                 </div>
               </div>
 
-              {/* Duration */}
               <div>
                 <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-3">Session Duration *</label>
                 <div className="flex gap-3">
@@ -644,7 +639,6 @@ export default function CreateListingPage() {
                 </div>
               </div>
 
-              {/* Price */}
               <div>
                 <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-3">
                   Credit Price per Session * <span className="font-normal text-stone-300 normal-case">= ₱{form.credit_price * 10}</span>
@@ -667,7 +661,6 @@ export default function CreateListingPage() {
                 </div>
               </div>
 
-              {/* Materials */}
               <div>
                 <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-2">
                   Materials you'll provide <span className="font-normal text-stone-300 normal-case">(optional)</span>
@@ -704,10 +697,8 @@ export default function CreateListingPage() {
               <h2 className="font-fraunces text-xl font-black text-stone-900 mb-1">Preview & Publish</h2>
               <p className="text-stone-400 text-sm mb-6">This is how your listing will appear. Looks good? Hit publish!</p>
 
-              {/* Preview card */}
               <div className="bg-stone-50 rounded-2xl p-1 mb-6">
                 <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-                  {/* Thumbnail or gradient */}
                   {thumbnailUrl ? (
                     <img src={thumbnailUrl} alt="thumbnail" className="w-full h-36 object-cover" />
                   ) : (
@@ -740,7 +731,6 @@ export default function CreateListingPage() {
                 </div>
               </div>
 
-              {/* Summary rows */}
               <div className="flex flex-col gap-2 mb-4">
                 {[
                   { label: "Skill",       value: isCustomSkill ? `${customSkillName} (New ✨)` : selectedSkill?.name },

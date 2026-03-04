@@ -15,6 +15,16 @@ function getBadgeTier(xp: number, sessions: number, avgRating: number): BadgeTie
   return   { name: "Seedling",emoji: "🌱", color: "#2d6a4f", bg: "#e8f4e8", border: "#bbf7d0" };
 }
 
+// ── BAYESIAN AVERAGE ──────────────────────────────────────────────────────────
+// Prevents someone with 1 lucky 5★ beating someone with 50 genuine reviews.
+// C=5 confidence weight, m=3.5 global prior mean
+// Formula: (C×m + sum_of_ratings) / (C + count)
+function bayesianAvg(ratings: number[]): number {
+  if (ratings.length === 0) return 0;
+  const C = 5, m = 3.5;
+  return (C * m + ratings.reduce((s, r) => s + r, 0)) / (C + ratings.length);
+}
+
 type User = {
   id: string; full_name: string; username: string; bio: string | null;
   location: string | null; level: string; credits: number; xp: number;
@@ -51,7 +61,7 @@ function Stars({ rating }: { rating: number }) {
 
 // ─── DRAWER ───────────────────────────────────────────────────────────────────
 function UserDrawer({ userId, onClose, currentUserId }: { userId: string; onClose: () => void; currentUserId: string }) {
-  const [user, setUser]       = useState<User | null>(null);
+  const [user, setUser]         = useState<User | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
   const [reviews, setReviews]   = useState<Review[]>([]);
   const [stats, setStats]       = useState<UserStats>({ sessions: 0, listings: 0, avgRating: 0, skills: [] });
@@ -77,7 +87,8 @@ function UserDrawer({ userId, onClose, currentUserId }: { userId: string; onClos
     setListings((listingsRes.data as any) || []);
     setReviews((reviewsRes.data as any) || []);
     const ratings = (reviewsRes.data as any) || [];
-    const avg = ratings.length > 0 ? ratings.reduce((s: number, r: any) => s + r.overall, 0) / ratings.length : 0;
+    // ── BAYESIAN AVG in drawer ──
+    const avg = bayesianAvg((ratings as any[]).map((r: any) => r.overall));
     setStats({ sessions: sessionsRes.count || 0, listings: listingsRes.data?.length || 0, avgRating: avg, skills: (skillsRes.data as any) || [] });
     setLoading(false);
   }
@@ -141,12 +152,12 @@ function UserDrawer({ userId, onClose, currentUserId }: { userId: string; onClos
               </div>
               {user.bio && <p style={{ fontSize:13, color:"#555", lineHeight:1.65, marginTop:8, marginBottom:0 }}>{user.bio}</p>}
 
-              {/* STATS — no credits */}
+              {/* STATS — no credits, bayesian rating */}
               <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginTop:14 }}>
                 {[
-                  { label:"Sessions", val:stats.sessions,                                       icon:"📅", color:"#0891b2" },
-                  { label:"Rating",   val:stats.avgRating > 0 ? `${stats.avgRating.toFixed(1)}★` : "—", icon:"⭐", color:"#f59e0b" },
-                  { label:"XP",       val:user.xp.toLocaleString(),                             icon:"⚡", color:lvl.bg  },
+                  { label:"Sessions", val:stats.sessions,                                                    icon:"📅", color:"#0891b2" },
+                  { label:"Rating",   val:stats.avgRating > 0 ? `${stats.avgRating.toFixed(2)}★` : "—",     icon:"⭐", color:"#f59e0b" },
+                  { label:"XP",       val:user.xp.toLocaleString(),                                          icon:"⚡", color:lvl.bg  },
                 ].map(s => (
                   <div key={s.label} style={{ background:"#faf8f4", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1.5px solid #f0ece4" }}>
                     <div style={{ fontSize:16, marginBottom:3 }}>{s.icon}</div>
@@ -283,16 +294,16 @@ function UserDrawer({ userId, onClose, currentUserId }: { userId: string; onClos
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function PeoplePage() {
-  const [currentUser, setCurrentUser]   = useState<User | null>(null);
-  const [users, setUsers]               = useState<User[]>([]);
-  const [filtered, setFiltered]         = useState<User[]>([]);
-  const [search, setSearch]             = useState("");
-  const [levelFilter, setLevelFilter]   = useState("all");
-  const [roleFilter, setRoleFilter]     = useState("all");
-  const [sortBy, setSortBy]             = useState<"xp"|"joined">("xp");
-  const [loading, setLoading]           = useState(true);
+  const [currentUser, setCurrentUser]       = useState<User | null>(null);
+  const [users, setUsers]                   = useState<User[]>([]);
+  const [filtered, setFiltered]             = useState<User[]>([]);
+  const [search, setSearch]                 = useState("");
+  const [levelFilter, setLevelFilter]       = useState("all");
+  const [roleFilter, setRoleFilter]         = useState("all");
+  const [sortBy, setSortBy]                 = useState<"xp"|"joined">("xp");
+  const [loading, setLoading]               = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [userStats, setUserStats]       = useState<Record<string, { sessions: number; avgRating: number; listings: number }>>({});
+  const [userStats, setUserStats]           = useState<Record<string, { sessions: number; avgRating: number; listings: number }>>({});
   const searchTimeout = useRef<any>(null);
 
   useEffect(() => { loadData(); }, []);
@@ -318,8 +329,8 @@ export default function PeoplePage() {
         supabase.from("listings").select("id", { count:"exact", head:true }).eq("teacher_id", u.id).eq("is_active",true),
         supabase.from("ratings").select("overall").eq("rated_id", u.id),
       ]);
-      const ratings = ratRes.data || [];
-      const avg = ratings.length > 0 ? ratings.reduce((s: number, r: any) => s + r.overall, 0) / ratings.length : 0;
+      // ── BAYESIAN AVG in cards ──
+      const avg = bayesianAvg((ratRes.data || []).map((r: any) => r.overall));
       statsMap[u.id] = { sessions: sessRes.count || 0, listings: listRes.count || 0, avgRating: avg };
     }));
     setUserStats(statsMap);
@@ -404,9 +415,9 @@ export default function PeoplePage() {
           </div>
           <div style={{ display:"flex", gap:28 }}>
             {[
-              { val:users.length,                              label:"Members",  icon:"👥" },
+              { val:users.length,                               label:"Members",  icon:"👥" },
               { val:users.filter(u=>u.role==="teacher").length, label:"Teachers", icon:"👩‍🏫" },
-              { val:users.filter(u=>u.is_verified).length,     label:"Verified", icon:"✅" },
+              { val:users.filter(u=>u.is_verified).length,      label:"Verified", icon:"✅" },
             ].map(s => (
               <div key={s.label} style={{ textAlign:"center" }}>
                 <div style={{ fontSize:16, marginBottom:4 }}>{s.icon}</div>
@@ -479,9 +490,9 @@ export default function PeoplePage() {
                 const s     = userStats[user.id];
                 const badge = getBadgeTier(user.xp, s?.sessions??0, s?.avgRating??0);
                 const isMe  = user.id === currentUser?.id;
-                const medals      = ["👑","🥈","🥉"];
-                const borders     = [`2px solid ${lvl.bg}`,"1.5px solid #e8e2d9","1.5px solid #e8e2d9"];
-                const shadows     = [`0 8px 32px ${lvl.glow}`,"0 4px 14px rgba(0,0,0,0.06)","0 4px 14px rgba(0,0,0,0.06)"];
+                const medals  = ["👑","🥈","🥉"];
+                const borders = [`2px solid ${lvl.bg}`,"1.5px solid #e8e2d9","1.5px solid #e8e2d9"];
+                const shadows = [`0 8px 32px ${lvl.glow}`,"0 4px 14px rgba(0,0,0,0.06)","0 4px 14px rgba(0,0,0,0.06)"];
                 return (
                   <div key={user.id} className="top-card" onClick={() => setSelectedUserId(user.id)}
                     style={{ background:"#fff", borderRadius:20, border:borders[idx], overflow:"hidden", position:"relative", boxShadow:shadows[idx], animation:`fadeUp 0.5s ${idx*0.1}s ease both` }}>
@@ -507,12 +518,11 @@ export default function PeoplePage() {
                       {user.bio && (
                         <p style={{ fontSize:11, color:"#888", lineHeight:1.5, marginBottom:12, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{user.bio}</p>
                       )}
-                      {/* Stats — no credits */}
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:5 }}>
                         {[
-                          { label:"XP",       val:user.xp.toLocaleString(),                                color:lvl.bg   },
-                          { label:"Sessions", val:s?.sessions??"-",                                         color:"#0891b2"},
-                          { label:"Rating",   val:s?.avgRating ? `${s.avgRating.toFixed(1)}★` : "—",      color:"#f59e0b"},
+                          { label:"XP",       val:user.xp.toLocaleString(),                                         color:lvl.bg   },
+                          { label:"Sessions", val:s?.sessions??"-",                                                  color:"#0891b2"},
+                          { label:"Rating",   val:s?.avgRating ? `${s.avgRating.toFixed(2)}★` : "—",               color:"#f59e0b"},
                         ].map(st => (
                           <div key={st.label} style={{ background:"#faf8f4", borderRadius:9, padding:"7px 4px", textAlign:"center", border:"1px solid #f0ece4" }}>
                             <div style={{ fontSize:12, fontWeight:900, color:st.color, fontFamily:"'Fraunces',serif" }}>{st.val}</div>
@@ -580,12 +590,11 @@ export default function PeoplePage() {
                         <div style={{ fontSize:11, color:"#bbb", marginBottom:10 }}>📍 {user.location}</div>
                       )}
 
-                      {/* Stats strip — credits REMOVED */}
                       <div style={{ display:"flex", borderTop:"1.5px solid #f5f0e8", paddingTop:9, gap:0 }}>
                         {[
-                          { label:"XP",       val:user.xp.toLocaleString(),                               color:lvl.bg   },
-                          { label:"Sessions", val:s?.sessions??"-",                                        color:"#0891b2"},
-                          { label:"Rating",   val:s?.avgRating?`${s.avgRating.toFixed(1)}★`:"—",          color:"#f59e0b"},
+                          { label:"XP",       val:user.xp.toLocaleString(),                                        color:lvl.bg   },
+                          { label:"Sessions", val:s?.sessions??"-",                                                 color:"#0891b2"},
+                          { label:"Rating",   val:s?.avgRating ? `${s.avgRating.toFixed(2)}★` : "—",              color:"#f59e0b"},
                         ].map((st, i, arr) => (
                           <div key={st.label} style={{ flex:1, textAlign:"center", borderRight:i<arr.length-1?"1px solid #f0ece4":"none" }}>
                             <div style={{ fontSize:13, fontWeight:900, color:st.color, fontFamily:"'Fraunces',serif" }}>{st.val}</div>

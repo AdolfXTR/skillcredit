@@ -3,12 +3,6 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-// ── NOTE: If PortfolioGallery / ReputationMini / BadgeChip don't exist yet,
-//    remove those imports and the components will be skipped gracefully.
-// import { PortfolioGallery } from "@/components/PortfolioSystem";
-// import { ReputationMini } from "@/components/ReputationScore";
-// import { BadgeChip } from "@/components/BadgeSystem";
-
 type PortfolioItem = {
   id: string; url: string; type: string; caption: string;
 };
@@ -18,7 +12,7 @@ type Listing = {
   credit_price: number; format: string; duration: number;
   prerequisites: string; outcomes: string; materials: string;
   is_active: boolean; created_at: string; teacher_id: string;
-  thumbnail_url?: string;                          // ← FIX: added
+  thumbnail_url?: string;
   skills: { name: string; category: string };
   profiles: { id: string; full_name: string; username: string; level: string; bio: string; xp: number };
 };
@@ -48,17 +42,26 @@ const CATEGORY_ICON: Record<string, string> = {
   Music: "🎵", Arts: "🎭", Media: "🎬", Science: "🔬", Other: "💡",
 };
 
+// FIX #6: Level from XP used in teacher card
+function getLevelFromXP(xp: number): string {
+  if (xp >= 4000) return "Legend";
+  if (xp >= 2000) return "Master";
+  if (xp >= 1000) return "Expert";
+  if (xp >= 600)  return "Skilled";
+  if (xp >= 300)  return "Contributor";
+  if (xp >= 100)  return "Learner";
+  return "Seedling";
+}
+
 function getInitials(name: string) {
   return (name || "??").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
 }
 
-// Simple inline portfolio gallery
 function PortfolioGallery({ items }: { items: PortfolioItem[] }) {
   const [lightbox, setLightbox] = useState<string | null>(null);
   if (!items.length) return null;
   return (
     <div className="bg-white rounded-2xl border border-stone-200 p-6">
-      <style>{`.font-fraunces{font-family:'Fraunces',serif}`}</style>
       <h3 className="font-fraunces text-base font-black text-stone-900 mb-4">📁 Portfolio Samples</h3>
       <div className="grid grid-cols-3 gap-3">
         {items.map(item => (
@@ -102,7 +105,6 @@ export default function ListingDetailPage() {
 
   const [teacherSessions, setTeacherSessions]   = useState(0);
   const [teacherAvgRating, setTeacherAvgRating] = useState(0);
-  const [teacherDisputes, setTeacherDisputes]   = useState(0);
 
   useEffect(() => {
     const init = async () => {
@@ -121,21 +123,17 @@ export default function ListingDetailPage() {
       if (error || !data) { setLoading(false); return; }
       setListing(data as Listing);
 
-      // Portfolio items
       const { data: pData } = await supabase
         .from("portfolio_items").select("*").eq("listing_id", id);
       if (pData) setPortfolio(pData as PortfolioItem[]);
 
-      // Teacher stats
       const teacherId = data.teacher_id;
       const [
         { count: sCount },
         { data: ratingData },
-        { count: dCount },
       ] = await Promise.all([
         supabase.from("sessions").select("*", { count: "exact", head: true }).eq("teacher_id", teacherId).eq("status", "completed"),
         supabase.from("ratings").select("overall").eq("rated_id", teacherId),
-        supabase.from("sessions").select("*", { count: "exact", head: true }).eq("teacher_id", teacherId).eq("status", "disputed"),
       ]);
 
       setTeacherSessions(sCount || 0);
@@ -143,14 +141,30 @@ export default function ListingDetailPage() {
         const avg = ratingData.reduce((s: number, r: any) => s + r.overall, 0) / ratingData.length;
         setTeacherAvgRating(parseFloat(avg.toFixed(1)));
       }
-      setTeacherDisputes(dCount || 0);
       setLoading(false);
     };
     init();
   }, [id]);
 
+  // FIX #7: Clear modal state every time it's opened
+  const openBookModal = () => {
+    setProposedDate("");
+    setProposedTime("");
+    setNote("");
+    setBookError("");
+    setBookingStep("form");
+    setShowBookModal(true);
+  };
+
   const handleBook = async () => {
     if (!currentUser || !listing) return;
+
+    // FIX #3: Hard guard — prevent booking own listing even if button somehow fires
+    if (currentUser.id === listing.teacher_id) {
+      setBookError("You cannot book your own listing.");
+      return;
+    }
+
     if (!proposedDate || !proposedTime) { setBookError("Please select a date and time."); return; }
     if (currentUser.credits < listing.credit_price) {
       setBookError(`You need ${listing.credit_price} credits but only have ${currentUser.credits}.`);
@@ -159,6 +173,21 @@ export default function ListingDetailPage() {
 
     setBooking(true);
     setBookError("");
+
+    // FIX #5: Check for existing active/pending session before creating a new one
+    const { data: existingSession } = await supabase
+      .from("sessions")
+      .select("id, status")
+      .eq("listing_id", listing.id)
+      .eq("learner_id", currentUser.id)
+      .in("status", ["pending", "confirmed"])
+      .maybeSingle();
+
+    if (existingSession) {
+      setBookError("You already have an active booking for this listing. Check your sessions page.");
+      setBooking(false);
+      return;
+    }
 
     const proposedDateTime = new Date(`${proposedDate}T${proposedTime}`).toISOString();
 
@@ -191,9 +220,12 @@ export default function ListingDetailPage() {
         user_id: listing.teacher_id, type: "session",
         title: "New session request!",
         body: `${currentUser.full_name} wants to book "${listing.title}"`,
-        link: `/sessions/${session.id}`,
+        link: `/sessions`,
       }),
     ]);
+
+    // FIX #12: Update credits in local state immediately so navbar reflects new balance
+    setCurrentUser(prev => prev ? { ...prev, credits: prev.credits - listing.credit_price } : prev);
 
     setBooking(false);
     setBookingStep("success");
@@ -205,6 +237,8 @@ export default function ListingDetailPage() {
   const teacherInitials = getInitials(listing?.profiles?.full_name || "??");
   const catGradient  = CATEGORY_TW[listing?.skills?.category || ""] || "from-emerald-700 to-emerald-500";
   const catIcon      = CATEGORY_ICON[listing?.skills?.category || ""] || "💡";
+  // FIX #6: Compute teacher level from XP
+  const teacherLevel = getLevelFromXP(listing?.profiles?.xp || 0);
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -243,7 +277,6 @@ export default function ListingDetailPage() {
                 <h2 className="font-fraunces text-2xl font-black text-stone-900 mb-1">Book a Session 📅</h2>
                 <p className="text-stone-400 text-sm mb-6">Propose a time and the teacher will confirm.</p>
                 <div className="flex flex-col gap-4">
-                  {/* Summary */}
                   <div className={`rounded-2xl border p-4 flex justify-between items-center ${fmt.bg} ${fmt.border}`}>
                     <div>
                       <p className="text-sm font-bold text-stone-800 mb-0.5">{listing.title}</p>
@@ -371,6 +404,7 @@ export default function ListingDetailPage() {
         <div className="flex items-center gap-2">
           <a href="/listings" className="px-3 py-1.5 rounded-lg text-stone-500 text-sm font-semibold hover:bg-stone-100 transition-colors no-underline">← All Listings</a>
           {currentUser && (
+            // FIX #12: This now updates live after booking because we call setCurrentUser in handleBook
             <span className="bg-emerald-50 text-emerald-700 text-sm font-bold px-3 py-1.5 rounded-full border border-emerald-200">
               💰 {currentUser.credits} cr
             </span>
@@ -384,20 +418,16 @@ export default function ListingDetailPage() {
           {/* ── LEFT ── */}
           <div className="flex flex-col gap-5">
 
-            {/* ── FIX: Thumbnail/hero section ── */}
             {listing.thumbnail_url ? (
-              // Show actual uploaded thumbnail
               <div className="rounded-2xl overflow-hidden border border-stone-200 shadow-sm" style={{ height: 280 }}>
                 <img src={listing.thumbnail_url} alt={listing.title} className="w-full h-full object-cover" />
               </div>
             ) : (
-              // Fallback: category gradient with icon
               <div className={`rounded-2xl bg-gradient-to-br ${catGradient} flex items-center justify-center`} style={{ height: 180 }}>
                 <span style={{ fontSize: 72, filter: "drop-shadow(0 4px 20px rgba(0,0,0,0.3))" }}>{catIcon}</span>
               </div>
             )}
 
-            {/* Main listing info card */}
             <div className="bg-white rounded-2xl border border-stone-200 p-7">
               <div className="flex gap-2 flex-wrap mb-4">
                 <span className={`text-xs font-bold px-3 py-1 rounded-full ${fmt.bg} ${fmt.color}`}>{fmt.icon} {fmt.label}</span>
@@ -414,10 +444,8 @@ export default function ListingDetailPage() {
               <p className="text-sm text-stone-500 leading-relaxed">{listing.description}</p>
             </div>
 
-            {/* Portfolio Gallery */}
             <PortfolioGallery items={portfolio} />
 
-            {/* Outcomes */}
             {listing.outcomes && (
               <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6">
                 <h3 className="font-fraunces text-base font-black text-emerald-700 mb-2">🎯 What You'll Walk Away With</h3>
@@ -425,7 +453,6 @@ export default function ListingDetailPage() {
               </div>
             )}
 
-            {/* Session details */}
             <div className="bg-white rounded-2xl border border-stone-200 p-6">
               <h3 className="font-fraunces text-base font-black text-stone-900 mb-4">Session Details</h3>
               <div className="grid grid-cols-2 gap-3">
@@ -443,7 +470,7 @@ export default function ListingDetailPage() {
               </div>
             </div>
 
-            {/* Teacher card */}
+            {/* Teacher card — FIX #6: shows level computed from XP */}
             <div className="bg-white rounded-2xl border border-stone-200 p-6">
               <h3 className="font-fraunces text-base font-black text-stone-900 mb-4">About the Teacher</h3>
               <div className="flex items-start gap-4 mb-4">
@@ -452,17 +479,16 @@ export default function ListingDetailPage() {
                 </div>
                 <div className="flex-1">
                   <h4 className="font-fraunces text-lg font-black text-stone-900 mb-0.5">{listing.profiles?.full_name}</h4>
-                  <p className="text-xs text-stone-400 mb-2">@{listing.profiles?.username} · {listing.profiles?.level || "Seedling"}</p>
+                  <p className="text-xs text-stone-400 mb-2">@{listing.profiles?.username} · {teacherLevel}</p>
                   {listing.profiles?.bio && <p className="text-sm text-stone-500 leading-relaxed">{listing.profiles.bio}</p>}
                 </div>
               </div>
 
-              {/* Teacher stats */}
               <div className="grid grid-cols-3 gap-3 pt-4 border-t border-stone-100">
                 {[
-                  { icon: "📚", label: "Sessions",  value: teacherSessions },
+                  { icon: "📚", label: "Sessions",   value: teacherSessions },
                   { icon: "⭐", label: "Avg Rating", value: teacherAvgRating > 0 ? teacherAvgRating.toFixed(1) : "—" },
-                  { icon: "⚡", label: "XP",         value: (listing.profiles?.xp || 0).toLocaleString() },
+                  { icon: "⚡", label: "XP",          value: (listing.profiles?.xp || 0).toLocaleString() },
                 ].map(s => (
                   <div key={s.label} className="text-center bg-stone-50 rounded-xl p-3">
                     <div className="text-lg mb-1">{s.icon}</div>
@@ -477,14 +503,12 @@ export default function ListingDetailPage() {
           {/* ── RIGHT: Booking sidebar ── */}
           <div className="sticky top-20">
             <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm">
-              {/* Price */}
               <div className="text-center mb-5 pb-5 border-b border-stone-100">
                 <p className="text-xs text-stone-400 font-semibold mb-1">Session price</p>
                 <p className="font-fraunces text-5xl font-black text-emerald-700 leading-none mb-1">{listing.credit_price}</p>
                 <p className="text-sm text-stone-400">credits · ₱{listing.credit_price * 10}</p>
               </div>
 
-              {/* Quick info */}
               <div className="flex flex-col gap-2.5 mb-5">
                 {[
                   { icon: fmt.icon, text: `${fmt.label} session` },
@@ -500,7 +524,7 @@ export default function ListingDetailPage() {
                 ))}
               </div>
 
-              {/* CTA */}
+              {/* FIX #3: UI guard — own listing shows info instead of book button */}
               {isOwnListing ? (
                 <div className="bg-stone-50 rounded-xl p-4 text-center">
                   <p className="text-sm text-stone-400 font-medium">This is your own listing</p>
@@ -510,7 +534,8 @@ export default function ListingDetailPage() {
                 </div>
               ) : currentUser ? (
                 <>
-                  <button onClick={() => setShowBookModal(true)}
+                  {/* FIX #7: Use openBookModal() instead of setShowBookModal(true) to always clear state */}
+                  <button onClick={openBookModal}
                     className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-fraunces text-base font-black border-0 cursor-pointer transition-colors mb-2">
                     Book Session →
                   </button>

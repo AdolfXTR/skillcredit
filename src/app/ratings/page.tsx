@@ -33,6 +33,16 @@ type Rating = {
   role_rated: "teacher" | "learner";
 };
 
+// ── BAYESIAN AVERAGE ──────────────────────────────────────────────────────────
+// Prevents 1-review 5.0 stars beating someone with 50 genuine reviews.
+// C=5 confidence weight, m=3.5 global prior mean
+function bayesianAvg(ratings: number[]): number {
+  if (ratings.length === 0) return 0;
+  const C = 5, m = 3.5;
+  const sum = ratings.reduce((s, r) => s + r, 0);
+  return (C * m + sum) / (C + ratings.length);
+}
+
 function Stars({ value, max = 5 }: { value: number; max?: number }) {
   return (
     <div className="flex gap-0.5">
@@ -85,7 +95,6 @@ export default function RatingsPage() {
       .from("profiles").select("id, full_name, username").eq("id", u.id).single();
     setUser(profile);
 
-    // ✅ Fetch all ratings for the community feed
     const { data: ratingsData } = await supabase
       .from("ratings")
       .select(`
@@ -138,7 +147,6 @@ export default function RatingsPage() {
       ? selectedSession.teacher_id
       : selectedSession.learner_id;
 
-    // ✅ FIXED: correct fields per role, is_revealed + is_flagged set
     const payload = {
       session_id:     selectedSession.id,
       rater_id:       user.id,
@@ -148,14 +156,12 @@ export default function RatingsPage() {
       communication:  form.communication || null,
       is_revealed:    true,
       is_flagged:     false,
-      // Teacher rates learner → preparedness + respectfulness
       ...(roleRated === "learner" ? {
         preparedness:   form.preparedness   || null,
         respectfulness: form.respectfulness || null,
         knowledge:      null,
         punctuality:    null,
       } : {
-        // Learner rates teacher → knowledge + punctuality
         knowledge:      form.knowledge   || null,
         punctuality:    form.punctuality || null,
         preparedness:   null,
@@ -188,18 +194,16 @@ export default function RatingsPage() {
     tab === "all" ? true : r.role_rated === tab
   );
 
-  // ✅ FIXED: avg rating is only ratings WHERE the current user is the rated person
+  // ── BAYESIAN AVG: only MY received ratings ──
   const myReceivedRatings = ratings.filter(r => r.rated_id === user?.id);
-  const avgRating = myReceivedRatings.length > 0
-    ? (myReceivedRatings.reduce((s, r) => s + r.overall, 0) / myReceivedRatings.length).toFixed(1)
-    : "—";
+  const myBayesian = bayesianAvg(myReceivedRatings.map(r => r.overall));
+  const avgRating = myReceivedRatings.length > 0 ? myBayesian.toFixed(2) : "—";
 
   const unratedSessions = sessions.filter(s => !alreadyRated.includes(s.id));
 
   const initials = (name: string) =>
     name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "?";
 
-  // ✅ FIXED: proper decimal display, no hardcoded .0
   const formatRating = (val: number) =>
     Number.isInteger(val) ? `${val}.0` : val.toFixed(1);
 
@@ -242,7 +246,6 @@ export default function RatingsPage() {
                   </button>
                 </div>
 
-                {/* Session selector */}
                 <div className="mb-5">
                   <p className="text-xs font-800 text-stone-400 uppercase tracking-widest mb-2">Select Session</p>
                   {unratedSessions.length === 0 ? (
@@ -279,7 +282,6 @@ export default function RatingsPage() {
 
                 {selectedSession && (
                   <>
-                    {/* Who are we rating */}
                     <div className={`rounded-xl border p-3 mb-5 ${roleRated === "teacher" ? "bg-green-50 border-green-200" : "bg-blue-50 border-blue-200"}`}>
                       <p className={`text-xs font-700 ${roleRated === "teacher" ? "text-green-700" : "text-blue-700"}`}>
                         {roleRated === "teacher" ? "You are rating the Teacher:" : "You are rating the Learner:"}
@@ -290,7 +292,6 @@ export default function RatingsPage() {
                     </div>
 
                     <div className="flex flex-col gap-5 mb-5">
-                      {/* ✅ FIXED: correct criteria per role */}
                       {roleRated === "teacher" ? (
                         <>
                           {[
@@ -398,12 +399,15 @@ export default function RatingsPage() {
             <p className="text-sm text-stone-400">What the community says about teachers and learners</p>
           </div>
           <div className="flex gap-3">
-            {/* ✅ FIXED: avgRating is now MY received ratings only */}
+            {/* Bayesian avg — fairer than raw */}
             <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 text-center">
               <p className="text-2xl font-900 text-amber-500 leading-none mb-1" style={{ fontFamily: "'Fraunces', serif" }}>
                 {avgRating}{avgRating !== "—" ? "★" : ""}
               </p>
               <p className="text-xs text-stone-400 font-600">My Avg Rating</p>
+              {myReceivedRatings.length > 0 && (
+                <p className="text-xs text-stone-300 mt-0.5">{myReceivedRatings.length} review{myReceivedRatings.length !== 1 ? "s" : ""}</p>
+              )}
             </div>
             <div className="bg-green-50 border border-green-200 rounded-2xl px-5 py-3 text-center">
               <p className="text-2xl font-900 text-[#2d6a4f] leading-none mb-1" style={{ fontFamily: "'Fraunces', serif" }}>
@@ -469,7 +473,6 @@ export default function RatingsPage() {
           <div className="flex flex-col gap-3">
             {filtered.map(rating => (
               <div key={rating.id} className="rating-card bg-white rounded-2xl border border-stone-200 p-5" style={{ borderLeft: `3px solid ${rating.role_rated === "teacher" ? "#22c55e" : "#3b82f6"}` }}>
-                {/* Header */}
                 <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-green-100 text-green-700 font-800 text-xs flex items-center justify-center shrink-0">
@@ -493,7 +496,6 @@ export default function RatingsPage() {
                   </div>
                 </div>
 
-                {/* Stars breakdown — ✅ FIXED: correct fields per role */}
                 <div className="flex flex-wrap gap-5 mb-4">
                   {rating.role_rated === "teacher" ? (
                     <>
@@ -512,13 +514,11 @@ export default function RatingsPage() {
                     <p className="text-xs font-700 text-stone-400 uppercase tracking-wider mb-1">Overall</p>
                     <div className="flex items-center gap-2">
                       <Stars value={rating.overall} />
-                      {/* ✅ FIXED: no hardcoded .0 */}
                       <span className="text-base font-900 text-amber-500" style={{ fontFamily: "'Fraunces', serif" }}>{formatRating(rating.overall)}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Review text */}
                 {rating.review && (
                   <div className="bg-stone-50 rounded-xl border-l-4 border-amber-300 px-4 py-3">
                     <p className="text-sm text-stone-600 italic leading-relaxed">"{rating.review}"</p>
