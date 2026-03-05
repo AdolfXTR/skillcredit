@@ -16,7 +16,7 @@ type Message = {
   receiver_id: string;
   content: string;
   image_url?: string;
-  message_type: string;
+  message_type: string; // "text" | "image" | "session_call"
   is_read: boolean;
   created_at: string;
 };
@@ -26,6 +26,15 @@ type Conversation = {
   last_message: string;
   last_time: string;
   unread_count: number;
+};
+
+// Stored as JSON in messages.content when message_type === "session_call"
+type CallPayload = {
+  room: string;
+  started_at: string;
+  duration_minutes: number;
+  status: "active" | "ended";
+  ended_by?: string;
 };
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -76,6 +85,159 @@ function groupByDate(messages: Message[]) {
   return groups;
 }
 
+// Deterministic room name from two user IDs (sorted so both get same room)
+function getRoomName(idA: string, idB: string) {
+  const slug = [idA, idB].sort().join("").replace(/-/g, "").slice(0, 20);
+  return `skillcredit-${slug}`;
+}
+
+// ─── SESSION TIMER ────────────────────────────────────────────────────────────
+function SessionTimer({
+  startedAt,
+  durationMinutes,
+  onExpire,
+}: {
+  startedAt: string;
+  durationMinutes: number;
+  onExpire: () => void;
+}) {
+  const total = durationMinutes * 60;
+  const [remaining, setRemaining] = useState(total);
+  const [elapsed, setElapsed] = useState(0);
+  const calledExpire = useRef(false);
+
+  useEffect(() => {
+    const tick = () => {
+      const elap = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+      const rem = Math.max(total - elap, 0);
+      setElapsed(elap);
+      setRemaining(rem);
+      if (rem === 0 && !calledExpire.current) {
+        calledExpire.current = true;
+        onExpire();
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startedAt, total]);
+
+  const pct = Math.min((elapsed / total) * 100, 100);
+  const mins = Math.floor(remaining / 60);
+  const secs = remaining % 60;
+  const isLow = remaining < 300;
+  const color = isLow ? "#dc2626" : "#2d6a4f";
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+      {/* Circular progress */}
+      <div style={{ position: "relative", width: 40, height: 40, flexShrink: 0 }}>
+        <svg width="40" height="40" style={{ transform: "rotate(-90deg)" }}>
+          <circle cx="20" cy="20" r="16" fill="none" stroke="#f0ece4" strokeWidth="3" />
+          <circle cx="20" cy="20" r="16" fill="none" stroke={color} strokeWidth="3"
+            strokeDasharray={`${(pct / 100) * 100.5} 100.5`} strokeLinecap="round"
+            style={{ transition: "stroke-dasharray 0.5s ease" }} />
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color, fontFamily: "'Fraunces', serif" }}>
+            {mins}
+          </span>
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 900, color: isLow ? "#dc2626" : "#1a1a1a", fontFamily: "'Fraunces', serif", lineHeight: 1 }}>
+          {String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
+        </div>
+        <div style={{ fontSize: 9, color: isLow ? "#dc2626" : "#aaa", fontWeight: 600 }}>
+          {isLow ? "⚠️ ending soon" : "remaining"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── VIDEO CALL PANEL ─────────────────────────────────────────────────────────
+function VideoCallPanel({
+  payload,
+  currentUserId,
+  otherUser,
+  onEnd,
+}: {
+  payload: CallPayload;
+  currentUserId: string;
+  otherUser: Profile;
+  onEnd: () => void;
+}) {
+  const [joined, setJoined] = useState(false);
+  const ended = payload.status === "ended";
+
+  // Ended pill
+  if (ended) {
+    return (
+      <div style={{ background: "#faf8f4", borderRadius: 14, border: "1.5px solid #e8e2d9", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#f0ece4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📹</div>
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 700, color: "#555" }}>Video session ended</p>
+          <p style={{ fontSize: 11, color: "#bbb" }}>
+            {payload.duration_minutes}min · {new Date(payload.started_at).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ borderRadius: 16, border: "2px solid #2d6a4f", overflow: "hidden", background: "#fff", boxShadow: "0 4px 24px rgba(45,106,79,0.12)" }}>
+      {/* Header bar */}
+      <div style={{ padding: "10px 16px", background: "linear-gradient(135deg,#1a4a36,#2d6a4f)", display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80", animation: "pulse 1.5s infinite" }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>
+            Live Session · {otherUser.full_name}
+          </span>
+        </div>
+        <SessionTimer
+          startedAt={payload.started_at}
+          durationMinutes={payload.duration_minutes}
+          onExpire={onEnd}
+        />
+        <button onClick={onEnd}
+          style={{ padding: "5px 13px", borderRadius: 8, background: "rgba(220,38,38,0.85)", color: "#fff", border: "none", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+          End
+        </button>
+      </div>
+
+      {/* Pre-join screen */}
+      {!joined && (
+        <div style={{ padding: "28px 24px", textAlign: "center", background: "#f9fdfb" }}>
+          <div style={{ fontSize: 46, marginBottom: 10 }}>🎥</div>
+          <p style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 900, color: "#1a1a1a", marginBottom: 6 }}>Ready to join?</p>
+          <p style={{ fontSize: 13, color: "#888", lineHeight: 1.65, marginBottom: 20 }}>
+            Your browser will ask for camera & mic permission.<br />
+            The session timer has already started!
+          </p>
+          <button onClick={() => setJoined(true)}
+            style={{ padding: "11px 30px", borderRadius: 12, background: "#2d6a4f", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 3px 14px rgba(45,106,79,0.25)" }}>
+            📹 Join Video Call
+          </button>
+          <p style={{ fontSize: 11, color: "#bbb", marginTop: 12 }}>Powered by Jitsi Meet · end-to-end encrypted · free</p>
+        </div>
+      )}
+
+      {/* Jitsi iframe */}
+      {joined && (
+        <iframe
+          src={`https://meet.jit.si/${payload.room}`}
+          allow="camera; microphone; fullscreen; display-capture; autoplay"
+          style={{ width: "100%", height: 450, border: "none", display: "block" }}
+          title="Video Session"
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function MessagesPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -94,6 +256,7 @@ export default function MessagesPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [startingCall, setStartingCall] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const searchTimeout = useRef<any>(null);
@@ -103,7 +266,7 @@ export default function MessagesPage() {
   useEffect(() => { loadData(); setTimeout(() => setMounted(true), 100); }, []);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // Real-time subscription
+  // Real-time: new messages + session_call updates
   useEffect(() => {
     if (!profile) return;
     const channel = supabase.channel(`messages-${profile.id}`)
@@ -117,7 +280,15 @@ export default function MessagesPage() {
           markRead(activeConvo.id);
         }
         loadConversations(profile.id);
-      }).subscribe();
+      })
+      // ↓ This catches when the other person ends the session (UPDATE on session_call row)
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "messages",
+      }, (payload) => {
+        const updated = payload.new as Message;
+        setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
+      })
+      .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [profile, activeConvo]);
 
@@ -130,40 +301,21 @@ export default function MessagesPage() {
 
     await loadConversations(user.id);
 
-    // ── AUTO-OPEN from Sessions page ──
-    // When user clicks "Message Teacher/Learner" on the sessions page,
-    // it stores the target user's ID in sessionStorage before redirecting here.
-    // We pick it up and auto-open that conversation.
     const openWith = sessionStorage.getItem("openMessageWith");
     if (openWith) {
       sessionStorage.removeItem("openMessageWith");
-      const { data: targetUser } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", openWith)
-        .single();
-
+      const { data: targetUser } = await supabase.from("profiles").select("*").eq("id", openWith).single();
       if (targetUser) {
-        // Small delay so the conversations sidebar renders first
         setTimeout(async () => {
           setActiveConvo(targetUser);
           setShowNewChat(false);
           setShowEmoji(false);
-
-          const { data: msgs } = await supabase
-            .from("messages")
-            .select("*")
+          const { data: msgs } = await supabase.from("messages").select("*")
             .or(`and(sender_id.eq.${user.id},receiver_id.eq.${targetUser.id}),and(sender_id.eq.${targetUser.id},receiver_id.eq.${user.id})`)
             .order("created_at", { ascending: true });
-
           setMessages(msgs || []);
-
-          await supabase.from("messages")
-            .update({ is_read: true })
-            .eq("sender_id", targetUser.id)
-            .eq("receiver_id", user.id)
-            .eq("is_read", false);
-
+          await supabase.from("messages").update({ is_read: true })
+            .eq("sender_id", targetUser.id).eq("receiver_id", user.id).eq("is_read", false);
           await loadConversations(user.id);
           setTimeout(() => textareaRef.current?.focus(), 150);
         }, 400);
@@ -174,8 +326,7 @@ export default function MessagesPage() {
   }
 
   async function loadConversations(userId: string) {
-    const { data: msgs } = await supabase
-      .from("messages").select("*")
+    const { data: msgs } = await supabase.from("messages").select("*")
       .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
       .order("created_at", { ascending: false });
     if (!msgs) return;
@@ -193,7 +344,9 @@ export default function MessagesPage() {
       if (!op) continue;
       const last = ms[0];
       const unread = ms.filter(m => m.receiver_id === userId && !m.is_read).length;
-      const lastText = last.message_type === "image" ? "📷 Photo" : last.content;
+      const lastText = last.message_type === "image" ? "📷 Photo"
+        : last.message_type === "session_call" ? "📹 Video session"
+        : last.content;
       convos.push({ other_user: op, last_message: lastText, last_time: last.created_at, unread_count: unread });
     }
     setConversations(convos);
@@ -204,11 +357,9 @@ export default function MessagesPage() {
     setShowNewChat(false);
     setShowEmoji(false);
     if (!profile) return;
-
     const { data } = await supabase.from("messages").select("*")
       .or(`and(sender_id.eq.${profile.id},receiver_id.eq.${other.id}),and(sender_id.eq.${other.id},receiver_id.eq.${profile.id})`)
       .order("created_at", { ascending: true });
-
     setMessages(data || []);
     await markRead(other.id);
     await loadConversations(profile.id);
@@ -219,6 +370,78 @@ export default function MessagesPage() {
     if (!profile) return;
     await supabase.from("messages").update({ is_read: true })
       .eq("sender_id", senderId).eq("receiver_id", profile.id).eq("is_read", false);
+  }
+
+  // ── START VIDEO SESSION ────────────────────────────────────────────────────
+  async function startVideoSession() {
+    if (!profile || !activeConvo || startingCall) return;
+
+    // Block if one is already active
+    const alreadyActive = messages.some(m => {
+      if (m.message_type !== "session_call") return false;
+      try { return (JSON.parse(m.content) as CallPayload).status === "active"; } catch { return false; }
+    });
+    if (alreadyActive) { alert("There's already an active session in this conversation!"); return; }
+
+    setStartingCall(true);
+
+    // Try to pull duration from an upcoming session between these two users
+    const { data: sessionRow } = await supabase
+      .from("sessions")
+      .select("listing:listing_id(duration)")
+      .or(`and(teacher_id.eq.${profile.id},learner_id.eq.${activeConvo.id}),and(teacher_id.eq.${activeConvo.id},learner_id.eq.${profile.id})`)
+      .eq("status", "upcoming")
+      .order("proposed_time", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    const duration = (sessionRow?.listing as any)?.duration || 60;
+    const room = getRoomName(profile.id, activeConvo.id);
+
+    const payload: CallPayload = {
+      room,
+      started_at: new Date().toISOString(),
+      duration_minutes: duration,
+      status: "active",
+    };
+
+    const { data: msg } = await supabase.from("messages").insert({
+      sender_id: profile.id,
+      receiver_id: activeConvo.id,
+      content: JSON.stringify(payload),
+      message_type: "session_call",
+      is_read: false,
+    }).select().single();
+
+    if (msg) setMessages(prev => [...prev, msg]);
+
+    // Notify the other user
+    try {
+      await supabase.from("notifications").insert({
+        user_id: activeConvo.id,
+        type: "session_call",
+        title: `${profile.full_name} started a video session`,
+        body: "Join now in Messages!",
+        link: "/messages",
+      });
+    } catch (_) {}
+
+    await loadConversations(profile.id);
+    setStartingCall(false);
+  }
+
+  // ── END VIDEO SESSION ──────────────────────────────────────────────────────
+  async function endVideoSession(msgId: string) {
+    if (!profile) return;
+    const msg = messages.find(m => m.id === msgId);
+    if (!msg) return;
+    try {
+      const p = JSON.parse(msg.content) as CallPayload;
+      p.status = "ended";
+      p.ended_by = profile.id;
+      await supabase.from("messages").update({ content: JSON.stringify(p) }).eq("id", msgId);
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: JSON.stringify(p) } : m));
+    } catch (_) {}
   }
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -297,6 +520,12 @@ export default function MessagesPage() {
     }, 300);
   }
 
+  // Is there a currently active call in this conversation?
+  const activeCallMsg = messages.find(m => {
+    if (m.message_type !== "session_call") return false;
+    try { return (JSON.parse(m.content) as CallPayload).status === "active"; } catch { return false; }
+  });
+
   const totalUnread = conversations.reduce((s, c) => s + c.unread_count, 0);
   const grouped = groupByDate(messages);
 
@@ -319,6 +548,8 @@ export default function MessagesPage() {
         @keyframes popIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
         @keyframes slideUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes spin { to{transform:rotate(360deg)} }
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-thumb { background: #e0dbd4; border-radius: 999px; }
         .convo-item { transition: background 0.12s; cursor: pointer; border-radius: 10px; }
@@ -338,6 +569,7 @@ export default function MessagesPage() {
         .nav-link { padding: 6px 12px; border-radius: 8px; color: #666; font-size: 13px; font-weight: 600; transition: all 0.12s; }
         .nav-link:hover { background: #f5f0e8; color: #333; }
         .nav-link.active { background: #e8f4e8; color: #2d6a4f; }
+        .call-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(45,106,79,0.28) !important; }
       `}</style>
 
       {/* NAVBAR */}
@@ -497,7 +729,23 @@ export default function MessagesPage() {
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{activeConvo.full_name}</div>
                   <div style={{ fontSize: 11, color: "#aaa" }}>@{activeConvo.username} · {activeConvo.level} · Online</div>
                 </div>
-                {/* Sessions shortcut — useful when redirected from sessions page */}
+
+                {/* ── VIDEO SESSION BUTTON (or live pill) ── */}
+                {activeCallMsg ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 13px", borderRadius: 20, background: "#e8f9f0", border: "1.5px solid #4ade80" }}>
+                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", animation: "pulse 1.5s infinite" }} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#166534" }}>Session live ↓</span>
+                  </div>
+                ) : (
+                  <button
+                    className="call-btn"
+                    onClick={startVideoSession}
+                    disabled={startingCall}
+                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 16px", borderRadius: 10, background: "#2d6a4f", color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: startingCall ? "not-allowed" : "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 2px 10px rgba(45,106,79,0.18)", opacity: startingCall ? 0.7 : 1, transition: "all 0.15s" }}>
+                    {startingCall ? "⏳ Starting…" : "📹 Start Session"}
+                  </button>
+                )}
+
                 <a href="/sessions" style={{ padding: "6px 14px", borderRadius: 8, background: "#e8f4e8", color: "#2d6a4f", fontSize: 12, fontWeight: 700, border: "1.5px solid #c6e8d4", transition: "all 0.12s" }}
                   onMouseOver={e => e.currentTarget.style.background = "#d4f0e0"}
                   onMouseOut={e => e.currentTarget.style.background = "#e8f4e8"}>
@@ -518,7 +766,12 @@ export default function MessagesPage() {
                       {getInitials(activeConvo.full_name)}
                     </div>
                     <div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 800, color: "#999", marginBottom: 4 }}>{activeConvo.full_name}</div>
-                    <div style={{ fontSize: 12, color: "#bbb" }}>Say hello 👋</div>
+                    <div style={{ fontSize: 12, color: "#bbb", marginBottom: 20 }}>Say hello 👋</div>
+                    <div style={{ background: "#f0fdf4", border: "1.5px dashed #4ade80", borderRadius: 14, padding: "16px 22px", maxWidth: 300, margin: "0 auto" }}>
+                      <div style={{ fontSize: 22, marginBottom: 6 }}>📹</div>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: "#166534", marginBottom: 3 }}>Have a session booked?</p>
+                      <p style={{ fontSize: 11, color: "#888", lineHeight: 1.6 }}>Hit <strong>"Start Session"</strong> above to kick off a video call with a live countdown timer!</p>
+                    </div>
                   </div>
                 )}
 
@@ -538,6 +791,23 @@ export default function MessagesPage() {
                       const sameSenderNext = nextMsg?.sender_id === msg.sender_id;
                       const showAvatar = !isMe && !sameSenderNext;
 
+                      // ── RENDER SESSION CALL ──
+                      if (msg.message_type === "session_call") {
+                        let payload: CallPayload | null = null;
+                        try { payload = JSON.parse(msg.content) as CallPayload; } catch { return null; }
+                        return (
+                          <div key={msg.id} style={{ margin: "14px 0" }}>
+                            <VideoCallPanel
+                              payload={payload}
+                              currentUserId={profile?.id || ""}
+                              otherUser={activeConvo}
+                              onEnd={() => endVideoSession(msg.id)}
+                            />
+                          </div>
+                        );
+                      }
+
+                      // ── RENDER NORMAL MESSAGE ──
                       return (
                         <div key={msg.id} className="msg-in"
                           style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 7, alignItems: "flex-end", marginBottom: sameSenderNext ? 2 : 8 }}>

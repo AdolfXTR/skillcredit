@@ -3,41 +3,50 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 const mockCards = [
-  { type: "listing", title: "Python for Absolute Beginners", teacher: "Maria S.", skill: "Programming", credits: 15, rating: 4.9, reviews: 34, verified: true, color: "#e8f4e8", accent: "#2d6a4f", tag: "💻" },
-  { type: "bounty", title: "Help me solve this calculus problem — due tonight!", credits: 20, answers: 3, deadline: "2h left", color: "#fff8e7", accent: "#b45309", tag: "🎯" },
-  { type: "community", title: "How do I center a div in CSS? I've tried everything 😭", author: "jaypee_dev", upvotes: 47, answers: 12, skill: "Web Dev", color: "#f0f4ff", accent: "#3730a3", tag: "💬" },
-  { type: "listing", title: "UI/UX Design Fundamentals with Figma", teacher: "Reina C.", skill: "Design", credits: 12, rating: 5.0, reviews: 18, verified: true, color: "#fdf0f8", accent: "#9d174d", tag: "🎨" },
-  { type: "achievement", title: "🏆 Carlo just earned Top Teacher in JavaScript!", sub: "23 sessions · 4.9 stars", color: "#f0fdf4", accent: "#166534", tag: "⭐" },
-  { type: "bounty", title: "Need someone to review my 5-page business plan", credits: 35, answers: 1, deadline: "1 day left", color: "#fff8e7", accent: "#b45309", tag: "🎯" },
-  { type: "listing", title: "Guitar Basics — From zero to your first song", teacher: "Sam R.", skill: "Music", credits: 10, rating: 4.7, reviews: 52, verified: false, color: "#fef9f0", accent: "#92400e", tag: "🎵" },
-  { type: "listing", title: "English Conversation Practice — Job-ready fluency", teacher: "Lisa M.", skill: "Language", credits: 8, rating: 4.8, reviews: 67, verified: true, color: "#f0fdf4", accent: "#166534", tag: "🌍" },
-  { type: "bounty", title: "Translate this paragraph from Filipino to English", credits: 10, answers: 5, deadline: "3h left", color: "#fff8e7", accent: "#b45309", tag: "🎯" },
-  { type: "community", title: "Best resources for learning React in 2025? Drop your recs 👇", author: "techie_anna", upvotes: 89, answers: 31, skill: "Programming", color: "#f0f4ff", accent: "#3730a3", tag: "💬" },
-  { type: "listing", title: "Video Editing with CapCut — Reels, vlogs & transitions", teacher: "Kiko D.", skill: "Media", credits: 14, rating: 4.6, reviews: 29, verified: true, color: "#fdf0f8", accent: "#9d174d", tag: "🎬" },
-  { type: "achievement", title: "🎯 Ana won 1st place on a Python bounty!", sub: "Earned 18 credits · Problem Solver badge", color: "#fffbf0", accent: "#92400e", tag: "⭐" },
+  { type: "listing",     title: "Python for Absolute Beginners",                          teacher: "Maria S.",  credits: 15, rating: 4.9, color: "#e8f4e8", accent: "#2d6a4f", tag: "💻" },
+  { type: "bounty",      title: "Help me solve this calculus problem — due tonight!",      credits: 20, answers: 3,  deadline: "2h left",    color: "#fff8e7", accent: "#b45309", tag: "🎯" },
+  { type: "community",   title: "How do I center a div in CSS? I've tried everything 😭", upvotes: 47, answers: 12, color: "#f0f4ff", accent: "#3730a3", tag: "💬" },
+  { type: "listing",     title: "UI/UX Design Fundamentals with Figma",                   teacher: "Reina C.", credits: 12, rating: 5.0, color: "#fdf0f8", accent: "#9d174d", tag: "🎨" },
+  { type: "achievement", title: "🏆 Carlo just earned Top Teacher in JavaScript!",        sub: "23 sessions · 4.9 stars",             color: "#f0fdf4", accent: "#166534", tag: "⭐" },
+  { type: "bounty",      title: "Need someone to review my 5-page business plan",         credits: 35, answers: 1,  deadline: "1 day left", color: "#fff8e7", accent: "#b45309", tag: "🎯" },
+  { type: "listing",     title: "Guitar Basics — From zero to your first song",           teacher: "Sam R.",   credits: 10, rating: 4.7, color: "#fef9f0", accent: "#92400e", tag: "🎵" },
+  { type: "listing",     title: "English Conversation Practice — Job-ready fluency",      teacher: "Lisa M.",  credits: 8,  rating: 4.8, color: "#f0fdf4", accent: "#166534", tag: "🌍" },
 ];
 
 const features = [
-  { icon: "🎓", title: "1-on-1 Sessions", desc: "Book private sessions with verified skill teachers. Credits held in escrow until you're satisfied." },
-  { icon: "🎯", title: "Bounty Tasks", desc: "Post a problem, set a reward. The community competes to give you the best answer." },
-  { icon: "💬", title: "Community Forum", desc: "Ask questions, share knowledge, earn credits just by helping others." },
+  { icon: "🎓", title: "1-on-1 Sessions",   desc: "Book private sessions with verified skill teachers. Credits held in escrow until you're satisfied." },
+  { icon: "🎯", title: "Bounty Tasks",       desc: "Post a problem, set a reward. The community competes to give you the best answer." },
+  { icon: "💬", title: "Community Forum",    desc: "Ask questions, share knowledge, earn credits just by helping others." },
   { icon: "✅", title: "Skill Verification", desc: "Teachers take quizzes to earn Verified badges — so you always know who's qualified." },
-  { icon: "🔒", title: "Escrow Protection", desc: "Credits are locked until both parties confirm the session is complete. 100% safe." },
-  { icon: "🏆", title: "XP & Levels", desc: "Earn XP, level up from Seedling to Legend, unlock badges and climb the leaderboard." },
+  { icon: "🔒", title: "Escrow Protection",  desc: "Credits are locked until both parties confirm the session is complete. 100% safe." },
+  { icon: "🏆", title: "XP & Levels",        desc: "Earn XP, level up from Seedling to Legend, unlock badges and climb the leaderboard." },
+];
+
+const learnTopics = [
+  { emoji: "💻", label: "Coding"         },
+  { emoji: "🌍", label: "English"        },
+  { emoji: "🎸", label: "Guitar"         },
+  { emoji: "🎨", label: "Design"         },
+  { emoji: "📐", label: "Math"           },
+  { emoji: "📊", label: "Business"       },
+  { emoji: "🎬", label: "Video Editing"  },
+  { emoji: "📸", label: "Photography"    },
+  { emoji: "🍳", label: "Cooking"        },
+  { emoji: "🗣️", label: "Public Speaking"},
 ];
 
 const SignupPromptModal = ({ onClose }: { onClose: () => void }) => (
-  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(8px)", padding: "16px" }}>
-    <div style={{ background: "#fffdf7", borderRadius: 28, padding: "44px 40px", maxWidth: 440, width: "100%", textAlign: "center", boxShadow: "0 32px 80px rgba(0,0,0,0.25)", border: "1.5px solid #e8e2d9" }}>
-      <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#e8f4e8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 20px" }}>🌱</div>
-      <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 900, color: "#1a1a1a", marginBottom: 10 }}>Join SkillCredit</h2>
-      <p style={{ color: "#777", fontSize: 14, lineHeight: 1.7, marginBottom: 28 }}>
-        Sign up free and get <strong style={{ color: "#2d6a4f" }}>20 credits</strong> instantly — enough to book your first session today.
+  <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, backdropFilter:"blur(8px)", padding:16 }}>
+    <div style={{ background:"#fffdf7", borderRadius:28, padding:"44px 40px", maxWidth:440, width:"100%", textAlign:"center", boxShadow:"0 32px 80px rgba(0,0,0,0.25)", border:"1.5px solid #e8e2d9" }}>
+      <div style={{ width:72, height:72, borderRadius:"50%", background:"#e8f4e8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 20px" }}>🌱</div>
+      <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:26, fontWeight:900, color:"#1a1a1a", marginBottom:10 }}>Join SkillCredit</h2>
+      <p style={{ color:"#666", fontSize:14, lineHeight:1.7, marginBottom:28 }}>
+        Sign up free and get <strong style={{ color:"#2d6a4f" }}>20 credits</strong> instantly — enough to book your first session today.
       </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <a href="/signup" style={{ background: "#2d6a4f", color: "#fff", padding: "14px 24px", borderRadius: 14, fontWeight: 800, fontSize: 15, textDecoration: "none", display: "block" }}>Create free account 🎁</a>
-        <a href="/login" style={{ background: "#f5f0e8", color: "#555", padding: "14px 24px", borderRadius: 14, fontWeight: 600, fontSize: 14, textDecoration: "none", display: "block" }}>I already have an account</a>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "#bbb", fontSize: 13, cursor: "pointer", marginTop: 4 }}>Continue browsing</button>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        <a href="/signup" style={{ background:"#2d6a4f", color:"#fff", padding:"14px 24px", borderRadius:14, fontWeight:800, fontSize:15, textDecoration:"none", display:"block" }}>Create free account 🎁</a>
+        <a href="/login"  style={{ background:"#f5f0e8", color:"#444", padding:"14px 24px", borderRadius:14, fontWeight:600, fontSize:14, textDecoration:"none", display:"block" }}>I already have an account</a>
+        <button onClick={onClose} style={{ background:"none", border:"none", color:"#bbb", fontSize:13, cursor:"pointer", marginTop:4 }}>Continue browsing</button>
       </div>
     </div>
   </div>
@@ -45,74 +54,38 @@ const SignupPromptModal = ({ onClose }: { onClose: () => void }) => (
 
 const MiniCard = ({ card, onClick }: { card: typeof mockCards[0]; onClick: () => void }) => (
   <div onClick={onClick}
-    style={{ background: card.color, borderRadius: 16, padding: "16px 18px", marginBottom: 12, breakInside: "avoid", border: "1px solid rgba(0,0,0,0.06)", cursor: "pointer", transition: "transform 0.2s", display: "block" }}
-    onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
-    onMouseLeave={e => e.currentTarget.style.transform = "none"}>
-    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-      <span style={{ fontSize: 14 }}>{card.tag}</span>
-      <span style={{ fontSize: 10, fontWeight: 800, color: card.accent, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+    style={{ background:card.color, borderRadius:16, padding:"16px 18px", marginBottom:12, breakInside:"avoid", border:"1px solid rgba(0,0,0,0.06)", cursor:"pointer", transition:"transform 0.2s,box-shadow 0.2s" }}
+    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)"; }}
+    onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
+    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
+      <span style={{ fontSize:14 }}>{card.tag}</span>
+      <span style={{ fontSize:10, fontWeight:800, color:card.accent, textTransform:"uppercase", letterSpacing:"0.06em" }}>
         {card.type === "listing" ? "Skill" : card.type === "bounty" ? "Bounty" : card.type === "achievement" ? "Achievement" : "Forum"}
       </span>
     </div>
-    <p style={{ fontFamily: "'Fraunces', serif", fontSize: 13, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.35, marginBottom: 6 }}>{card.title}</p>
-    {card.type === "listing" && <p style={{ fontSize: 11, color: "#888" }}>by {card.teacher} · <strong style={{ color: card.accent }}>{card.credits} cr</strong> · ⭐{card.rating}</p>}
-    {card.type === "bounty" && <p style={{ fontSize: 11, color: "#888" }}>🏆 <strong style={{ color: card.accent }}>{card.credits} cr</strong> reward · ⏱ {card.deadline}</p>}
-    {card.type === "community" && <p style={{ fontSize: 11, color: "#888" }}>▲ {card.upvotes} · 💬 {card.answers} answers</p>}
-    {card.type === "achievement" && <p style={{ fontSize: 11, color: "#888" }}>{card.sub}</p>}
+    <p style={{ fontFamily:"'Fraunces',serif", fontSize:13, fontWeight:800, color:"#111", lineHeight:1.35, marginBottom:6 }}>{card.title}</p>
+    {card.type === "listing"     && "teacher" in card && "credits" in card && <p style={{ fontSize:11, color:"#777" }}>by {(card as any).teacher} · <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong> · ⭐{(card as any).rating}</p>}
+    {card.type === "bounty"      && "credits" in card && <p style={{ fontSize:11, color:"#777" }}>🏆 <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong> reward · ⏱ {(card as any).deadline}</p>}
+    {card.type === "community"   && "upvotes" in card && <p style={{ fontSize:11, color:"#777" }}>▲ {(card as any).upvotes} · 💬 {(card as any).answers} answers</p>}
+    {card.type === "achievement" && "sub" in card     && <p style={{ fontSize:11, color:"#777" }}>{(card as any).sub}</p>}
   </div>
 );
-
-// ── Animated counter hook ──────────────────────────────────────────────────
-function useCountUp(target: number, duration = 1500) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (target === 0) return;
-    let start = 0;
-    const step = target / (duration / 16);
-    const timer = setInterval(() => {
-      start += step;
-      if (start >= target) { setCount(target); clearInterval(timer); }
-      else setCount(Math.floor(start));
-    }, 16);
-    return () => clearInterval(timer);
-  }, [target, duration]);
-  return count;
-}
-
-function StatNumber({ value, suffix = "+" }: { value: number; suffix?: string }) {
-  const count = useCountUp(value);
-  if (value === 0) return <span>—</span>;
-  return <span>{count.toLocaleString()}{suffix}</span>;
-}
 
 export default function LandingPage() {
   const [showModal, setShowModal] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [scrolled, setScrolled]   = useState(false);
 
-  // ── LIVE STATS from Supabase ───────────────────────────────────────────────
-  const [liveStats, setLiveStats] = useState({
-    users: 0,
-    sessions: 0,
-    bounties: 0,
-    loaded: false,
-  });
-
+  // Scroll reveal
   useEffect(() => {
-    const loadStats = async () => {
-      const [usersRes, sessionsRes, bountiesRes] = await Promise.all([
-        supabase.from("profiles").select("*", { count: "exact", head: true }),
-        supabase.from("sessions").select("*", { count: "exact", head: true }).eq("status", "completed"),
-        supabase.from("bounties").select("*", { count: "exact", head: true }).eq("status", "closed"),
-      ]);
-      setLiveStats({
-        users:    usersRes.count    ?? 0,
-        sessions: sessionsRes.count ?? 0,
-        bounties: bountiesRes.count ?? 0,
-        loaded: true,
-      });
-    };
-    loadStats();
+    const observer = new IntersectionObserver(
+      entries => entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add("visible"); observer.unobserve(e.target); }
+      }),
+      { threshold: 0.1 }
+    );
+    document.querySelectorAll(".reveal").forEach(el => observer.observe(el));
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -121,250 +94,223 @@ export default function LandingPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const stats = [
-    { value: liveStats.users,    suffix: "+", label: "Active Users"    },
-    { value: liveStats.sessions, suffix: "+", label: "Sessions Done"   },
-    { value: liveStats.bounties, suffix: "+", label: "Bounties Solved" },
-    { value: 0,                  suffix: "",  label: "To Get Started", display: "₱0" },
-  ];
+  // Suppress unused supabase warning — kept for future live stats
+  void supabase;
 
-  if (guestMode) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#faf8f4", fontFamily: "'DM Sans', sans-serif" }}>
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,700;0,800;0,900;1,700&family=DM+Sans:wght@400;500;600;700&display=swap');
-          *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-          @media (max-width: 600px) { .guest-cards { columns: 1 !important; } }
-          @media (min-width: 601px) and (max-width: 900px) { .guest-cards { columns: 2 !important; } }
-        `}</style>
-        {showModal && <SignupPromptModal onClose={() => setShowModal(false)} />}
-
-        <nav style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(250,248,244,0.95)", backdropFilter: "blur(12px)", borderBottom: "1.5px solid #e8e2d9", padding: "0 24px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#2d6a4f" }}>SkillCredit</span>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 11, color: "#aaa", background: "#f5f0e8", padding: "4px 10px", borderRadius: 20, fontWeight: 600 }}>👀 Guest</span>
-            <a href="/login" style={{ padding: "7px 14px", borderRadius: 10, border: "1.5px solid #2d6a4f", color: "#2d6a4f", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>Log in</a>
-            <a href="/signup" style={{ padding: "7px 14px", borderRadius: 10, background: "#2d6a4f", color: "#fff", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>Sign up</a>
-          </div>
-        </nav>
-
-        <div style={{ background: "linear-gradient(90deg, #2d6a4f, #1a4a35)", color: "#fff", textAlign: "center", padding: "10px 16px", fontSize: 13, fontWeight: 600 }}>
-          🎁 Sign up and get <strong>20 free credits</strong>!
-          <a href="/signup" style={{ color: "#b7e4c7", marginLeft: 8, textDecoration: "underline", fontWeight: 800 }}>Create account →</a>
+  if (guestMode) return (
+    <div style={{ minHeight:"100vh", background:"#faf8f4", fontFamily:"'DM Sans',sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,700;0,800;0,900;1,700&family=DM+Sans:wght@400;500;600;700&display=swap');
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        @media(max-width:600px){.guest-cards{columns:1!important}}
+        @media(min-width:601px)and(max-width:900px){.guest-cards{columns:2!important}}
+      `}</style>
+      {showModal && <SignupPromptModal onClose={() => setShowModal(false)} />}
+      <nav style={{ position:"sticky", top:0, zIndex:100, background:"rgba(250,248,244,0.95)", backdropFilter:"blur(12px)", borderBottom:"1.5px solid #e8e2d9", padding:"0 24px", height:58, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#2d6a4f" }}>SkillCredit</span>
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          <span style={{ fontSize:11, color:"#888", background:"#f5f0e8", padding:"4px 10px", borderRadius:20, fontWeight:600 }}>👀 Guest</span>
+          <a href="/login"  style={{ padding:"7px 14px", borderRadius:10, border:"1.5px solid #2d6a4f", color:"#2d6a4f", fontWeight:700, fontSize:13, textDecoration:"none" }}>Log in</a>
+          <a href="/signup" style={{ padding:"7px 14px", borderRadius:10, background:"#2d6a4f", color:"#fff", fontWeight:700, fontSize:13, textDecoration:"none" }}>Sign up</a>
         </div>
-
-        <div style={{ maxWidth: 1160, margin: "0 auto", padding: "32px 16px" }}>
-          <div style={{ marginBottom: 24 }}>
-            <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 900, color: "#1a1a1a" }}>What's happening on SkillCredit ✨</h2>
-            <p style={{ fontSize: 13, color: "#aaa", marginTop: 4 }}>Browse listings, bounties, and community posts — sign up to participate</p>
-          </div>
-          <div className="guest-cards" style={{ columns: "260px 4", gap: 16 }}>
-            {mockCards.map((card, i) => <MiniCard key={i} card={card} onClick={() => setShowModal(true)} />)}
-          </div>
-        </div>
-
-        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: "1.5px solid #e8e2d9", padding: "12px 20px", display: "flex", justifyContent: "center", alignItems: "center", gap: 12, flexWrap: "wrap", boxShadow: "0 -4px 24px rgba(0,0,0,0.07)" }}>
-          <p style={{ fontSize: 13, color: "#555", margin: 0, fontWeight: 500, textAlign: "center" }}>Join Filipinos teaching and learning on SkillCredit</p>
-          <a href="/signup" style={{ background: "#2d6a4f", color: "#fff", padding: "10px 22px", borderRadius: 12, fontWeight: 800, fontSize: 13, textDecoration: "none", whiteSpace: "nowrap" }}>Get started free →</a>
-        </div>
-        <div style={{ height: 70 }} />
+      </nav>
+      <div style={{ background:"linear-gradient(90deg,#2d6a4f,#1a4a35)", color:"#fff", textAlign:"center", padding:"10px 16px", fontSize:13, fontWeight:600 }}>
+        🎁 Sign up and get <strong>20 free credits</strong>!
+        <a href="/signup" style={{ color:"#b7e4c7", marginLeft:8, textDecoration:"underline", fontWeight:800 }}>Create account →</a>
       </div>
-    );
-  }
+      <div style={{ maxWidth:1160, margin:"0 auto", padding:"32px 16px" }}>
+        <div style={{ marginBottom:24 }}>
+          <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:22, fontWeight:900, color:"#1a1a1a" }}>What's happening on SkillCredit ✨</h2>
+          <p style={{ fontSize:13, color:"#999", marginTop:4 }}>Browse listings, bounties, and community posts — sign up to participate</p>
+        </div>
+        <div className="guest-cards" style={{ columns:"260px 4", gap:16 }}>
+          {mockCards.map((card, i) => <MiniCard key={i} card={card} onClick={() => setShowModal(true)} />)}
+        </div>
+      </div>
+      <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#fff", borderTop:"1.5px solid #e8e2d9", padding:"12px 20px", display:"flex", justifyContent:"center", alignItems:"center", gap:12, flexWrap:"wrap", boxShadow:"0 -4px 24px rgba(0,0,0,0.07)" }}>
+        <p style={{ fontSize:13, color:"#444", margin:0, fontWeight:500 }}>Join Filipinos teaching and learning on SkillCredit</p>
+        <a href="/signup" style={{ background:"#2d6a4f", color:"#fff", padding:"10px 22px", borderRadius:12, fontWeight:800, fontSize:13, textDecoration:"none" }}>Get started free →</a>
+      </div>
+      <div style={{ height:70 }} />
+    </div>
+  );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#faf8f4", fontFamily: "'DM Sans', sans-serif", overflowX: "hidden" }}>
+    <div style={{ minHeight:"100vh", background:"#faf8f4", fontFamily:"'DM Sans',sans-serif", overflowX:"hidden" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,700;0,800;0,900;1,800&family=DM+Sans:wght@400;500;600;700&display=swap');
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        a { text-decoration: none; }
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        a{text-decoration:none}
 
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
-        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes shimmer { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+        @keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:none}}
 
-        .hero-tag { animation: fadeUp 0.6s ease both; }
-        .hero-h1 { animation: fadeUp 0.6s 0.1s ease both; }
-        .hero-p { animation: fadeUp 0.6s 0.2s ease both; }
-        .hero-btns { animation: fadeUp 0.6s 0.3s ease both; }
-        .hero-stats { animation: fadeUp 0.6s 0.4s ease both; }
-        .preview-col { animation: fadeUp 0.7s 0.2s ease both; }
+        .reveal{opacity:0;transform:translateY(36px);transition:opacity .7s ease,transform .7s ease}
+        .reveal.visible{opacity:1;transform:none}
 
-        .cta-btn { transition: transform 0.2s, box-shadow 0.2s; }
-        .cta-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(45,106,79,0.35) !important; }
-        .ghost-btn { transition: all 0.2s; }
-        .ghost-btn:hover { background: #ede8de !important; }
-        .feature-card { transition: transform 0.2s, box-shadow 0.2s; }
-        .feature-card:hover { transform: translateY(-4px); box-shadow: 0 12px 36px rgba(0,0,0,0.09) !important; }
-        .nav-link { transition: color 0.15s, background 0.15s; }
-        .nav-link:hover { color: #2d6a4f !important; background: #f0f8f0 !important; }
-        .stat-card { transition: transform 0.2s; }
-        .stat-card:hover { transform: translateY(-2px); }
-        .stat-loading { animation: shimmer 1.5s ease infinite; }
+        .hero-tag{animation:fadeUp .5s ease both}
+        .hero-h1{animation:fadeUp .5s .08s ease both}
+        .hero-p{animation:fadeUp .5s .16s ease both}
+        .hero-btns{animation:fadeUp .5s .24s ease both}
+        .hero-proof{animation:fadeUp .5s .32s ease both}
+        .preview-col{animation:fadeUp .6s .18s ease both}
 
-        .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
-        .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-        .steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-        .community-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
-        .stats-row { display: flex; gap: 28px; flex-wrap: wrap; }
-        .nav-links { display: flex; gap: 4px; }
-        .nav-right { display: flex; gap: 8px; align-items: center; }
-        .preview-col-wrap { display: block; }
-        .footer-inner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+        .cta-btn{transition:transform .2s,box-shadow .2s}
+        .cta-btn:hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(45,106,79,0.4)!important}
+        .ghost-btn{transition:all .2s}
+        .ghost-btn:hover{background:#e8e2d8!important}
+        .feature-card{transition:transform .2s,box-shadow .2s}
+        .feature-card:hover{transform:translateY(-5px);box-shadow:0 14px 40px rgba(0,0,0,0.1)!important}
+        .nav-link{transition:color .15s,background .15s}
+        .nav-link:hover{color:#2d6a4f!important;background:#eef6ee!important}
+        .topic-pill{transition:all .2s}
+        .topic-pill:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.08)}
+        .teacher-chip{transition:transform .18s,box-shadow .18s}
+        .teacher-chip:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.08)!important}
 
-        @media (max-width: 768px) {
-          .hero-grid { grid-template-columns: 1fr; gap: 40px; }
-          .features-grid { grid-template-columns: 1fr 1fr; }
-          .steps-grid { grid-template-columns: 1fr; gap: 14px; }
-          .community-grid { grid-template-columns: 1fr; gap: 32px; }
-          .nav-links { display: none; }
-          .nav-right .browse-btn { display: none; }
-          .preview-col-wrap { display: none; }
-          .hero-section { padding: 48px 20px 40px !important; }
-          .section-pad { padding: 56px 20px !important; }
-          .footer-inner { flex-direction: column; text-align: center; gap: 12px; }
-          .footer-links { justify-content: center; }
+        .hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+        .features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+        .steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+        .community-grid{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+        .problem-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:24px;align-items:center;max-width:700px;margin:0 auto}
+        .nav-links{display:flex;gap:4px}
+        .footer-inner{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px}
+
+        @media(max-width:768px){
+          .hero-grid{grid-template-columns:1fr;gap:36px}
+          .features-grid{grid-template-columns:1fr 1fr}
+          .steps-grid{grid-template-columns:1fr;gap:14px}
+          .community-grid{grid-template-columns:1fr;gap:32px}
+          .problem-grid{grid-template-columns:1fr;gap:16px}
+          .nav-links{display:none}
+          .browse-btn{display:none}
+          .preview-col{display:none}
+          .section-pad{padding:60px 20px!important}
+          .footer-inner{flex-direction:column;text-align:center}
         }
-
-        @media (max-width: 480px) {
-          .features-grid { grid-template-columns: 1fr; }
-          .hero-h1-text { font-size: 40px !important; }
-          .hero-btns-wrap { flex-direction: column; }
-          .hero-btns-wrap a, .hero-btns-wrap button { width: 100%; text-align: center; justify-content: center; }
+        @media(max-width:480px){
+          .features-grid{grid-template-columns:1fr}
+          .hero-h1-text{font-size:40px!important}
+          .hero-btns-wrap{flex-direction:column}
+          .hero-btns-wrap a,.hero-btns-wrap button{width:100%;text-align:center;justify-content:center}
         }
-
-        @media (min-width: 769px) and (max-width: 1024px) {
-          .hero-grid { gap: 32px; }
-          .hero-h1-text { font-size: 44px !important; }
+        @media(min-width:769px)and(max-width:1024px){
+          .hero-grid{gap:32px}
+          .hero-h1-text{font-size:46px!important}
         }
       `}</style>
 
       {/* ── NAVBAR ── */}
-      <nav style={{
-        position: "sticky", top: 0, zIndex: 200,
-        background: scrolled ? "rgba(250,248,244,0.97)" : "transparent",
-        backdropFilter: scrolled ? "blur(16px)" : "none",
-        borderBottom: scrolled ? "1.5px solid #e8e2d9" : "1.5px solid transparent",
-        padding: "0 24px", height: 64,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        transition: "all 0.3s ease",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
+      <nav style={{ position:"sticky", top:0, zIndex:200, background: scrolled ? "rgba(250,248,244,0.97)" : "transparent", backdropFilter: scrolled ? "blur(16px)" : "none", borderBottom: scrolled ? "1.5px solid #e8e2d9" : "1.5px solid transparent", padding:"0 32px", height:60, display:"flex", alignItems:"center", justifyContent:"space-between", transition:"all .3s ease" }}>
+        <div style={{ display:"flex", alignItems:"center" }}>
+          <span style={{ fontFamily:"'Fraunces',serif", fontSize:22, fontWeight:900, color:"#2d6a4f" }}>Skill</span>
+          <span style={{ fontFamily:"'Fraunces',serif", fontSize:22, fontWeight:900, color:"#111" }}>Credit</span>
         </div>
-
         <div className="nav-links">
-          {["How it works", "Features", "Community"].map(label => (
-            <a key={label} href={`#${label.toLowerCase().replace(/ /g, "-")}`} className="nav-link"
-              style={{ padding: "7px 14px", borderRadius: 8, color: "#666", fontSize: 13, fontWeight: 600 }}>
-              {label}
-            </a>
+          {["How it works","Features","Community"].map(label => (
+            <a key={label} href={`#${label.toLowerCase().replace(/ /g,"-")}`} className="nav-link"
+              style={{ padding:"7px 14px", borderRadius:8, color:"#555", fontSize:13, fontWeight:600 }}>{label}</a>
           ))}
         </div>
-
-        <div className="nav-right">
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           <button onClick={() => setGuestMode(true)} className="ghost-btn browse-btn"
-            style={{ padding: "8px 16px", borderRadius: 10, background: "#f5f0e8", color: "#666", fontWeight: 600, fontSize: 13, border: "none", cursor: "pointer" }}>
+            style={{ padding:"8px 16px", borderRadius:10, background:"#f0ece4", color:"#555", fontWeight:600, fontSize:13, border:"none", cursor:"pointer" }}>
             Browse first
           </button>
-          <a href="/login" style={{ padding: "8px 16px", borderRadius: 10, border: "1.5px solid #d4cfc6", color: "#555", fontWeight: 600, fontSize: 13 }}>Log in</a>
-          <a href="/signup" className="cta-btn"
-            style={{ padding: "8px 18px", borderRadius: 10, background: "#2d6a4f", color: "#fff", fontWeight: 800, fontSize: 13, boxShadow: "0 4px 14px rgba(45,106,79,0.25)" }}>
-            Sign up free
-          </a>
+          <a href="/login"  style={{ padding:"8px 16px", borderRadius:10, border:"1.5px solid #ccc", color:"#444", fontWeight:600, fontSize:13 }}>Log in</a>
+          <a href="/signup" className="cta-btn" style={{ padding:"8px 18px", borderRadius:10, background:"#2d6a4f", color:"#fff", fontWeight:800, fontSize:13, boxShadow:"0 4px 14px rgba(45,106,79,0.28)" }}>Sign up free</a>
         </div>
       </nav>
 
-      {/* ── HERO ── */}
-      <section className="hero-section" style={{ maxWidth: 1200, margin: "0 auto", padding: "72px 48px 60px" }}>
-        <div className="hero-grid">
-          {/* Left */}
-          <div>
-            <div className="hero-tag" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#e8f4e8", border: "1.5px solid #b7e4c7", padding: "6px 16px", borderRadius: 999, marginBottom: 28 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2d6a4f", animation: "pulse 2s infinite", display: "inline-block" }} />
-              <span style={{ fontSize: 12, color: "#2d6a4f", fontWeight: 700 }}>🌱 Free to join — 20 credits on signup</span>
-            </div>
+      {/* ── HERO — full viewport ── */}
+      <section style={{ minHeight:"calc(100vh - 60px)", display:"flex", alignItems:"center", width:"100%" }}>
+        <div style={{ maxWidth:1200, margin:"0 auto", padding:"0 48px", width:"100%" }}>
+          <div className="hero-grid">
 
-            <h1 className="hero-h1">
-              <span className="hero-h1-text" style={{ fontFamily: "'Fraunces', serif", fontSize: 56, fontWeight: 900, color: "#1a1a1a", lineHeight: 1.08, display: "block", marginBottom: 24, letterSpacing: "-0.02em" }}>
-                Share skills.<br />
-                <em style={{ color: "#2d6a4f", fontStyle: "italic" }}>Earn credits.</em><br />
-                Keep learning.
-              </span>
-            </h1>
-
-            <p className="hero-p" style={{ fontSize: 17, color: "#666", lineHeight: 1.75, marginBottom: 36, maxWidth: 460 }}>
-              A community where Filipinos teach what they know and learn what they don't — powered by a fair credit economy. No cash needed to start.
-            </p>
-
-            <div className="hero-btns">
-              <div className="hero-btns-wrap" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 44 }}>
-                <a href="/signup" className="cta-btn"
-                  style={{ background: "#2d6a4f", color: "#fff", padding: "16px 32px", borderRadius: 14, fontWeight: 800, fontSize: 16, boxShadow: "0 6px 24px rgba(45,106,79,0.28)", display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  Start free — get 20 credits 🎁
-                </a>
-                <button onClick={() => setGuestMode(true)} className="ghost-btn"
-                  style={{ background: "#f5f0e8", color: "#555", padding: "16px 28px", borderRadius: 14, fontWeight: 700, fontSize: 16, border: "none", cursor: "pointer" }}>
-                  👀 Browse first
-                </button>
+            {/* Left */}
+            <div>
+              {/* Early access badge */}
+              <div className="hero-tag" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#e8f4e8", border:"1.5px solid #b7e4c7", padding:"6px 16px", borderRadius:999, marginBottom:24 }}>
+                <span style={{ width:8, height:8, borderRadius:"50%", background:"#2d6a4f", animation:"pulse 2s infinite", display:"inline-block" }} />
+                <span style={{ fontSize:12, color:"#2d6a4f", fontWeight:700 }}>🚀 Early Access — Join the first learners</span>
               </div>
-            </div>
 
-            {/* ── LIVE STATS ── */}
-            <div className="hero-stats stats-row">
-              {stats.map((s, i) => (
-                <div key={i} className="stat-card">
-                  <p style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 900, color: "#2d6a4f", lineHeight: 1 }}>
-                    {s.display ? (
-                      s.display
-                    ) : !liveStats.loaded ? (
-                      <span className="stat-loading" style={{ display: "inline-block", width: 48, height: 24, background: "#e8f4e8", borderRadius: 6 }} />
-                    ) : (
-                      <StatNumber value={s.value} suffix={s.suffix} />
-                    )}
-                  </p>
-                  <p style={{ fontSize: 12, color: "#aaa", fontWeight: 600, marginTop: 3 }}>{s.label}</p>
-                  {/* ✅ live indicator for real stats */}
-                  {!s.display && liveStats.loaded && s.value > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-                      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2d6a4f", animation: "pulse 2s infinite", display: "inline-block" }} />
-                      <span style={{ fontSize: 9, color: "#aaa", fontWeight: 600 }}>live</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+              {/* Bigger headline */}
+              <h1 className="hero-h1">
+                <span className="hero-h1-text" style={{ fontFamily:"'Fraunces',serif", fontSize:62, fontWeight:900, color:"#111", lineHeight:1.05, display:"block", marginBottom:20, letterSpacing:"-0.02em" }}>
+                  Share skills.<br />
+                  <em style={{ color:"#2d6a4f", fontStyle:"italic" }}>Earn credits.</em><br />
+                  Keep learning.
+                </span>
+              </h1>
 
-          {/* Right — preview */}
-          <div className="preview-col preview-col-wrap" style={{ position: "relative" }}>
-            <div style={{ position: "absolute", top: "10%", left: "10%", width: "80%", height: "80%", background: "radial-gradient(ellipse, rgba(45,106,79,0.12) 0%, transparent 70%)", pointerEvents: "none", borderRadius: "50%" }} />
-            <div style={{ position: "relative", borderRadius: 24, overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.14), 0 0 0 1.5px #e8e2d9", background: "#fff" }}>
-              <div style={{ background: "#f5f0e8", padding: "12px 16px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1.5px solid #e8e2d9" }}>
-                <div style={{ display: "flex", gap: 5 }}>
-                  {["#fc605b", "#fdbc40", "#34c84a"].map(c => <div key={c} style={{ width: 11, height: 11, borderRadius: "50%", background: c }} />)}
+              {/* Clearer subtext */}
+              <p className="hero-p" style={{ fontSize:17, color:"#555", lineHeight:1.75, marginBottom:32, maxWidth:460 }}>
+                Learn any skill by spending credits — or <strong style={{ color:"#2d6a4f" }}>earn credits by teaching what you know</strong>. No cash needed. Ever.
+              </p>
+
+              {/* CTA with urgency */}
+              <div className="hero-btns">
+                <div className="hero-btns-wrap" style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:12 }}>
+                  <a href="/signup" className="cta-btn"
+                    style={{ background:"#2d6a4f", color:"#fff", padding:"16px 32px", borderRadius:14, fontWeight:800, fontSize:16, boxShadow:"0 6px 24px rgba(45,106,79,0.3)", display:"inline-flex", alignItems:"center", gap:8 }}>
+                    🎁 Get 20 free credits — join now
+                  </a>
+                  <button onClick={() => setGuestMode(true)} className="ghost-btn"
+                    style={{ background:"#f0ece4", color:"#444", padding:"16px 26px", borderRadius:14, fontWeight:700, fontSize:16, border:"none", cursor:"pointer" }}>
+                    👀 Browse first
+                  </button>
                 </div>
-                <div style={{ flex: 1, background: "#fff", borderRadius: 6, padding: "4px 12px", fontSize: 11, color: "#aaa", fontWeight: 600 }}>skillcredit.ph</div>
+                <p style={{ fontSize:12, color:"#aaa", marginBottom:28 }}>No credit card required · Free forever to start</p>
               </div>
-              <div style={{ padding: "16px", maxHeight: 460, overflowY: "hidden", maskImage: "linear-gradient(to bottom, black 65%, transparent 100%)" }}>
-                <div style={{ columns: "2", gap: 10 }}>
-                  {mockCards.slice(0, 8).map((card, i) => (
-                    <div key={i} style={{ background: card.color, borderRadius: 14, padding: "14px", marginBottom: 10, breakInside: "avoid", border: "1px solid rgba(0,0,0,0.05)", animation: `fadeUp 0.5s ${i * 0.07}s ease both` }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6 }}>
-                        <span style={{ fontSize: 12 }}>{card.tag}</span>
-                        <span style={{ fontSize: 9, fontWeight: 800, color: card.accent, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                          {card.type === "listing" ? "Skill" : card.type === "bounty" ? "Bounty" : card.type === "achievement" ? "Win" : "Forum"}
-                        </span>
-                      </div>
-                      <p style={{ fontFamily: "'Fraunces', serif", fontSize: 12, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.3, marginBottom: 4 }}>{card.title}</p>
-                      {card.type === "listing" && <p style={{ fontSize: 10, color: "#999" }}>{card.teacher} · <strong style={{ color: card.accent }}>{card.credits} cr</strong></p>}
-                      {card.type === "bounty" && <p style={{ fontSize: 10, color: "#999" }}>🏆 <strong style={{ color: card.accent }}>{card.credits} cr</strong> · {card.deadline}</p>}
-                      {card.type === "community" && <p style={{ fontSize: 10, color: "#999" }}>▲ {card.upvotes} · 💬 {card.answers}</p>}
-                      {card.type === "achievement" && <p style={{ fontSize: 10, color: "#999" }}>{card.sub}</p>}
+
+              {/* Honest early access social proof */}
+              <div className="hero-proof" style={{ display:"flex", alignItems:"center", gap:12, background:"#fff", border:"1.5px solid #e8e2d9", borderRadius:16, padding:"14px 18px", boxShadow:"0 2px 12px rgba(0,0,0,0.04)", maxWidth:420 }}>
+                <div style={{ display:"flex", marginRight:4 }}>
+                  {["#2d6a4f","#b45309","#9d174d","#3730a3","#166534"].map((c, i) => (
+                    <div key={i} style={{ width:28, height:28, borderRadius:"50%", background:c, border:"2px solid #fff", marginLeft: i === 0 ? 0 : -8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, color:"#fff", fontWeight:900 }}>
+                      {["M","S","R","J","L"][i]}
                     </div>
                   ))}
+                </div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:800, color:"#111", lineHeight:1.2 }}>Be among the first learners</div>
+                  <div style={{ fontSize:11, color:"#999", marginTop:2 }}>Early access is open — grab your 20 free credits now 🎁</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right — preview */}
+            <div className="preview-col" style={{ position:"relative" }}>
+              <div style={{ position:"absolute", top:"10%", left:"10%", width:"80%", height:"80%", background:"radial-gradient(ellipse,rgba(45,106,79,0.1) 0%,transparent 70%)", pointerEvents:"none", borderRadius:"50%" }} />
+              <div style={{ position:"relative", borderRadius:24, overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.14),0 0 0 1.5px #e8e2d9", background:"#fff" }}>
+                <div style={{ background:"#f5f0e8", padding:"10px 16px", display:"flex", alignItems:"center", gap:8, borderBottom:"1.5px solid #e8e2d9" }}>
+                  <div style={{ display:"flex", gap:5 }}>
+                    {["#fc605b","#fdbc40","#34c84a"].map(c => <div key={c} style={{ width:11, height:11, borderRadius:"50%", background:c }} />)}
+                  </div>
+                  <div style={{ flex:1, background:"#fff", borderRadius:6, padding:"4px 12px", fontSize:11, color:"#aaa", fontWeight:600 }}>skillcredit.ph</div>
+                </div>
+                <div style={{ padding:14, maxHeight:440, overflowY:"hidden", maskImage:"linear-gradient(to bottom, black 60%, transparent 100%)" }}>
+                  <div style={{ columns:2, gap:10 }}>
+                    {mockCards.map((card, i) => (
+                      <div key={i} style={{ background:card.color, borderRadius:13, padding:13, marginBottom:10, breakInside:"avoid", border:"1px solid rgba(0,0,0,0.05)", animation:`fadeUp .5s ${i*.07}s ease both`, transition:"transform .2s,box-shadow .2s" }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.08)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:5 }}>
+                          <span style={{ fontSize:11 }}>{card.tag}</span>
+                          <span style={{ fontSize:9, fontWeight:800, color:card.accent, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                            {card.type === "listing" ? "Skill" : card.type === "bounty" ? "Bounty" : card.type === "achievement" ? "Win" : "Forum"}
+                          </span>
+                        </div>
+                        <p style={{ fontFamily:"'Fraunces',serif", fontSize:11, fontWeight:800, color:"#111", lineHeight:1.3, marginBottom:4 }}>{card.title}</p>
+                        {card.type === "listing"     && "teacher" in card && <p style={{ fontSize:10, color:"#888" }}>{(card as any).teacher} · <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong></p>}
+                        {card.type === "bounty"      && "credits" in card && <p style={{ fontSize:10, color:"#888" }}>🏆 <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong> · {(card as any).deadline}</p>}
+                        {card.type === "community"   && "upvotes" in card && <p style={{ fontSize:10, color:"#888" }}>▲ {(card as any).upvotes} · 💬 {(card as any).answers}</p>}
+                        {card.type === "achievement" && "sub" in card     && <p style={{ fontSize:10, color:"#888" }}>{(card as any).sub}</p>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -372,25 +318,73 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── WHY THIS EXISTS ── */}
+      <section className="section-pad reveal" style={{ background:"#111", padding:"80px 48px" }}>
+        <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" }}>
+          <span style={{ fontSize:12, fontWeight:800, color:"#52b788", letterSpacing:"0.12em", textTransform:"uppercase" }}>The Problem</span>
+          <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:40, fontWeight:900, color:"#fff", marginTop:10, marginBottom:16, letterSpacing:"-0.02em", lineHeight:1.15 }}>
+            Learning is expensive.<br />
+            <em style={{ color:"#52b788", fontStyle:"italic" }}>But everyone knows something valuable.</em>
+          </h2>
+          <p style={{ fontSize:16, color:"rgba(255,255,255,0.5)", lineHeight:1.8, maxWidth:600, margin:"0 auto 48px" }}>
+            Courses cost thousands. Tutors are hard to find. Most skills stay locked inside people who never get to share them.
+          </p>
+          <div className="problem-grid">
+            <div style={{ background:"rgba(255,255,255,0.06)", borderRadius:20, padding:"28px 24px", border:"1px solid rgba(255,255,255,0.08)" }}>
+              <div style={{ fontSize:32, marginBottom:12 }}>😩</div>
+              <h3 style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:900, color:"#fff", marginBottom:8 }}>Before SkillCredit</h3>
+              <p style={{ fontSize:13, color:"rgba(255,255,255,0.4)", lineHeight:1.7 }}>Pay ₱500/hr for tutors. Watch YouTube and hope. Can't afford online courses.</p>
+            </div>
+            <div style={{ fontSize:28, color:"#52b788", fontWeight:900 }}>→</div>
+            <div style={{ background:"rgba(82,183,136,0.1)", borderRadius:20, padding:"28px 24px", border:"1.5px solid rgba(82,183,136,0.25)" }}>
+              <div style={{ fontSize:32, marginBottom:12 }}>🌱</div>
+              <h3 style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:900, color:"#52b788", marginBottom:8 }}>With SkillCredit</h3>
+              <p style={{ fontSize:13, color:"rgba(255,255,255,0.55)", lineHeight:1.7 }}>Teach guitar, earn credits. Spend them to learn Python. No cash needed.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── WHAT CAN YOU LEARN ── */}
+      <section className="section-pad reveal" style={{ background:"#faf8f4", padding:"72px 48px" }}>
+        <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" }}>
+          <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" }}>What can you learn?</span>
+          <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:36, fontWeight:900, color:"#111", marginTop:10, marginBottom:8, letterSpacing:"-0.02em" }}>
+            Anything the community knows
+          </h2>
+          <p style={{ fontSize:15, color:"#666", marginBottom:36 }}>If someone knows it, you can learn it — with credits, not cash.</p>
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap", justifyContent:"center" }}>
+            {learnTopics.map((t, i) => (
+              <div key={i} className="topic-pill" style={{ display:"flex", alignItems:"center", gap:8, background:"#fff", border:"1.5px solid #e8e2d9", borderRadius:999, padding:"10px 20px", fontSize:14, fontWeight:700, color:"#333", boxShadow:"0 2px 8px rgba(0,0,0,0.04)", cursor:"default" }}>
+                <span style={{ fontSize:18 }}>{t.emoji}</span> {t.label}
+              </div>
+            ))}
+            <div style={{ display:"flex", alignItems:"center", gap:8, background:"#e8f4e8", border:"1.5px solid #b7e4c7", borderRadius:999, padding:"10px 20px", fontSize:14, fontWeight:700, color:"#2d6a4f" }}>
+              + much more
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── HOW IT WORKS ── */}
-      <section id="how-it-works" className="section-pad" style={{ background: "#fff", padding: "80px 48px" }}>
-        <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: "#2d6a4f", letterSpacing: "0.12em", textTransform: "uppercase" }}>How it works</span>
-            <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 40, fontWeight: 900, color: "#1a1a1a", marginTop: 10, letterSpacing: "-0.02em" }}>Simple. Fair. Powerful.</h2>
+      <section id="how-it-works" className="section-pad reveal" style={{ background:"#fff", padding:"80px 48px" }}>
+        <div style={{ maxWidth:1000, margin:"0 auto" }}>
+          <div style={{ textAlign:"center", marginBottom:52 }}>
+            <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" }}>How it works</span>
+            <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:40, fontWeight:900, color:"#111", marginTop:10, letterSpacing:"-0.02em" }}>Simple. Fair. Powerful.</h2>
           </div>
           <div className="steps-grid">
             {[
-              { icon: "🌱", num: "01", title: "Sign up & get 20 credits", desc: "Create your profile, list skills you can teach and skills you want to learn. 20 free credits land in your wallet instantly." },
-              { icon: "📚", num: "02", title: "Book sessions or post bounties", desc: "Find a teacher and book a 1-on-1 session, or post a task bounty and let the community race to help you." },
-              { icon: "⭐", num: "03", title: "Teach, earn, grow", desc: "Every session you teach earns credits. Every bounty you solve earns credits. Spend them to keep learning — forever." },
+              { icon:"🌱", num:"01", title:"Sign up & get 20 credits",       desc:"Create your profile, list skills you can teach and skills you want to learn. 20 free credits land in your wallet instantly." },
+              { icon:"📚", num:"02", title:"Book sessions or post bounties",  desc:"Find a teacher and book a 1-on-1 session, or post a task bounty and let the community race to help you." },
+              { icon:"⭐", num:"03", title:"Teach, earn, grow",               desc:"Every session you teach earns credits. Every bounty you solve earns credits. Spend them to keep learning — forever." },
             ].map(item => (
-              <div key={item.num} style={{ background: "#faf8f4", borderRadius: 20, padding: "32px 28px", border: "1.5px solid #e8e2d9", position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", top: -16, right: -16, width: 80, height: 80, borderRadius: "50%", background: "#e8f4e8", opacity: 0.6 }} />
-                <span style={{ fontSize: 36, display: "block", marginBottom: 16 }}>{item.icon}</span>
-                <span style={{ fontSize: 11, fontWeight: 900, color: "#2d6a4f", letterSpacing: "0.1em" }}>STEP {item.num}</span>
-                <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 900, color: "#1a1a1a", margin: "10px 0 12px" }}>{item.title}</h3>
-                <p style={{ fontSize: 14, color: "#777", lineHeight: 1.7 }}>{item.desc}</p>
+              <div key={item.num} style={{ background:"#faf8f4", borderRadius:20, padding:"32px 28px", border:"1.5px solid #e8e2d9", position:"relative", overflow:"hidden" }}>
+                <div style={{ position:"absolute", top:-16, right:-16, width:80, height:80, borderRadius:"50%", background:"#e8f4e8", opacity:0.7 }} />
+                <span style={{ fontSize:36, display:"block", marginBottom:14 }}>{item.icon}</span>
+                <span style={{ fontSize:11, fontWeight:900, color:"#2d6a4f", letterSpacing:"0.1em" }}>STEP {item.num}</span>
+                <h3 style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:900, color:"#111", margin:"8px 0 10px" }}>{item.title}</h3>
+                <p style={{ fontSize:14, color:"#666", lineHeight:1.7 }}>{item.desc}</p>
               </div>
             ))}
           </div>
@@ -398,18 +392,18 @@ export default function LandingPage() {
       </section>
 
       {/* ── FEATURES ── */}
-      <section id="features" className="section-pad" style={{ padding: "80px 48px", background: "#faf8f4" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 52 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: "#2d6a4f", letterSpacing: "0.12em", textTransform: "uppercase" }}>Features</span>
-            <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 40, fontWeight: 900, color: "#1a1a1a", marginTop: 10, letterSpacing: "-0.02em" }}>Everything you need to learn and earn</h2>
+      <section id="features" className="section-pad reveal" style={{ padding:"80px 48px", background:"#faf8f4" }}>
+        <div style={{ maxWidth:1100, margin:"0 auto" }}>
+          <div style={{ textAlign:"center", marginBottom:48 }}>
+            <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" }}>Features</span>
+            <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:40, fontWeight:900, color:"#111", marginTop:10, letterSpacing:"-0.02em" }}>Everything you need to learn and earn</h2>
           </div>
           <div className="features-grid">
             {features.map((f, i) => (
-              <div key={i} className="feature-card" style={{ background: "#fff", borderRadius: 18, padding: "28px", border: "1.5px solid #e8e2d9", boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}>
-                <div style={{ width: 48, height: 48, borderRadius: 14, background: "#e8f4e8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, marginBottom: 16 }}>{f.icon}</div>
-                <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 900, color: "#1a1a1a", marginBottom: 8 }}>{f.title}</h3>
-                <p style={{ fontSize: 13, color: "#777", lineHeight: 1.7 }}>{f.desc}</p>
+              <div key={i} className="feature-card" style={{ background:"#fff", borderRadius:18, padding:"28px", border:"1.5px solid #e8e2d9", boxShadow:"0 2px 10px rgba(0,0,0,0.04)" }}>
+                <div style={{ width:48, height:48, borderRadius:14, background:"#e8f4e8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, marginBottom:14 }}>{f.icon}</div>
+                <h3 style={{ fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:900, color:"#111", marginBottom:8 }}>{f.title}</h3>
+                <p style={{ fontSize:13, color:"#666", lineHeight:1.7 }}>{f.desc}</p>
               </div>
             ))}
           </div>
@@ -417,45 +411,47 @@ export default function LandingPage() {
       </section>
 
       {/* ── COMMUNITY ── */}
-      <section id="community" className="section-pad" style={{ background: "#fff", padding: "80px 48px" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+      <section id="community" className="section-pad reveal" style={{ background:"#fff", padding:"80px 48px" }}>
+        <div style={{ maxWidth:1100, margin:"0 auto" }}>
           <div className="community-grid">
             <div>
-              <span style={{ fontSize: 12, fontWeight: 800, color: "#2d6a4f", letterSpacing: "0.12em", textTransform: "uppercase" }}>Community</span>
-              <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 38, fontWeight: 900, color: "#1a1a1a", margin: "12px 0 18px", lineHeight: 1.15 }}>A living, breathing knowledge community</h2>
-              <p style={{ fontSize: 15, color: "#666", lineHeight: 1.75, marginBottom: 28 }}>
+              <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" }}>Community</span>
+              <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:38, fontWeight:900, color:"#111", margin:"12px 0 16px", lineHeight:1.15 }}>A living, breathing knowledge community</h2>
+              <p style={{ fontSize:15, color:"#555", lineHeight:1.75, marginBottom:24 }}>
                 Ask questions in the forum, answer bounties, join skill groups, and watch your reputation grow. Every contribution earns you credits and XP.
               </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 32 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:28 }}>
                 {[
-                  { icon: "💬", text: "Forum Q&A — ask anything, earn by answering" },
-                  { icon: "🎯", text: "Bounty tasks — post problems with credit rewards" },
-                  { icon: "👥", text: "Skill groups — find your learning community" },
-                  { icon: "🏆", text: "Leaderboard — compete to be the top contributor" },
+                  { icon:"💬", text:"Forum Q&A — ask anything, earn by answering"     },
+                  { icon:"🎯", text:"Bounty tasks — post problems with credit rewards" },
+                  { icon:"👥", text:"Skill groups — find your learning community"      },
+                  { icon:"🏆", text:"Leaderboard — compete to be the top contributor"  },
                 ].map(item => (
-                  <div key={item.text} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ width: 36, height: 36, borderRadius: 10, background: "#e8f4e8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
-                    <span style={{ fontSize: 14, color: "#444", fontWeight: 500 }}>{item.text}</span>
+                  <div key={item.text} style={{ display:"flex", alignItems:"center", gap:12 }}>
+                    <span style={{ width:36, height:36, borderRadius:10, background:"#e8f4e8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{item.icon}</span>
+                    <span style={{ fontSize:14, color:"#333", fontWeight:500 }}>{item.text}</span>
                   </div>
                 ))}
               </div>
-              <a href="/signup" className="cta-btn" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#2d6a4f", color: "#fff", padding: "13px 26px", borderRadius: 12, fontWeight: 800, fontSize: 14, boxShadow: "0 4px 16px rgba(45,106,79,0.25)" }}>
+              <a href="/signup" className="cta-btn" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#2d6a4f", color:"#fff", padding:"13px 26px", borderRadius:12, fontWeight:800, fontSize:14, boxShadow:"0 4px 16px rgba(45,106,79,0.25)" }}>
                 Join the community →
               </a>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {mockCards.filter(c => c.type === "community" || c.type === "achievement" || c.type === "bounty").slice(0, 5).map((card, i) => (
-                <div key={i} style={{ background: card.color, borderRadius: 16, padding: "16px 18px", border: "1px solid rgba(0,0,0,0.05)", animation: `slideIn 0.4s ${i * 0.1}s ease both` }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                    <span style={{ fontSize: 14 }}>{card.tag}</span>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: card.accent, textTransform: "uppercase" }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {mockCards.filter(c => c.type === "community" || c.type === "achievement" || c.type === "bounty").slice(0,5).map((card, i) => (
+                <div key={i} style={{ background:card.color, borderRadius:16, padding:"16px 18px", border:"1px solid rgba(0,0,0,0.05)", transition:"transform .2s" }}
+                  onMouseEnter={e => e.currentTarget.style.transform = "translateX(4px)"}
+                  onMouseLeave={e => e.currentTarget.style.transform = "none"}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+                    <span style={{ fontSize:14 }}>{card.tag}</span>
+                    <span style={{ fontSize:10, fontWeight:800, color:card.accent, textTransform:"uppercase" }}>
                       {card.type === "bounty" ? "Bounty" : card.type === "achievement" ? "Achievement" : "Forum"}
                     </span>
                   </div>
-                  <p style={{ fontFamily: "'Fraunces', serif", fontSize: 14, fontWeight: 800, color: "#1a1a1a", marginBottom: 4, lineHeight: 1.3 }}>{card.title}</p>
-                  {card.type === "bounty" && <p style={{ fontSize: 12, color: "#888" }}>🏆 {card.credits} credits · {card.deadline} · {card.answers} answers</p>}
-                  {card.type === "achievement" && <p style={{ fontSize: 12, color: "#888" }}>{card.sub}</p>}
-                  {card.type === "community" && <p style={{ fontSize: 12, color: "#888" }}>▲ {card.upvotes} upvotes · 💬 {card.answers} answers</p>}
+                  <p style={{ fontFamily:"'Fraunces',serif", fontSize:14, fontWeight:800, color:"#111", marginBottom:4, lineHeight:1.3 }}>{card.title}</p>
+                  {card.type === "bounty"      && "credits" in card && <p style={{ fontSize:12, color:"#777" }}>🏆 {(card as any).credits} credits · {(card as any).deadline} · {(card as any).answers} answers</p>}
+                  {card.type === "achievement" && "sub" in card     && <p style={{ fontSize:12, color:"#777" }}>{(card as any).sub}</p>}
+                  {card.type === "community"   && "upvotes" in card && <p style={{ fontSize:12, color:"#777" }}>▲ {(card as any).upvotes} upvotes · 💬 {(card as any).answers} answers</p>}
                 </div>
               ))}
             </div>
@@ -464,55 +460,56 @@ export default function LandingPage() {
       </section>
 
       {/* ── FINAL CTA ── */}
-      <section className="section-pad" style={{ background: "linear-gradient(135deg, #1a3d2e 0%, #2d6a4f 50%, #1a4a35 100%)", padding: "96px 48px", textAlign: "center", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: -60, left: "10%", width: 300, height: 300, borderRadius: "50%", background: "rgba(255,255,255,0.04)" }} />
-        <div style={{ position: "absolute", bottom: -80, right: "15%", width: 400, height: 400, borderRadius: "50%", background: "rgba(255,255,255,0.03)" }} />
-        <div style={{ position: "relative" }}>
-          <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 48, fontWeight: 900, color: "#fff", marginBottom: 16, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
-            Ready to start your<br /><em style={{ fontStyle: "italic", color: "#b7e4c7" }}>skill journey?</em>
+      <section className="section-pad reveal" style={{ background:"linear-gradient(135deg,#1a3d2e 0%,#2d6a4f 50%,#1a4a35 100%)", padding:"96px 48px", textAlign:"center", position:"relative", overflow:"hidden" }}>
+        <div style={{ position:"absolute", top:-60, left:"10%", width:300, height:300, borderRadius:"50%", background:"rgba(255,255,255,0.04)" }} />
+        <div style={{ position:"absolute", bottom:-80, right:"15%", width:400, height:400, borderRadius:"50%", background:"rgba(255,255,255,0.03)" }} />
+        <div style={{ position:"relative" }}>
+          <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.2)", borderRadius:999, padding:"6px 18px", marginBottom:24, fontSize:13, color:"rgba(255,255,255,0.8)", fontWeight:600 }}>
+            🚀 Limited early access — join now
+          </div>
+          <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:48, fontWeight:900, color:"#fff", marginBottom:16, letterSpacing:"-0.02em", lineHeight:1.1 }}>
+            Ready to start your<br /><em style={{ fontStyle:"italic", color:"#b7e4c7" }}>skill journey?</em>
           </h2>
-          <p style={{ fontSize: 17, color: "rgba(255,255,255,0.7)", maxWidth: 500, margin: "0 auto 40px" }}>
-            Join thousands of Filipino learners and teachers. It's free, it's fair, and it starts today.
+          <p style={{ fontSize:17, color:"rgba(255,255,255,0.65)", maxWidth:500, margin:"0 auto 40px" }}>
+            Join the first Filipinos building the SkillCredit community. It's free, it's fair, and it starts today.
           </p>
-          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
-            <a href="/signup" className="cta-btn" style={{ background: "#fff", color: "#2d6a4f", padding: "18px 40px", borderRadius: 14, fontWeight: 900, fontSize: 17, display: "inline-flex", alignItems: "center", gap: 8 }}>
-              Create free account 🎁
+          <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap", marginBottom:16 }}>
+            <a href="/signup" className="cta-btn" style={{ background:"#fff", color:"#2d6a4f", padding:"18px 40px", borderRadius:14, fontWeight:900, fontSize:17, display:"inline-flex", alignItems:"center", gap:8 }}>
+              🎁 Create free account — get 20 credits
             </a>
-            <button onClick={() => setGuestMode(true)} className="ghost-btn" style={{ background: "rgba(255,255,255,0.12)", color: "#fff", padding: "18px 32px", borderRadius: 14, fontWeight: 700, fontSize: 16, border: "1.5px solid rgba(255,255,255,0.2)", cursor: "pointer" }}>
+            <button onClick={() => setGuestMode(true)} className="ghost-btn" style={{ background:"rgba(255,255,255,0.1)", color:"#fff", padding:"18px 32px", borderRadius:14, fontWeight:700, fontSize:16, border:"1.5px solid rgba(255,255,255,0.2)", cursor:"pointer" }}>
               Browse as guest →
             </button>
           </div>
-          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginTop: 20 }}>No credit card required · 20 free credits on signup · Cancel anytime</p>
+          <p style={{ color:"rgba(255,255,255,0.35)", fontSize:13 }}>No credit card required · 20 free credits on signup · Cancel anytime</p>
         </div>
       </section>
 
       {/* ── FOOTER ── */}
-      <footer style={{ background: "#1a1a1a", padding: "32px 48px" }}>
+      <footer style={{ background:"#111", padding:"32px 48px" }}>
         <div className="footer-inner">
-          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
-            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 900, color: "#fff" }}>Credit</span>
+          <div style={{ display:"flex", alignItems:"center" }}>
+            <span style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:900, color:"#2d6a4f" }}>Skill</span>
+            <span style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:900, color:"#fff" }}>Credit</span>
           </div>
-          <div style={{ textAlign: "center" }}>
-            <p style={{ fontSize: 12, color: "#444", marginBottom: 6 }}>Built with ❤️ for Filipino learners and teachers</p>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "linear-gradient(135deg, #1a3d2e, #2d6a4f)", border: "1px solid rgba(45,106,79,0.4)", borderRadius: 999, padding: "6px 16px" }}>
-              <span style={{ fontSize: 12 }}>👨‍💻</span>
-              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 400 }}>Developed by</span>
-              <span style={{ fontSize: 13, color: "#fff", fontWeight: 700 }}>France Adolf P. Borja</span>
+          <div style={{ textAlign:"center" }}>
+            <p style={{ fontSize:12, color:"#444", marginBottom:6 }}>Built with ❤️ for Filipino learners and teachers</p>
+            <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"linear-gradient(135deg,#1a3d2e,#2d6a4f)", border:"1px solid rgba(45,106,79,0.4)", borderRadius:999, padding:"6px 16px" }}>
+              <span style={{ fontSize:12 }}>👨‍💻</span>
+              <span style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>Developed by</span>
+              <span style={{ fontSize:13, color:"#fff", fontWeight:700 }}>France Adolf P. Borja</span>
             </div>
           </div>
-          <div className="footer-links" style={{ display: "flex", gap: 16 }}>
-            {["Privacy", "Terms", "Contact"].map(l => (
-              <a key={l} href="#" style={{ fontSize: 13, color: "#555", fontWeight: 600 }}
-                onMouseOver={e => e.currentTarget.style.color = "#fff"}
-                onMouseOut={e => e.currentTarget.style.color = "#555"}>
-                {l}
-              </a>
+          <div style={{ display:"flex", gap:16 }}>
+            {["Privacy","Terms","Contact"].map(l => (
+              <a key={l} href="#" style={{ fontSize:13, color:"#555", fontWeight:600, transition:"color .15s" }}
+                onMouseOver={e => (e.currentTarget.style.color = "#fff")}
+                onMouseOut={e  => (e.currentTarget.style.color = "#555")}>{l}</a>
             ))}
           </div>
         </div>
-        <div style={{ borderTop: "1px solid #2a2a2a", marginTop: 24, paddingTop: 20, textAlign: "center" }}>
-          <p style={{ fontSize: 11, color: "#333" }}>© 2025 SkillCredit · All rights reserved · Thesis Project</p>
+        <div style={{ borderTop:"1px solid #222", marginTop:24, paddingTop:20, textAlign:"center" }}>
+          <p style={{ fontSize:11, color:"#333" }}>© 2025 SkillCredit · All rights reserved · Thesis Project</p>
         </div>
       </footer>
     </div>

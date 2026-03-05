@@ -15,9 +15,14 @@ type Session = {
   teacher_completed: boolean;
   learner_completed: boolean;
   created_at: string;
-  listing?: { title: string; format: string; description?: string };
+  listing?: {
+    title: string;
+    format: string;
+    description?: string;
+    meeting_link?: string | null;   // ← NEW
+  };
   teacher?: { id: string; full_name: string; username: string; level: string };
-  learner?: { id: string; full_name: string; username: string; level: string };
+  learner?:  { id: string; full_name: string; username: string; level: string };
 };
 
 type Profile = {
@@ -105,6 +110,52 @@ const LEARNER_RATES_TEACHER = [
   { key: "punctuality",   label: "Punctuality",        hint: "Did they show up on time?"            },
 ];
 
+// ── MEETING LINK BUTTON ───────────────────────────────────────────────────────
+function MeetingLinkButton({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+
+  // Detect platform
+  const icon =
+    url.includes("meet.google") ? "🎥" :
+    url.includes("zoom.us")     ? "💙" :
+    url.includes("discord.gg")  ? "💜" :
+    url.includes("teams.micro") ? "🔵" :
+    "🔗";
+
+  const label =
+    url.includes("meet.google") ? "Google Meet" :
+    url.includes("zoom.us")     ? "Zoom"         :
+    url.includes("discord.gg")  ? "Discord"      :
+    url.includes("teams.micro") ? "Teams"        :
+    "Join Meeting";
+
+  const copyLink = async () => {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-3 bg-sky-50 border border-sky-200 rounded-2xl">
+      <span className="text-lg">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-black text-sky-800 mb-0.5">Session Link</p>
+        <p className="text-xs text-sky-500 truncate font-medium">{url.replace(/^https?:\/\//, "").slice(0, 40)}…</p>
+      </div>
+      <div className="flex gap-1.5 flex-shrink-0">
+        <a href={url} target="_blank" rel="noopener noreferrer"
+          className="px-3 py-1.5 bg-sky-600 text-white rounded-xl text-xs font-black no-underline hover:bg-sky-700 transition-colors flex items-center gap-1.5">
+          {icon} Join {label}
+        </a>
+        <button onClick={copyLink}
+          className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-colors cursor-pointer ${copied ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-50"}`}>
+          {copied ? "✓ Copied" : "Copy"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function SessionsPage() {
   const [profile,           setProfile]           = useState<Profile | null>(null);
   const [sessions,          setSessions]          = useState<Session[]>([]);
@@ -124,7 +175,6 @@ export default function SessionsPage() {
   const [rescheduleSession, setRescheduleSession] = useState<Session | null>(null);
   const [newTime,           setNewTime]           = useState("");
 
-  // FIX #14: computed once, used as min for the reschedule datetime input
   const minRescheduleTime = new Date().toISOString().slice(0, 16);
 
   const showToast = (msg: string, type: "success"|"error" = "success") => {
@@ -142,7 +192,7 @@ export default function SessionsPage() {
     const [profRes, sessRes, ratingsRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("sessions")
-        .select(`*, listing:listings(title, format, description),
+        .select(`*, listing:listings(title, format, description, meeting_link),
           teacher:profiles!sessions_teacher_id_fkey(id, full_name, username, level),
           learner:profiles!sessions_learner_id_fkey(id, full_name, username, level)`)
         .or(`teacher_id.eq.${user.id},learner_id.eq.${user.id}`)
@@ -161,7 +211,6 @@ export default function SessionsPage() {
     window.location.href = "/messages";
   }
 
-  // FIX #8 helper: try RPC first (atomic), fallback to safe read-then-write
   async function safeIncrementCredits(userId: string, amount: number) {
     const { error } = await supabase.rpc("increment_credits", { user_id: userId, amount });
     if (error) {
@@ -180,7 +229,6 @@ export default function SessionsPage() {
 
   async function handleDecline(session: Session) {
     setActionLoading(session.id + "-decline");
-    // FIX #8: atomic credit increment
     await safeIncrementCredits(session.learner_id, session.credit_amount);
     await supabase.from("sessions").update({ status: "cancelled" }).eq("id", session.id);
     await supabase.from("escrow").update({ status: "refunded" }).eq("session_id", session.id);
@@ -192,11 +240,9 @@ export default function SessionsPage() {
     await loadData(); setActionLoading(null);
   }
 
-  // FIX #10: Learner can cancel their own pending booking and get refunded
   async function handleCancelPending(session: Session) {
     if (!profile) return;
     setActionLoading(session.id + "-cancel");
-    // FIX #8: atomic credit increment
     await safeIncrementCredits(session.learner_id, session.credit_amount);
     await supabase.from("sessions").update({ status: "cancelled" }).eq("id", session.id);
     await supabase.from("escrow").update({ status: "refunded" }).eq("session_id", session.id);
@@ -211,35 +257,20 @@ export default function SessionsPage() {
   async function handleMarkComplete(session: Session) {
     setActionLoading(session.id + "-complete");
     const isTeacher = profile?.id === session.teacher_id;
-    const { data: updated, error } = await supabase
-      .from("sessions")
+    const { data: updated, error } = await supabase.from("sessions")
       .update(isTeacher ? { teacher_completed: true } : { learner_completed: true })
-      .eq("id", session.id)
-      .select()
-      .single();
+      .eq("id", session.id).select().single();
 
     if (error || !updated) { showToast("Something went wrong.", "error"); setActionLoading(null); return; }
-
     const bothDone = updated.teacher_completed && updated.learner_completed;
 
     if (bothDone) {
-      // FIX #2: Re-read status from DB to detect if other party already triggered release
-      const { data: freshSession } = await supabase
-        .from("sessions").select("status").eq("id", session.id).single();
+      const { data: freshSession } = await supabase.from("sessions").select("status").eq("id", session.id).single();
+      if (freshSession?.status === "completed") { showToast("Session already completed!"); await loadData(); setActionLoading(null); return; }
 
-      if (freshSession?.status === "completed") {
-        showToast("Session already completed!");
-        await loadData(); setActionLoading(null);
-        return;
-      }
-
-      // Mark completed first to "claim" the release before doing any credit work
-      const { error: statusErr } = await supabase
-        .from("sessions").update({ status: "completed" }).eq("id", session.id);
-
+      const { error: statusErr } = await supabase.from("sessions").update({ status: "completed" }).eq("id", session.id);
       if (statusErr) { showToast("Error completing session.", "error"); setActionLoading(null); return; }
 
-      // FIX #8: atomic credit release
       await safeIncrementCredits(session.teacher_id, session.credit_amount);
       await supabase.from("escrow").update({ status: "released" }).eq("session_id", session.id);
 
@@ -255,30 +286,23 @@ export default function SessionsPage() {
 
       showToast(`Session complete! ${session.credit_amount} cr released.`);
 
-      // FIX #9: Re-fetch the session with the correct completed status before opening rating modal
-      const { data: completedSession } = await supabase
-        .from("sessions")
-        .select(`*, listing:listings(title, format, description),
+      const { data: completedSession } = await supabase.from("sessions")
+        .select(`*, listing:listings(title, format, description, meeting_link),
           teacher:profiles!sessions_teacher_id_fkey(id, full_name, username, level),
           learner:profiles!sessions_learner_id_fkey(id, full_name, username, level)`)
-        .eq("id", session.id)
-        .single();
+        .eq("id", session.id).single();
 
-      await loadData();
-      setActionLoading(null);
-
+      await loadData(); setActionLoading(null);
       if (completedSession) {
         setRatingSession(completedSession as Session);
-        setRatingSubmitted(false);
-        setRatingError("");
+        setRatingSubmitted(false); setRatingError("");
         setRatingForm({ overall:0, knowledge:0, communication:0, punctuality:0, preparedness:0, respectfulness:0, review:"" });
       }
     } else {
       const otherId = isTeacher ? session.learner_id : session.teacher_id;
       try { await supabase.from("notifications").insert({ user_id: otherId, type: "session", title: "Please confirm session complete ✅", body: `The ${isTeacher ? "teacher" : "learner"} marked it done. Confirm to release credits!`, link: "/sessions" }); } catch (_) {}
       showToast(`Marked complete! Waiting for ${isTeacher ? "learner" : "teacher"} to confirm.`);
-      await loadData();
-      setActionLoading(null);
+      await loadData(); setActionLoading(null);
     }
   }
 
@@ -380,8 +404,7 @@ export default function SessionsPage() {
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl text-white text-sm font-semibold shadow-2xl fade-up"
           style={{ background: toast.type === "success" ? "linear-gradient(135deg,#1a4a36,#2d6a4f)" : "linear-gradient(135deg,#991b1b,#dc2626)", maxWidth: 360 }}>
-          <span>{toast.type === "success" ? "✓" : "!"}</span>
-          {toast.msg}
+          <span>{toast.type === "success" ? "✓" : "!"}</span>{toast.msg}
         </div>
       )}
 
@@ -489,6 +512,7 @@ export default function SessionsPage() {
             const isExpanded = expandedId === session.id;
             const hasRated   = alreadyRated.has(session.id);
             const levelColor = LEVEL_COLORS[other?.level || "Seedling"] || "#2d6a4f";
+            const meetingLink = session.listing?.meeting_link;
 
             return (
               <div key={session.id} className="session-card bg-white rounded-2xl border border-stone-200 overflow-hidden fade-up" style={{ animationDelay: `${idx * .04}s`, borderLeft: `3px solid ${cfg.dot}` }}>
@@ -560,7 +584,6 @@ export default function SessionsPage() {
                       </button>
                     </>)}
 
-                    {/* FIX #10: Learner can cancel pending — credits refunded automatically */}
                     {session.status === "pending" && !isTeacher && (
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-600 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">Awaiting teacher</span>
@@ -594,7 +617,6 @@ export default function SessionsPage() {
                       </button>
                     </>)}
 
-                    {/* FIX #15: Dispute also available on completed sessions */}
                     {session.status === "completed" && (
                       <button onClick={() => setDisputeSession(session)}
                         className="px-3.5 py-1.5 rounded-xl bg-violet-50 text-violet-600 text-xs font-700 hover:bg-violet-100 transition-colors border border-violet-200">
@@ -614,6 +636,30 @@ export default function SessionsPage() {
                     )}
                   </div>
                 </div>
+
+                {/* ── MEETING LINK BANNER (confirmed sessions only) ── */}
+                {session.status === "confirmed" && meetingLink && (
+                  <div className="px-5 pb-4">
+                    <MeetingLinkButton url={meetingLink} />
+                  </div>
+                )}
+
+                {/* ── NO LINK NOTICE (teacher only, confirmed) ── */}
+                {session.status === "confirmed" && !meetingLink && isTeacher && (
+                  <div className="px-5 pb-4">
+                    <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
+                      <span className="text-lg">💡</span>
+                      <div className="flex-1">
+                        <p className="text-xs font-black text-amber-800">No meeting link set</p>
+                        <p className="text-xs text-amber-600 font-medium">Add a Zoom / Google Meet link to your listing so the learner knows where to join.</p>
+                      </div>
+                      <a href={`/listings/${session.listing_id}/edit`}
+                        className="px-3 py-1.5 bg-amber-500 text-white rounded-xl text-xs font-black no-underline hover:bg-amber-600 transition-colors whitespace-nowrap">
+                        Edit Listing →
+                      </a>
+                    </div>
+                  </div>
+                )}
 
                 {isExpanded && (
                   <div className="px-5 py-4 border-t border-stone-100 bg-stone-50/50">
@@ -724,7 +770,6 @@ export default function SessionsPage() {
               Rescheduling resets to <strong>pending</strong> and notifies the other party to re-confirm.
             </p>
             <label className="text-xs font-700 text-stone-700 block mb-2">New Date & Time</label>
-            {/* FIX #14: min prevents picking a past time */}
             <input type="datetime-local" value={newTime} min={minRescheduleTime} onChange={e => setNewTime(e.target.value)}
               className="w-full p-3 rounded-xl border border-stone-200 text-sm outline-none focus:border-[#2d6a4f] transition-colors mb-5"
               style={{ fontFamily: "'DM Sans', sans-serif" }} />
