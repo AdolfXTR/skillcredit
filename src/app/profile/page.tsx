@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Profile = {
@@ -97,6 +97,78 @@ const TX_ICONS: Record<string, string> = {
   bounty_earn: "🏆", topup: "💳", challenge: "⚡", session_refund: "↩️",
 };
 
+// ── AVATAR COMPONENT ─────────────────────────────────────────────────────────
+function AvatarUploader({
+  userId, currentUrl, initials, lvlColor,
+  onUploaded,
+}: {
+  userId: string; currentUrl: string | null; initials: string;
+  lvlColor: string; onUploaded: (url: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview]     = useState<string | null>(currentUrl || null);
+  const [err, setErr]             = useState("");
+
+  const handleFile = async (file: File) => {
+    if (!file.type.startsWith("image/")) { setErr("Please pick an image."); return; }
+    if (file.size > 3 * 1024 * 1024)    { setErr("Max 3 MB.");             return; }
+    setErr(""); setUploading(true);
+
+    const ext  = file.name.split(".").pop();
+    const path = `${userId}/avatar.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from("avatars")
+      .upload(path, file, { upsert: true, contentType: file.type });
+
+    if (upErr) { setErr("Upload failed."); setUploading(false); return; }
+
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    const url = data.publicUrl + `?t=${Date.now()}`; // bust cache
+    await supabase.from("profiles").update({ avatar_url: data.publicUrl }).eq("id", userId);
+    setPreview(url);
+    onUploaded(data.publicUrl);
+    setUploading(false);
+  };
+
+  return (
+    <div className="relative shrink-0" style={{ width: 64, height: 64 }}>
+      {/* Avatar circle */}
+      <div
+        onClick={() => !uploading && inputRef.current?.click()}
+        className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center cursor-pointer"
+        style={{ background: preview ? "transparent" : `linear-gradient(135deg,${lvlColor},${lvlColor}99)`, boxShadow: `0 6px 20px ${lvlColor}33` }}
+        title="Click to change photo"
+      >
+        {preview ? (
+          <img src={preview} alt="avatar" className="w-full h-full object-cover" />
+        ) : (
+          <span className="text-white text-xl font-900">{initials}</span>
+        )}
+      </div>
+
+      {/* Camera badge */}
+      <button
+        onClick={() => !uploading && inputRef.current?.click()}
+        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-2 border-stone-100 flex items-center justify-center cursor-pointer hover:bg-stone-50 transition-colors"
+        style={{ fontSize: 11, boxShadow: "0 2px 8px rgba(0,0,0,.12)" }}
+        title="Upload photo"
+      >
+        {uploading ? <span style={{ animation: "spin .8s linear infinite", display: "inline-block" }}>⟳</span> : "📷"}
+      </button>
+
+      <input ref={inputRef} type="file" accept="image/*" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+
+      {err && (
+        <div className="absolute top-full left-0 mt-1 text-xs text-red-500 bg-red-50 border border-red-200 px-2 py-1 rounded-lg whitespace-nowrap z-10">
+          {err}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const [profile, setProfile]             = useState<Profile | null>(null);
   const [listings, setListings]           = useState<Listing[]>([]);
@@ -113,7 +185,6 @@ export default function ProfilePage() {
   const [disputes, setDisputes]           = useState(0);
   const [bountiesWon, setBountiesWon]     = useState(0);
 
-  // Listing edit/delete state
   const [editingListing, setEditingListing]   = useState<Listing | null>(null);
   const [editListingForm, setEditListingForm] = useState({ title: "", description: "", prerequisites: "", outcomes: "", materials: "", credit_price: 10, is_active: true });
   const [savingListing, setSavingListing]     = useState(false);
@@ -182,29 +253,13 @@ export default function ProfilePage() {
     setEditingListing(listing);
     setEditListingForm({ title: listing.title, description: "", prerequisites: "", outcomes: "", materials: "", credit_price: listing.credit_price, is_active: listing.is_active });
     const { data } = await supabase.from("listings").select("*").eq("id", listing.id).single();
-    if (data) setEditListingForm({
-      title: data.title || "",
-      description: data.description || "",
-      prerequisites: data.prerequisites || "",
-      outcomes: data.outcomes || "",
-      materials: data.materials || "",
-      credit_price: data.credit_price,
-      is_active: data.is_active,
-    });
+    if (data) setEditListingForm({ title: data.title || "", description: data.description || "", prerequisites: data.prerequisites || "", outcomes: data.outcomes || "", materials: data.materials || "", credit_price: data.credit_price, is_active: data.is_active });
   };
 
   const handleSaveListing = async () => {
     if (!editingListing || !profile) return;
     setSavingListing(true); setListingError("");
-    const { error } = await supabase.from("listings").update({
-      title:         editListingForm.title,
-      description:   editListingForm.description,
-      prerequisites: editListingForm.prerequisites,
-      outcomes:      editListingForm.outcomes,
-      materials:     editListingForm.materials,
-      credit_price:  editListingForm.credit_price,
-      is_active:     editListingForm.is_active,
-    }).eq("id", editingListing.id);
+    const { error } = await supabase.from("listings").update({ title: editListingForm.title, description: editListingForm.description, prerequisites: editListingForm.prerequisites, outcomes: editListingForm.outcomes, materials: editListingForm.materials, credit_price: editListingForm.credit_price, is_active: editListingForm.is_active }).eq("id", editingListing.id);
     if (error) { setListingError("Failed to save. Try again."); setSavingListing(false); return; }
     const { data: l } = await supabase.from("listings").select("*, skills(name,category)").eq("teacher_id", profile.id).order("created_at", { ascending: false });
     setListings((l as Listing[]) || []);
@@ -250,6 +305,7 @@ export default function ProfilePage() {
         a{text-decoration:none;color:inherit}
         @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
         @keyframes popIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+        @keyframes spin{to{transform:rotate(360deg)}}
         .fade-up{animation:fadeUp .35s ease both}
         .card{background:#fff;border-radius:20px;border:1.5px solid #e8e2d9}
         .navlink{padding:5px 11px;border-radius:7px;font-size:13px;font-weight:600;color:#666;transition:all .12s;display:inline-block}
@@ -372,6 +428,22 @@ export default function ProfilePage() {
             {editing ? (
               <div className="max-w-md">
                 <h2 className="text-xl font-900 text-stone-900 mb-5" style={{ fontFamily: "'Fraunces', serif" }}>Edit Profile</h2>
+
+                {/* Avatar uploader inside edit form */}
+                <div className="flex items-center gap-4 mb-5 p-4 bg-stone-50 rounded-2xl border border-stone-200">
+                  <AvatarUploader
+                    userId={profile.id}
+                    currentUrl={profile.avatar_url || null}
+                    initials={getInitials(profile.full_name || "")}
+                    lvlColor={lvlColor}
+                    onUploaded={url => setProfile(p => p ? { ...p, avatar_url: url } : p)}
+                  />
+                  <div>
+                    <p className="text-sm font-700 text-stone-700 mb-0.5">Profile Photo</p>
+                    <p className="text-xs text-stone-400 leading-relaxed">Click the avatar or 📷 button to upload.<br/>JPG, PNG, WEBP · Max 3 MB</p>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-4">
                   {[
                     { key: "full_name", label: "Full Name",  placeholder: "Your full name",                    type: "input"    },
@@ -403,10 +475,20 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div className="flex items-start gap-5 flex-wrap">
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-900 shrink-0"
-                  style={{ background: `linear-gradient(135deg,${lvlColor},${lvlColor}99)`, boxShadow: `0 6px 20px ${lvlColor}33` }}>
-                  {getInitials(profile.full_name || "")}
+                {/* Avatar in view mode — click to open edit */}
+                <div className="relative shrink-0 cursor-pointer" onClick={() => setEditing(true)} title="Edit profile photo">
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center"
+                    style={{ background: profile.avatar_url ? "transparent" : `linear-gradient(135deg,${lvlColor},${lvlColor}99)`, boxShadow: `0 6px 20px ${lvlColor}33` }}>
+                    {profile.avatar_url ? (
+                      <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-white text-xl font-900">{getInitials(profile.full_name || "")}</span>
+                    )}
+                  </div>
+                  {/* Small camera hint */}
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white border border-stone-200 flex items-center justify-center" style={{ fontSize: 10, boxShadow: "0 1px 4px rgba(0,0,0,.12)" }}>📷</div>
                 </div>
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <h1 className="text-2xl font-900 text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>{profile.full_name || "Unnamed User"}</h1>
@@ -532,7 +614,6 @@ export default function ProfilePage() {
                   ))}
                 </div>
 
-                {/* LISTINGS TAB */}
                 {activeTab === "listings" && (
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -568,14 +649,8 @@ export default function ProfilePage() {
                                 <div className="text-xs text-stone-400">per session</div>
                               </div>
                               <div className="flex gap-2 shrink-0">
-                                <button onClick={() => openEditListing(listing)}
-                                  style={{ padding: "6px 14px", borderRadius: 9, background: "#f5f0e8", border: "1.5px solid #e8e2d9", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#555", fontFamily: "'DM Sans',sans-serif" }}>
-                                  ✏️ Edit
-                                </button>
-                                <button onClick={() => setConfirmDeleteId(listing.id)}
-                                  style={{ padding: "6px 14px", borderRadius: 9, background: "#fef2f2", border: "1.5px solid #fecaca", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#dc2626", fontFamily: "'DM Sans',sans-serif" }}>
-                                  🗑
-                                </button>
+                                <button onClick={() => openEditListing(listing)} style={{ padding: "6px 14px", borderRadius: 9, background: "#f5f0e8", border: "1.5px solid #e8e2d9", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#555", fontFamily: "'DM Sans',sans-serif" }}>✏️ Edit</button>
+                                <button onClick={() => setConfirmDeleteId(listing.id)} style={{ padding: "6px 14px", borderRadius: 9, background: "#fef2f2", border: "1.5px solid #fecaca", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#dc2626", fontFamily: "'DM Sans',sans-serif" }}>🗑</button>
                               </div>
                             </div>
                           );
@@ -585,7 +660,6 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                {/* BADGES TAB */}
                 {activeTab === "badges" && (
                   <div>
                     <h3 className="text-base font-900 text-stone-900 mb-3" style={{ fontFamily: "'Fraunces', serif" }}>Earned Badges</h3>
@@ -609,7 +683,6 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                {/* ACTIVITY TAB */}
                 {activeTab === "activity" && (
                   <div>
                     <h3 className="text-base font-900 text-stone-900 mb-3" style={{ fontFamily: "'Fraunces', serif" }}>Credit Activity</h3>
@@ -624,9 +697,7 @@ export default function ProfilePage() {
                         {transactions.map((tx, i) => (
                           <div key={tx.id} className="tx-row flex items-center justify-between gap-3 px-5 py-3.5" style={{ borderBottom: i < transactions.length - 1 ? "1px solid #f5f0e8" : "none" }}>
                             <div className="flex items-center gap-3">
-                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 ${tx.amount > 0 ? "bg-green-50" : "bg-red-50"}`}>
-                                {TX_ICONS[tx.type] || "💳"}
-                              </div>
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 ${tx.amount > 0 ? "bg-green-50" : "bg-red-50"}`}>{TX_ICONS[tx.type] || "💳"}</div>
                               <div>
                                 <p className="text-sm font-600 text-stone-700">{tx.description || tx.type.replace(/_/g, " ")}</p>
                                 <p className="text-xs text-stone-400">{new Date(tx.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
