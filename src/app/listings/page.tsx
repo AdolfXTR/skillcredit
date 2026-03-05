@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { bayesianAvg } from "@/lib/ratings";
 
 type Listing = {
   id: string;
@@ -124,7 +125,7 @@ export default function ListingsPage() {
             grouped[r.rated_id].push(r.overall);
           });
           Object.entries(grouped).forEach(([id, vals]) => {
-            avgMap[id] = parseFloat((vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(1));
+          avgMap[id] = parseFloat(bayesianAvg(vals).toFixed(1));
           });
         }
       }

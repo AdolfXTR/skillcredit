@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { bayesianAvg } from "@/lib/ratings";
 
 type PortfolioItem = {
   id: string; url: string; type: string; caption: string;
@@ -138,8 +139,8 @@ export default function ListingDetailPage() {
 
       setTeacherSessions(sCount || 0);
       if (ratingData?.length) {
-        const avg = ratingData.reduce((s: number, r: any) => s + r.overall, 0) / ratingData.length;
-        setTeacherAvgRating(parseFloat(avg.toFixed(1)));
+      const raw = ratingData.map((r: any) => r.overall);
+      setTeacherAvgRating(parseFloat(bayesianAvg(raw).toFixed(2)));
       }
       setLoading(false);
     };
