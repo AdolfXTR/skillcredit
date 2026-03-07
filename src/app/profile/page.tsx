@@ -6,6 +6,9 @@ type Profile = {
   id: string; full_name: string; username: string; bio: string;
   location: string; credits: number; xp: number; level: string;
   role: string; avatar_url: string; created_at: string; is_verified?: boolean;
+  // ── Perk columns (added after SQL ran) ──
+  xp_multiplier?: number; multiplier_ends_at?: string | null;
+  champion_title?: string | null; champion_streak?: number;
 };
 type Listing     = { id: string; title: string; format: string; duration: number; credit_price: number; is_active: boolean; skills: { name: string; category: string } };
 type Transaction = { id: string; amount: number; type: string; description: string; created_at: string };
@@ -40,10 +43,8 @@ function computeEarnedBadges(xp: number, sessions: number, bountiesWon: number, 
 function bayesianAvg(ratings: number[]): number {
   if (ratings.length === 0) return 0;
   const C = 5, m = 3.5;
-  const sum = ratings.reduce((s, r) => s + r, 0);
-  return (C * m + sum) / (C + ratings.length);
+  return (C * m + ratings.reduce((s, r) => s + r, 0)) / (C + ratings.length);
 }
-
 function getBadgeTier(xp: number, sessions: number, rating: number) {
   for (let i = BADGE_TIERS.length - 1; i >= 0; i--) {
     const t = BADGE_TIERS[i];
@@ -64,7 +65,6 @@ function getLevelFromXP(xp: number) {
   if (xp >= 100)  return "Learner";
   return "Seedling";
 }
-
 const LEVEL_COLOR: Record<string, string> = {
   Seedling: "#2d6a4f", Learner: "#1d4ed8", Contributor: "#7c3aed",
   Skilled: "#b45309", Expert: "#dc2626", Master: "#0891b2", Legend: "#d97706",
@@ -73,7 +73,6 @@ const XP_TO_NEXT: Record<string, number> = {
   Seedling: 100, Learner: 300, Contributor: 600, Skilled: 1000,
   Expert: 2000, Master: 4000, Legend: 9999,
 };
-
 function calcRep(avgRating: number, sessions: number, repeatClients: number, disputes: number) {
   const r = Math.min(Math.round(avgRating * sessions * 4), 80);
   const s = Math.min(sessions * 2, 15);
@@ -81,9 +80,19 @@ function calcRep(avgRating: number, sessions: number, repeatClients: number, dis
   const d = disputes * -15;
   return Math.max(0, Math.min(r + s + c + d, 100));
 }
-
 function getInitials(name: string) {
   return name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "??";
+}
+
+// ── Returns rank (1/2/3) from profile data ──────────────────────────────────
+function getRankFromProfile(p: Profile): number {
+  if (!p.champion_title) return 0;
+  // We infer rank from multiplier value
+  if (p.xp_multiplier === 1.25) return 1;
+  if (p.xp_multiplier === 1.15) return 2;
+  if (p.xp_multiplier === 1.10) return 3;
+  if (p.champion_title) return 1; // fallback if title exists
+  return 0;
 }
 
 const FORMAT_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -97,15 +106,54 @@ const TX_ICONS: Record<string, string> = {
   bounty_earn: "🏆", topup: "💳", challenge: "⚡", session_refund: "↩️",
 };
 
-// ── AVATAR COMPONENT ─────────────────────────────────────────────────────────
-function AvatarUploader({
-  userId, currentUrl, initials, lvlColor,
-  onUploaded,
-}: {
-  userId: string; currentUrl: string | null; initials: string;
-  lvlColor: string; onUploaded: (url: string) => void;
+// ── PREMIUM AVATAR COMPONENT ─────────────────────────────────────────────────
+// Shows animated gold/silver/bronze border for top 3
+function PremiumAvatar({ url, initials, lvlColor, rank, size = 64, shape = "rounded-2xl" }: {
+  url?: string | null; initials: string; lvlColor: string;
+  rank?: number; size?: number; shape?: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const borderClass = rank === 1 ? "gold-border" : rank === 2 ? "silver-border" : rank === 3 ? "bronze-border" : "";
+  const rankIcon    = rank === 1 ? "👑" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
+
+  return (
+    <div style={{ position:"relative", width:size, height:size, flexShrink:0 }}>
+      {/* Outer glow ring — only for top 3 */}
+      {rank && rank <= 3 && (
+        <div className={borderClass} style={{
+          position:"absolute", inset:-4, borderRadius: size >= 56 ? 20 : "50%",
+          pointerEvents:"none", zIndex:1,
+        }} />
+      )}
+      <div style={{
+        width:size, height:size,
+        borderRadius: size >= 56 ? 16 : "50%",
+        overflow:"hidden",
+        background: url ? "transparent" : `linear-gradient(135deg,${lvlColor},${lvlColor}99)`,
+        boxShadow: rank && rank <= 3 ? "none" : `0 6px 20px ${lvlColor}33`,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        position:"relative", zIndex:2,
+      }}>
+        {url
+          ? <img src={url} alt="avatar" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+          : <span style={{ color:"#fff", fontSize:size*0.32, fontWeight:900 }}>{initials}</span>
+        }
+      </div>
+      {/* Rank badge bottom-right */}
+      {rankIcon && (
+        <div style={{ position:"absolute", bottom:-4, right:-4, background:"#fff", borderRadius:"50%", width:24, height:24, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, boxShadow:"0 2px 8px rgba(0,0,0,.15)", zIndex:3 }}>
+          {rankIcon}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── AVATAR UPLOADER ──────────────────────────────────────────────────────────
+function AvatarUploader({ userId, currentUrl, initials, lvlColor, rank, onUploaded }: {
+  userId: string; currentUrl: string | null; initials: string;
+  lvlColor: string; rank?: number; onUploaded: (url: string) => void;
+}) {
+  const inputRef  = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview]     = useState<string | null>(currentUrl || null);
   const [err, setErr]             = useState("");
@@ -114,57 +162,29 @@ function AvatarUploader({
     if (!file.type.startsWith("image/")) { setErr("Please pick an image."); return; }
     if (file.size > 3 * 1024 * 1024)    { setErr("Max 3 MB.");             return; }
     setErr(""); setUploading(true);
-
     const ext  = file.name.split(".").pop();
     const path = `${userId}/avatar.${ext}`;
-    const { error: upErr } = await supabase.storage
-      .from("avatars")
-      .upload(path, file, { upsert: true, contentType: file.type });
-
+    const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type });
     if (upErr) { setErr("Upload failed."); setUploading(false); return; }
-
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    const url = data.publicUrl + `?t=${Date.now()}`; // bust cache
+    const url = data.publicUrl + `?t=${Date.now()}`;
     await supabase.from("profiles").update({ avatar_url: data.publicUrl }).eq("id", userId);
-    setPreview(url);
-    onUploaded(data.publicUrl);
-    setUploading(false);
+    setPreview(url); onUploaded(data.publicUrl); setUploading(false);
   };
 
   return (
-    <div className="relative shrink-0" style={{ width: 64, height: 64 }}>
-      {/* Avatar circle */}
-      <div
-        onClick={() => !uploading && inputRef.current?.click()}
-        className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center cursor-pointer"
-        style={{ background: preview ? "transparent" : `linear-gradient(135deg,${lvlColor},${lvlColor}99)`, boxShadow: `0 6px 20px ${lvlColor}33` }}
-        title="Click to change photo"
-      >
-        {preview ? (
-          <img src={preview} alt="avatar" className="w-full h-full object-cover" />
-        ) : (
-          <span className="text-white text-xl font-900">{initials}</span>
-        )}
+    <div style={{ position:"relative", width:64, height:64 }}>
+      <div onClick={() => !uploading && inputRef.current?.click()}
+        style={{ cursor:"pointer", position:"relative", width:64, height:64 }}>
+        <PremiumAvatar url={preview} initials={initials} lvlColor={lvlColor} rank={rank} size={64} />
       </div>
-
-      {/* Camera badge */}
-      <button
-        onClick={() => !uploading && inputRef.current?.click()}
-        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-2 border-stone-100 flex items-center justify-center cursor-pointer hover:bg-stone-50 transition-colors"
-        style={{ fontSize: 11, boxShadow: "0 2px 8px rgba(0,0,0,.12)" }}
-        title="Upload photo"
-      >
-        {uploading ? <span style={{ animation: "spin .8s linear infinite", display: "inline-block" }}>⟳</span> : "📷"}
+      <button onClick={() => !uploading && inputRef.current?.click()}
+        style={{ position:"absolute", bottom:-4, right:-4, width:22, height:22, borderRadius:"50%", background:"#fff", border:"2px solid #e8e2d9", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:10, boxShadow:"0 2px 8px rgba(0,0,0,.12)", zIndex:10 }}>
+        {uploading ? "⟳" : "📷"}
       </button>
-
-      <input ref={inputRef} type="file" accept="image/*" className="hidden"
+      <input ref={inputRef} type="file" accept="image/*" style={{ display:"none" }}
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-
-      {err && (
-        <div className="absolute top-full left-0 mt-1 text-xs text-red-500 bg-red-50 border border-red-200 px-2 py-1 rounded-lg whitespace-nowrap z-10">
-          {err}
-        </div>
-      )}
+      {err && <div style={{ position:"absolute", top:"100%", left:0, marginTop:4, fontSize:10, color:"#dc2626", background:"#fef2f2", border:"1px solid #fecaca", padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap", zIndex:20 }}>{err}</div>}
     </div>
   );
 }
@@ -184,9 +204,8 @@ export default function ProfilePage() {
   const [repeatClients, setRepeatClients] = useState(0);
   const [disputes, setDisputes]           = useState(0);
   const [bountiesWon, setBountiesWon]     = useState(0);
-
   const [editingListing, setEditingListing]   = useState<Listing | null>(null);
-  const [editListingForm, setEditListingForm] = useState({ title: "", description: "", prerequisites: "", outcomes: "", materials: "", credit_price: 10, is_active: true });
+  const [editListingForm, setEditListingForm] = useState({ title:"", description:"", prerequisites:"", outcomes:"", materials:"", credit_price:10, is_active:true });
   const [savingListing, setSavingListing]     = useState(false);
   const [deletingId, setDeletingId]           = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -197,7 +216,11 @@ export default function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = "/login"; return; }
 
-      const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      // Fetch with perk columns — graceful fallback
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("*,xp_multiplier,multiplier_ends_at,champion_title,champion_streak")
+        .eq("id", user.id).single();
       if (prof) {
         setProfile(prof);
         setEditForm({ full_name: prof.full_name || "", bio: prof.bio || "", location: prof.location || "" });
@@ -210,12 +233,12 @@ export default function ProfilePage() {
       ] = await Promise.all([
         supabase.from("listings").select("*, skills(name,category)").eq("teacher_id", user.id).order("created_at", { ascending: false }),
         supabase.from("credit_transactions").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
-        supabase.from("sessions").select("*", { count: "exact", head: true }).or(`teacher_id.eq.${user.id},learner_id.eq.${user.id}`).eq("status", "completed"),
+        supabase.from("sessions").select("*", { count:"exact", head:true }).or(`teacher_id.eq.${user.id},learner_id.eq.${user.id}`).eq("status","completed"),
         supabase.from("ratings").select("overall").eq("rated_id", user.id),
-        supabase.from("sessions").select("learner_id").eq("teacher_id", user.id).eq("status", "completed"),
-        supabase.from("sessions").select("*", { count: "exact", head: true }).eq("teacher_id", user.id).eq("status", "disputed"),
-        supabase.from("user_skills").select("*, skills(name,category)").eq("user_id", user.id).order("is_verified", { ascending: false }),
-        supabase.from("bounty_answers").select("*", { count: "exact", head: true }).eq("answerer_id", user.id).not("placement", "is", null),
+        supabase.from("sessions").select("learner_id").eq("teacher_id", user.id).eq("status","completed"),
+        supabase.from("sessions").select("*", { count:"exact", head:true }).eq("teacher_id", user.id).eq("status","disputed"),
+        supabase.from("user_skills").select("*, skills(name,category)").eq("user_id", user.id).order("is_verified", { ascending:false }),
+        supabase.from("bounty_answers").select("*", { count:"exact", head:true }).eq("answerer_id", user.id).not("placement","is",null),
       ]);
 
       setListings((l as Listing[]) || []);
@@ -223,15 +246,12 @@ export default function ProfilePage() {
       setSessions(sCount || 0);
       setUserSkills((skillsData as UserSkill[]) || []);
       setBountiesWon(bCount || 0);
-
       if (ratingData && ratingData.length > 0) {
-        const bayes = bayesianAvg(ratingData.map((r: { overall: number }) => r.overall));
-        setAvgRating(parseFloat(bayes.toFixed(2)));
+        setAvgRating(parseFloat(bayesianAvg(ratingData.map((r: any) => r.overall)).toFixed(2)));
       }
-
       if (sessionData) {
         const counts: Record<string, number> = {};
-        sessionData.forEach((s: { learner_id: string }) => { counts[s.learner_id] = (counts[s.learner_id] || 0) + 1; });
+        sessionData.forEach((s: any) => { counts[s.learner_id] = (counts[s.learner_id] || 0) + 1; });
         setRepeatClients(Object.values(counts).filter(c => c > 1).length);
       }
       setDisputes(dCount || 0);
@@ -249,19 +269,18 @@ export default function ProfilePage() {
   };
 
   const openEditListing = async (listing: Listing) => {
-    setListingError("");
-    setEditingListing(listing);
-    setEditListingForm({ title: listing.title, description: "", prerequisites: "", outcomes: "", materials: "", credit_price: listing.credit_price, is_active: listing.is_active });
+    setListingError(""); setEditingListing(listing);
+    setEditListingForm({ title:listing.title, description:"", prerequisites:"", outcomes:"", materials:"", credit_price:listing.credit_price, is_active:listing.is_active });
     const { data } = await supabase.from("listings").select("*").eq("id", listing.id).single();
-    if (data) setEditListingForm({ title: data.title || "", description: data.description || "", prerequisites: data.prerequisites || "", outcomes: data.outcomes || "", materials: data.materials || "", credit_price: data.credit_price, is_active: data.is_active });
+    if (data) setEditListingForm({ title:data.title||"", description:data.description||"", prerequisites:data.prerequisites||"", outcomes:data.outcomes||"", materials:data.materials||"", credit_price:data.credit_price, is_active:data.is_active });
   };
 
   const handleSaveListing = async () => {
     if (!editingListing || !profile) return;
     setSavingListing(true); setListingError("");
-    const { error } = await supabase.from("listings").update({ title: editListingForm.title, description: editListingForm.description, prerequisites: editListingForm.prerequisites, outcomes: editListingForm.outcomes, materials: editListingForm.materials, credit_price: editListingForm.credit_price, is_active: editListingForm.is_active }).eq("id", editingListing.id);
-    if (error) { setListingError("Failed to save. Try again."); setSavingListing(false); return; }
-    const { data: l } = await supabase.from("listings").select("*, skills(name,category)").eq("teacher_id", profile.id).order("created_at", { ascending: false });
+    const { error } = await supabase.from("listings").update({ title:editListingForm.title, description:editListingForm.description, prerequisites:editListingForm.prerequisites, outcomes:editListingForm.outcomes, materials:editListingForm.materials, credit_price:editListingForm.credit_price, is_active:editListingForm.is_active }).eq("id", editingListing.id);
+    if (error) { setListingError("Failed to save."); setSavingListing(false); return; }
+    const { data: l } = await supabase.from("listings").select("*, skills(name,category)").eq("teacher_id", profile.id).order("created_at", { ascending:false });
     setListings((l as Listing[]) || []);
     setSavingListing(false); setEditingListing(null);
   };
@@ -274,10 +293,10 @@ export default function ProfilePage() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-[#faf8f4] flex items-center justify-center" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="min-h-screen bg-[#faf8f4] flex items-center justify-center" style={{ fontFamily:"'DM Sans',sans-serif" }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <div className="text-center">
-        <div className="w-8 h-8 rounded-full border-2 border-[#2d6a4f] border-t-transparent mx-auto mb-3" style={{ animation: "spin .8s linear infinite" }} />
+        <div className="w-8 h-8 rounded-full border-2 border-[#2d6a4f] border-t-transparent mx-auto mb-3" style={{ animation:"spin .8s linear infinite" }} />
         <p className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Loading profile</p>
       </div>
     </div>
@@ -294,18 +313,39 @@ export default function ProfilePage() {
   const repLabel         = rep >= 80 ? "Exceptional" : rep >= 60 ? "Great" : rep >= 40 ? "Good" : rep >= 20 ? "Fair" : "Building";
   const xpNext           = XP_TO_NEXT[displayLevel] || 100;
   const xpPct            = Math.min((profile.xp / xpNext) * 100, 100);
-  const joinDate         = new Date(profile.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "long" });
+  const joinDate         = new Date(profile.created_at).toLocaleDateString("en-PH", { year:"numeric", month:"long" });
   const earnedBadges     = computeEarnedBadges(profile.xp, sessions, bountiesWon, avgRating, listings.length);
 
+  // ── Perk helpers ──
+  const rank          = getRankFromProfile(profile);
+  const hasMulti      = profile.xp_multiplier && profile.xp_multiplier > 1 && profile.multiplier_ends_at && new Date(profile.multiplier_ends_at) > new Date();
+  const rankLabel     = rank === 1 ? "👑 Champion" : rank === 2 ? "🥈 Runner-up" : rank === 3 ? "🥉 Third Place" : null;
+  const rankBgColor   = rank === 1 ? "linear-gradient(135deg,#1a3d2e,#2d6a4f)" : rank === 2 ? "linear-gradient(135deg,#2c3e50,#34495e)" : rank === 3 ? "linear-gradient(135deg,#4a2c0a,#7a4a1a)" : null;
+
   return (
-    <div className="min-h-screen bg-[#faf8f4]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="min-h-screen bg-[#faf8f4]" style={{ fontFamily:"'DM Sans',sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
         *,*::before,*::after{box-sizing:border-box}
         a{text-decoration:none;color:inherit}
-        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-        @keyframes popIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
-        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeUp   {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+        @keyframes popIn    {from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+        @keyframes spin     {to{transform:rotate(360deg)}}
+        @keyframes shimmer  {0%{background-position:-200% 0}100%{background-position:200% 0}}
+
+        /* ── Premium border animations ── */
+        @keyframes goldPulse  {0%,100%{box-shadow:0 0 0 3px #e8a800,0 0 16px rgba(232,168,0,.6),0 0 32px rgba(232,168,0,.3)}50%{box-shadow:0 0 0 3px #ffd700,0 0 28px rgba(255,215,0,.85),0 0 52px rgba(255,215,0,.45)}}
+        @keyframes silverPulse{0%,100%{box-shadow:0 0 0 2.5px #c0c0c0,0 0 12px rgba(160,160,160,.4)}50%{box-shadow:0 0 0 2.5px #e8e8e8,0 0 20px rgba(200,200,200,.65)}}
+        @keyframes bronzePulse{0%,100%{box-shadow:0 0 0 2.5px #cd7f32,0 0 12px rgba(205,127,50,.35)}50%{box-shadow:0 0 0 2.5px #e8a060,0 0 20px rgba(232,160,80,.55)}}
+        @keyframes goldSpin   {0%{background:conic-gradient(#e8a800,#ffd700,#e8a800,#b8860b,#e8a800)}100%{background:conic-gradient(#ffd700,#e8a800,#b8860b,#e8a800,#ffd700)}}
+
+        .gold-border  {border-radius:20px;animation:goldPulse 2s ease infinite}
+        .silver-border{border-radius:20px;animation:silverPulse 2s ease infinite}
+        .bronze-border{border-radius:20px;animation:bronzePulse 2s ease infinite}
+        .gold-border-round  {border-radius:50%;animation:goldPulse 2s ease infinite}
+        .silver-border-round{border-radius:50%;animation:silverPulse 2s ease infinite}
+        .bronze-border-round{border-radius:50%;animation:bronzePulse 2s ease infinite}
+
         .fade-up{animation:fadeUp .35s ease both}
         .card{background:#fff;border-radius:20px;border:1.5px solid #e8e2d9}
         .navlink{padding:5px 11px;border-radius:7px;font-size:13px;font-weight:600;color:#666;transition:all .12s;display:inline-block}
@@ -320,57 +360,59 @@ export default function ProfilePage() {
         .quick-link:hover{background:#e8f5ee!important;color:#2d6a4f!important}
         .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
         .modal{background:#fff;border-radius:22px;padding:28px;width:100%;max-width:480px;box-shadow:0 24px 64px rgba(0,0,0,.18);animation:popIn .18s ease;max-height:90vh;overflow-y:auto}
+        .xp-bar{background:linear-gradient(90deg,#2d6a4f,#52b788);background-size:200%;animation:shimmer 2.5s infinite;border-radius:999px;height:100%}
+        .multi-pulse{animation:goldPulse 1.5s ease infinite}
       `}</style>
 
       {/* LISTING EDIT MODAL */}
       {editingListing && (
         <div className="modal-backdrop" onClick={() => setEditingListing(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a", marginBottom: 4 }}>Edit Listing ✏️</h2>
-            <p style={{ fontSize: 12, color: "#aaa", marginBottom: 20 }}>Update your listing. Price changes affect future bookings only.</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#1a1a1a", marginBottom:4 }}>Edit Listing ✏️</h2>
+            <p style={{ fontSize:12, color:"#aaa", marginBottom:20 }}>Update your listing. Price changes affect future bookings only.</p>
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
               {[
-                { key: "title",         label: "Title *",                    type: "input"    },
-                { key: "description",   label: "Description",                type: "textarea" },
-                { key: "outcomes",      label: "What learners will achieve", type: "textarea" },
-                { key: "prerequisites", label: "Prerequisites",              type: "input"    },
-                { key: "materials",     label: "Materials",                  type: "input"    },
+                { key:"title",         label:"Title *",                    type:"input"    },
+                { key:"description",   label:"Description",                type:"textarea" },
+                { key:"outcomes",      label:"What learners will achieve", type:"textarea" },
+                { key:"prerequisites", label:"Prerequisites",              type:"input"    },
+                { key:"materials",     label:"Materials",                  type:"input"    },
               ].map(f => (
                 <div key={f.key}>
-                  <label style={{ fontSize: 10, fontWeight: 800, color: "#aaa", textTransform: "uppercase", letterSpacing: ".08em", display: "block", marginBottom: 6 }}>{f.label}</label>
+                  <label style={{ fontSize:10, fontWeight:800, color:"#aaa", textTransform:"uppercase", letterSpacing:".08em", display:"block", marginBottom:6 }}>{f.label}</label>
                   {f.type === "textarea" ? (
                     <textarea value={editListingForm[f.key as keyof typeof editListingForm] as string} rows={3}
                       onChange={e => setEditListingForm(p => ({ ...p, [f.key]: e.target.value }))}
-                      style={{ width: "100%", padding: "10px 13px", borderRadius: 11, border: "1.5px solid #e8e2d9", fontSize: 13, fontFamily: "'DM Sans',sans-serif", background: "#fafaf8", outline: "none", resize: "vertical" }} />
+                      style={{ width:"100%", padding:"10px 13px", borderRadius:11, border:"1.5px solid #e8e2d9", fontSize:13, fontFamily:"'DM Sans',sans-serif", background:"#fafaf8", outline:"none", resize:"vertical" }} />
                   ) : (
                     <input value={editListingForm[f.key as keyof typeof editListingForm] as string}
                       onChange={e => setEditListingForm(p => ({ ...p, [f.key]: e.target.value }))}
-                      style={{ width: "100%", padding: "10px 13px", borderRadius: 11, border: "1.5px solid #e8e2d9", fontSize: 13, fontFamily: "'DM Sans',sans-serif", background: "#fafaf8", outline: "none" }} />
+                      style={{ width:"100%", padding:"10px 13px", borderRadius:11, border:"1.5px solid #e8e2d9", fontSize:13, fontFamily:"'DM Sans',sans-serif", background:"#fafaf8", outline:"none" }} />
                   )}
                 </div>
               ))}
               <div>
-                <label style={{ fontSize: 10, fontWeight: 800, color: "#aaa", textTransform: "uppercase", letterSpacing: ".08em", display: "block", marginBottom: 6 }}>Credit Price</label>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <button onClick={() => setEditListingForm(p => ({ ...p, credit_price: Math.max(5, p.credit_price - 5) }))} style={{ width: 36, height: 36, borderRadius: 9, border: "1.5px solid #e8e2d9", background: "#fafaf8", fontSize: 18, cursor: "pointer" }}>-</button>
-                  <div style={{ flex: 1, textAlign: "center", fontFamily: "'Fraunces',serif", fontSize: 30, fontWeight: 900, color: "#2d6a4f" }}>{editListingForm.credit_price} cr</div>
-                  <button onClick={() => setEditListingForm(p => ({ ...p, credit_price: Math.min(100, p.credit_price + 5) }))} style={{ width: 36, height: 36, borderRadius: 9, border: "1.5px solid #e8e2d9", background: "#fafaf8", fontSize: 18, cursor: "pointer" }}>+</button>
+                <label style={{ fontSize:10, fontWeight:800, color:"#aaa", textTransform:"uppercase", letterSpacing:".08em", display:"block", marginBottom:6 }}>Credit Price</label>
+                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                  <button onClick={() => setEditListingForm(p => ({ ...p, credit_price:Math.max(5, p.credit_price - 5) }))} style={{ width:36, height:36, borderRadius:9, border:"1.5px solid #e8e2d9", background:"#fafaf8", fontSize:18, cursor:"pointer" }}>-</button>
+                  <div style={{ flex:1, textAlign:"center", fontFamily:"'Fraunces',serif", fontSize:30, fontWeight:900, color:"#2d6a4f" }}>{editListingForm.credit_price} cr</div>
+                  <button onClick={() => setEditListingForm(p => ({ ...p, credit_price:Math.min(100, p.credit_price + 5) }))} style={{ width:36, height:36, borderRadius:9, border:"1.5px solid #e8e2d9", background:"#fafaf8", fontSize:18, cursor:"pointer" }}>+</button>
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", borderRadius: 11, cursor: "pointer" }}
+              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 13px", borderRadius:11, cursor:"pointer" }}
                 onClick={() => setEditListingForm(p => ({ ...p, is_active: !p.is_active }))}>
-                <div style={{ width: 38, height: 22, borderRadius: 999, background: editListingForm.is_active ? "#2d6a4f" : "#d1cec7", position: "relative", transition: "background .2s", flexShrink: 0 }}>
-                  <div style={{ position: "absolute", top: 3, left: editListingForm.is_active ? 18 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+                <div style={{ width:38, height:22, borderRadius:999, background:editListingForm.is_active?"#2d6a4f":"#d1cec7", position:"relative", transition:"background .2s", flexShrink:0 }}>
+                  <div style={{ position:"absolute", top:3, left:editListingForm.is_active?18:3, width:16, height:16, borderRadius:"50%", background:"#fff", transition:"left .2s" }} />
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: editListingForm.is_active ? "#2d6a4f" : "#888" }}>
+                <span style={{ fontSize:13, fontWeight:700, color:editListingForm.is_active?"#2d6a4f":"#888" }}>
                   {editListingForm.is_active ? "Active - visible to learners" : "Paused - hidden from browse"}
                 </span>
               </div>
             </div>
-            {listingError && <p style={{ color: "#dc2626", fontSize: 12, marginTop: 10 }}>{listingError}</p>}
-            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-              <button onClick={() => setEditingListing(null)} style={{ flex: 1, padding: "10px", borderRadius: 11, background: "#f5f0e8", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#666" }}>Cancel</button>
-              <button onClick={handleSaveListing} disabled={savingListing || !editListingForm.title.trim()} style={{ flex: 2, padding: "10px", borderRadius: 11, background: savingListing ? "#aaa" : "#2d6a4f", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", color: "#fff" }}>
+            {listingError && <p style={{ color:"#dc2626", fontSize:12, marginTop:10 }}>{listingError}</p>}
+            <div style={{ display:"flex", gap:8, marginTop:20 }}>
+              <button onClick={() => setEditingListing(null)} style={{ flex:1, padding:"10px", borderRadius:11, background:"#f5f0e8", border:"none", fontSize:13, fontWeight:700, cursor:"pointer", color:"#666" }}>Cancel</button>
+              <button onClick={handleSaveListing} disabled={savingListing || !editListingForm.title.trim()} style={{ flex:2, padding:"10px", borderRadius:11, background:savingListing?"#aaa":"#2d6a4f", border:"none", fontSize:13, fontWeight:800, cursor:"pointer", color:"#fff" }}>
                 {savingListing ? "Saving..." : "Save Changes"}
               </button>
             </div>
@@ -381,15 +423,15 @@ export default function ProfilePage() {
       {/* DELETE CONFIRM MODAL */}
       {confirmDeleteId && (
         <div className="modal-backdrop" onClick={() => setConfirmDeleteId(null)}>
-          <div className="modal" style={{ maxWidth: 360 }} onClick={e => e.stopPropagation()}>
-            <div style={{ textAlign: "center", marginBottom: 16 }}>
-              <div style={{ fontSize: 40, marginBottom: 8 }}>🗑️</div>
-              <h3 style={{ fontFamily: "'Fraunces',serif", fontSize: 18, fontWeight: 900, color: "#1a1a1a", marginBottom: 6 }}>Delete Listing?</h3>
-              <p style={{ fontSize: 13, color: "#888" }}>This permanently removes the listing. Pending bookings will be cancelled.</p>
+          <div className="modal" style={{ maxWidth:360 }} onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign:"center", marginBottom:16 }}>
+              <div style={{ fontSize:40, marginBottom:8 }}>🗑️</div>
+              <h3 style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:900, color:"#1a1a1a", marginBottom:6 }}>Delete Listing?</h3>
+              <p style={{ fontSize:13, color:"#888" }}>This permanently removes the listing. Pending bookings will be cancelled.</p>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setConfirmDeleteId(null)} style={{ flex: 1, padding: "10px", borderRadius: 11, background: "#f5f0e8", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#666" }}>Cancel</button>
-              <button onClick={() => handleDeleteListing(confirmDeleteId)} disabled={deletingId === confirmDeleteId} style={{ flex: 1, padding: "10px", borderRadius: 11, background: "#dc2626", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", color: "#fff" }}>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={() => setConfirmDeleteId(null)} style={{ flex:1, padding:"10px", borderRadius:11, background:"#f5f0e8", border:"none", fontSize:13, fontWeight:700, cursor:"pointer", color:"#666" }}>Cancel</button>
+              <button onClick={() => handleDeleteListing(confirmDeleteId)} disabled={deletingId === confirmDeleteId} style={{ flex:1, padding:"10px", borderRadius:11, background:"#dc2626", border:"none", fontSize:13, fontWeight:800, cursor:"pointer", color:"#fff" }}>
                 {deletingId === confirmDeleteId ? "Deleting..." : "Yes, Delete"}
               </button>
             </div>
@@ -400,8 +442,8 @@ export default function ProfilePage() {
       {/* NAVBAR */}
       <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-stone-200 px-6 h-14 flex items-center justify-between">
         <a href="/dashboard">
-          <span style={{ fontFamily: "'Fraunces', serif", fontWeight: 900, fontSize: 19, color: "#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily: "'Fraunces', serif", fontWeight: 900, fontSize: 19, color: "#1a1a1a" }}>Credit</span>
+          <span style={{ fontFamily:"'Fraunces',serif", fontWeight:900, fontSize:19, color:"#2d6a4f" }}>Skill</span>
+          <span style={{ fontFamily:"'Fraunces',serif", fontWeight:900, fontSize:19, color:"#1a1a1a" }}>Credit</span>
         </a>
         <div className="flex gap-0.5">
           {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
@@ -414,60 +456,67 @@ export default function ProfilePage() {
           </a>
           <button onClick={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
             className="text-xs font-600 text-red-500 bg-red-50 px-3.5 py-1.5 rounded-full border border-red-200 cursor-pointer hover:bg-red-100 transition-colors"
-            style={{ fontFamily: "'DM Sans', sans-serif" }}>
-            Log out
-          </button>
+            style={{ fontFamily:"'DM Sans',sans-serif" }}>Log out</button>
         </div>
       </nav>
 
       <div className="max-w-5xl mx-auto px-5 py-8 pb-20">
 
+        {/* ── CHAMPION BANNER — only visible when they're top 3 ── */}
+        {rank > 0 && rankBgColor && (
+          <div style={{ background:rankBgColor, borderRadius:16, padding:"14px 20px", marginBottom:16, display:"flex", alignItems:"center", gap:14, flexWrap:"wrap", animation:"fadeUp .3s ease" }}>
+            <span style={{ fontSize:32 }}>{rank===1?"👑":rank===2?"🥈":"🥉"}</span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14, fontWeight:800, color:"#fff" }}>
+                {rankLabel} — {profile.champion_title}{profile.champion_streak && profile.champion_streak > 1 ? ` ×${profile.champion_streak} week streak! 🔥` : ""}
+              </div>
+              <div style={{ fontSize:12, color:"rgba(255,255,255,.6)" }}>
+                This week's leaderboard reward · {hasMulti ? `⚡ ${profile.xp_multiplier}x XP multiplier active` : ""}
+              </div>
+            </div>
+            <a href="/leaderboard" style={{ background:"rgba(255,255,255,.15)", color:"#fff", padding:"8px 16px", borderRadius:10, fontSize:12, fontWeight:700, border:"1px solid rgba(255,255,255,.2)", whiteSpace:"nowrap" }}>
+              View Leaderboard →
+            </a>
+          </div>
+        )}
+
         {/* PROFILE HERO */}
-        <div className="card overflow-hidden mb-4 fade-up" style={{ borderLeft: `3px solid ${lvlColor}` }}>
+        <div className="card overflow-hidden mb-4 fade-up" style={{ borderLeft:`3px solid ${rank===1?"#e8a800":rank===2?"#c0c0c0":rank===3?"#cd7f32":lvlColor}` }}>
           <div className="p-6">
             {editing ? (
               <div className="max-w-md">
-                <h2 className="text-xl font-900 text-stone-900 mb-5" style={{ fontFamily: "'Fraunces', serif" }}>Edit Profile</h2>
-
-                {/* Avatar uploader inside edit form */}
+                <h2 className="text-xl font-900 text-stone-900 mb-5" style={{ fontFamily:"'Fraunces',serif" }}>Edit Profile</h2>
                 <div className="flex items-center gap-4 mb-5 p-4 bg-stone-50 rounded-2xl border border-stone-200">
-                  <AvatarUploader
-                    userId={profile.id}
-                    currentUrl={profile.avatar_url || null}
-                    initials={getInitials(profile.full_name || "")}
-                    lvlColor={lvlColor}
-                    onUploaded={url => setProfile(p => p ? { ...p, avatar_url: url } : p)}
-                  />
+                  <AvatarUploader userId={profile.id} currentUrl={profile.avatar_url||null} initials={getInitials(profile.full_name||"")} lvlColor={lvlColor} rank={rank||undefined}
+                    onUploaded={url => setProfile(p => p ? { ...p, avatar_url:url } : p)} />
                   <div>
                     <p className="text-sm font-700 text-stone-700 mb-0.5">Profile Photo</p>
-                    <p className="text-xs text-stone-400 leading-relaxed">Click the avatar or 📷 button to upload.<br/>JPG, PNG, WEBP · Max 3 MB</p>
+                    <p className="text-xs text-stone-400 leading-relaxed">Click to upload · JPG, PNG, WEBP · Max 3 MB</p>
+                    {rank > 0 && <p className="text-xs font-700 mt-1" style={{ color:rank===1?"#e8a800":rank===2?"#c0c0c0":"#cd7f32" }}>✨ Your {rank===1?"gold":rank===2?"silver":"bronze"} border is showing!</p>}
                   </div>
                 </div>
-
                 <div className="flex flex-col gap-4">
                   {[
-                    { key: "full_name", label: "Full Name",  placeholder: "Your full name",                    type: "input"    },
-                    { key: "location",  label: "Location",   placeholder: "e.g. Cebu City, Philippines",       type: "input"    },
-                    { key: "bio",       label: "Bio",        placeholder: "Tell the community about yourself…", type: "textarea" },
+                    { key:"full_name", label:"Full Name",  placeholder:"Your full name",                    type:"input"    },
+                    { key:"location",  label:"Location",   placeholder:"e.g. Cebu City, Philippines",       type:"input"    },
+                    { key:"bio",       label:"Bio",        placeholder:"Tell the community about yourself…", type:"textarea" },
                   ].map(f => (
                     <div key={f.key}>
                       <label className="text-xs font-800 text-stone-400 uppercase tracking-widest block mb-1.5">{f.label}</label>
                       {f.type === "textarea" ? (
                         <textarea value={editForm[f.key as keyof typeof editForm]} rows={3} placeholder={f.placeholder}
-                          onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
-                          className="w-full p-3 rounded-xl border border-stone-200 bg-stone-50 text-sm outline-none focus:border-[#2d6a4f] transition-colors resize-none"
-                          style={{ fontFamily: "'DM Sans', sans-serif" }} />
+                          onChange={e => setEditForm(p => ({ ...p, [f.key]:e.target.value }))}
+                          className="w-full p-3 rounded-xl border border-stone-200 bg-stone-50 text-sm outline-none resize-none" style={{ fontFamily:"'DM Sans',sans-serif" }} />
                       ) : (
                         <input value={editForm[f.key as keyof typeof editForm]} placeholder={f.placeholder}
-                          onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
-                          className="w-full p-3 rounded-xl border border-stone-200 bg-stone-50 text-sm outline-none focus:border-[#2d6a4f] transition-colors"
-                          style={{ fontFamily: "'DM Sans', sans-serif" }} />
+                          onChange={e => setEditForm(p => ({ ...p, [f.key]:e.target.value }))}
+                          className="w-full p-3 rounded-xl border border-stone-200 bg-stone-50 text-sm outline-none" style={{ fontFamily:"'DM Sans',sans-serif" }} />
                       )}
                     </div>
                   ))}
                   <div className="flex gap-2 mt-1">
-                    <button onClick={() => setEditing(false)} className="flex-1 py-2.5 bg-stone-100 text-stone-600 rounded-xl text-sm font-700 hover:bg-stone-200 transition-colors border-0 cursor-pointer" style={{ fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
-                    <button onClick={handleSave} disabled={saving} className="py-2.5 px-8 bg-[#2d6a4f] text-white rounded-xl text-sm font-800 hover:bg-[#1a4a36] transition-colors border-0 cursor-pointer disabled:opacity-60" style={{ fontFamily: "'DM Sans', sans-serif", flex: 2 }}>
+                    <button onClick={() => setEditing(false)} className="flex-1 py-2.5 bg-stone-100 text-stone-600 rounded-xl text-sm font-700 border-0 cursor-pointer" style={{ fontFamily:"'DM Sans',sans-serif" }}>Cancel</button>
+                    <button onClick={handleSave} disabled={saving} className="py-2.5 px-8 bg-[#2d6a4f] text-white rounded-xl text-sm font-800 border-0 cursor-pointer disabled:opacity-60" style={{ fontFamily:"'DM Sans',sans-serif", flex:2 }}>
                       {saving ? "Saving…" : "Save Changes"}
                     </button>
                   </div>
@@ -475,34 +524,38 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div className="flex items-start gap-5 flex-wrap">
-                {/* Avatar in view mode — click to open edit */}
+                {/* ── PREMIUM AVATAR ── */}
                 <div className="relative shrink-0 cursor-pointer" onClick={() => setEditing(true)} title="Edit profile photo">
-                  <div className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center"
-                    style={{ background: profile.avatar_url ? "transparent" : `linear-gradient(135deg,${lvlColor},${lvlColor}99)`, boxShadow: `0 6px 20px ${lvlColor}33` }}>
-                    {profile.avatar_url ? (
-                      <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-white text-xl font-900">{getInitials(profile.full_name || "")}</span>
-                    )}
-                  </div>
-                  {/* Small camera hint */}
-                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white border border-stone-200 flex items-center justify-center" style={{ fontSize: 10, boxShadow: "0 1px 4px rgba(0,0,0,.12)" }}>📷</div>
+                  <PremiumAvatar url={profile.avatar_url||null} initials={getInitials(profile.full_name||"")} lvlColor={lvlColor} rank={rank||undefined} size={64} />
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <h1 className="text-2xl font-900 text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>{profile.full_name || "Unnamed User"}</h1>
-                    <span className="text-xs font-800 px-2.5 py-0.5 rounded-full" style={{ background: badge.bg, color: badge.color }}>{badge.emoji} {badge.name}</span>
-                    <span className="text-xs font-700 px-2.5 py-0.5 rounded-full" style={{ background: `${lvlColor}15`, color: lvlColor }}>{displayLevel}</span>
+                    <h1 className="text-2xl font-900 text-stone-900" style={{ fontFamily:"'Fraunces',serif" }}>{profile.full_name||"Unnamed User"}</h1>
+                    <span className="text-xs font-800 px-2.5 py-0.5 rounded-full" style={{ background:badge.bg, color:badge.color }}>{badge.emoji} {badge.name}</span>
+                    <span className="text-xs font-700 px-2.5 py-0.5 rounded-full" style={{ background:`${lvlColor}15`, color:lvlColor }}>{displayLevel}</span>
                     {profile.is_verified && <span className="text-xs font-700 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">✓ Verified</span>}
+                    {/* ── Champion title ── */}
+                    {profile.champion_title && (
+                      <span className="text-xs font-800 px-2.5 py-0.5 rounded-full" style={{ background:"#fffbeb", color:"#e8a800", border:"1px solid #f0d890" }}>
+                        🏆 {profile.champion_title}{profile.champion_streak && profile.champion_streak > 1 ? ` ×${profile.champion_streak}` : ""}
+                      </span>
+                    )}
+                    {/* ── XP Multiplier ── */}
+                    {hasMulti && (
+                      <span className="text-xs font-800 px-2.5 py-0.5 rounded-full" style={{ background:"#fdf0ee", color:"#c0392b", border:"1px solid #f0b8b0" }}>
+                        ⚡ {profile.xp_multiplier}x XP
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-stone-400 mb-3">@{profile.username}</p>
-                  {profile.bio ? <p className="text-sm text-stone-500 leading-relaxed mb-3 max-w-lg">{profile.bio}</p>
+                  {profile.bio
+                    ? <p className="text-sm text-stone-500 leading-relaxed mb-3 max-w-lg">{profile.bio}</p>
                     : <p className="text-sm text-stone-300 italic mb-3">No bio yet — add one to stand out!</p>}
                   {verifiedSkills.length > 0 && (
                     <div className="flex items-center gap-2 flex-wrap mb-3">
                       <span className="text-xs font-700 text-stone-400">Verified in:</span>
-                      {verifiedSkills.slice(0, 4).map(s => (
+                      {verifiedSkills.slice(0,4).map(s => (
                         <span key={s.id} className="text-xs font-700 px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">✓ {s.skills?.name}</span>
                       ))}
                       {verifiedSkills.length > 4 && <span className="text-xs text-stone-400">+{verifiedSkills.length - 4} more</span>}
@@ -512,21 +565,23 @@ export default function ProfilePage() {
                     {profile.location && <span>📍 {profile.location}</span>}
                     <span>📅 Joined {joinDate}</span>
                     {avgRating > 0 && <span>⭐ {avgRating.toFixed(2)} avg rating</span>}
-                    <span>🏅 {earnedBadges.length} badge{earnedBadges.length !== 1 ? "s" : ""}</span>
+                    <span>🏅 {earnedBadges.length} badge{earnedBadges.length!==1?"s":""}</span>
                   </div>
                 </div>
                 <button onClick={() => setEditing(true)}
                   className="px-4 py-2 bg-stone-100 text-stone-600 text-xs font-700 rounded-xl border border-stone-200 hover:bg-stone-200 transition-colors cursor-pointer shrink-0"
-                  style={{ fontFamily: "'DM Sans', sans-serif" }}>✏️ Edit Profile</button>
+                  style={{ fontFamily:"'DM Sans',sans-serif" }}>✏️ Edit Profile</button>
               </div>
             )}
             {!editing && (
               <div className="mt-5 pt-5 border-t border-stone-100">
                 <div className="flex justify-between mb-2">
-                  <span className="text-xs font-700 text-stone-500">⚡ {profile.xp} XP · {displayLevel}</span>
+                  <span className="text-xs font-700 text-stone-500">⚡ {profile.xp} XP · {displayLevel}{hasMulti ? ` · ⚡${profile.xp_multiplier}x multiplier active` : ""}</span>
                   <span className="text-xs text-stone-300">{xpNext - profile.xp > 0 ? `${xpNext - profile.xp} XP to next level` : "Max level!"}</span>
                 </div>
-                <div className="progress-bar"><div className="progress-fill" style={{ width: `${xpPct}%`, background: `linear-gradient(90deg,${lvlColor},${lvlColor}88)` }} /></div>
+                <div className="progress-bar">
+                  <div className="xp-bar" style={{ width:`${xpPct}%` }} />
+                </div>
               </div>
             )}
           </div>
@@ -534,18 +589,18 @@ export default function ProfilePage() {
 
         {/* STATS STRIP */}
         {!editing && (
-          <div className="grid grid-cols-5 gap-3 mb-4 fade-up" style={{ animationDelay: ".06s" }}>
+          <div className="grid grid-cols-5 gap-3 mb-4 fade-up" style={{ animationDelay:".06s" }}>
             {[
-              { label: "Credits",  value: profile.credits,    icon: "💰", color: "#2d6a4f", href: "/wallet"          },
-              { label: "XP",       value: profile.xp,         icon: "⚡", color: "#7c3aed", href: "/leaderboard"     },
-              { label: "Sessions", value: sessions,            icon: "📚", color: "#0891b2", href: "/sessions"        },
-              { label: "Listings", value: listings.length,     icon: "📋", color: "#b45309", href: "/listings/create" },
-              { label: "Badges",   value: earnedBadges.length, icon: "🏅", color: "#dc2626", href: "#"               },
+              { label:"Credits",  value:profile.credits,    icon:"💰", color:"#2d6a4f", href:"/wallet"          },
+              { label:"XP",       value:profile.xp,         icon:"⚡", color:"#7c3aed", href:"/leaderboard"     },
+              { label:"Sessions", value:sessions,            icon:"📚", color:"#0891b2", href:"/sessions"        },
+              { label:"Listings", value:listings.length,     icon:"📋", color:"#b45309", href:"/listings/create" },
+              { label:"Badges",   value:earnedBadges.length, icon:"🏅", color:"#dc2626", href:"#"               },
             ].map(s => (
               <a key={s.label} href={s.href}
-                onClick={s.label === "Badges" ? e => { e.preventDefault(); setActiveTab("badges"); } : undefined}
+                onClick={s.label==="Badges" ? e => { e.preventDefault(); setActiveTab("badges"); } : undefined}
                 className="card stat-card p-4 text-center block">
-                <div className="text-2xl font-900 leading-none mb-1" style={{ fontFamily: "'Fraunces', serif", color: s.color }}>{s.value}</div>
+                <div className="text-2xl font-900 leading-none mb-1" style={{ fontFamily:"'Fraunces',serif", color:s.color }}>{s.value}</div>
                 <div className="text-xs text-stone-400 font-700 uppercase tracking-wider">{s.label}</div>
               </a>
             ))}
@@ -554,14 +609,14 @@ export default function ProfilePage() {
 
         {/* MAIN GRID */}
         {!editing && (
-          <div className="grid gap-4 fade-up" style={{ gridTemplateColumns: "1fr 280px", animationDelay: ".1s" }}>
+          <div className="grid gap-4 fade-up" style={{ gridTemplateColumns:"1fr 280px", animationDelay:".1s" }}>
             <div className="flex flex-col gap-4">
 
               {/* SKILLS */}
               <div className="card p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-sm font-800 text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>Skills & Verifications</h3>
+                    <h3 className="text-sm font-800 text-stone-900" style={{ fontFamily:"'Fraunces',serif" }}>Skills & Verifications</h3>
                     <p className="text-xs text-stone-400 mt-0.5">Skills you've listed or been verified in</p>
                   </div>
                   <a href="/verify" className="text-xs font-700 text-[#2d6a4f] bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 hover:bg-green-100 transition-colors">+ Get Verified</a>
@@ -597,7 +652,7 @@ export default function ProfilePage() {
                       <p className="text-sm font-700 text-stone-800 mb-0.5">Get your skills verified!</p>
                       <p className="text-xs text-stone-500">Verified teachers get <strong>2x more bookings</strong>.</p>
                     </div>
-                    <a href="/verify" className="text-xs font-800 text-white bg-[#2d6a4f] px-3 py-2 rounded-lg hover:bg-[#1a4a36] transition-colors whitespace-nowrap">Verify Now →</a>
+                    <a href="/verify" className="text-xs font-800 text-white bg-[#2d6a4f] px-3 py-2 rounded-lg whitespace-nowrap">Verify Now →</a>
                   </div>
                 )}
               </div>
@@ -606,26 +661,24 @@ export default function ProfilePage() {
               <div>
                 <div className="flex bg-stone-100 p-1 rounded-xl gap-0.5 w-fit mb-4">
                   {[{k:"listings",l:"Listings"},{k:"badges",l:`Badges (${earnedBadges.length})`},{k:"activity",l:"Activity"}].map(t => (
-                    <button key={t.k} onClick={() => setActiveTab(t.k as "listings"|"badges"|"activity")}
-                      className={`px-4 py-1.5 rounded-lg text-xs font-700 transition-all border-0 cursor-pointer ${activeTab === t.k ? "bg-white text-stone-900 shadow-sm" : "text-stone-400 hover:text-stone-600 bg-transparent"}`}
-                      style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                      {t.l}
-                    </button>
+                    <button key={t.k} onClick={() => setActiveTab(t.k as any)}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-700 transition-all border-0 cursor-pointer ${activeTab===t.k?"bg-white text-stone-900 shadow-sm":"text-stone-400 bg-transparent"}`}
+                      style={{ fontFamily:"'DM Sans',sans-serif" }}>{t.l}</button>
                   ))}
                 </div>
 
                 {activeTab === "listings" && (
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-base font-900 text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>My Skill Listings</h3>
-                      <a href="/listings/create" className="text-xs font-700 text-white bg-[#2d6a4f] px-4 py-2 rounded-xl hover:bg-[#1a4a36] transition-colors">+ Create Listing</a>
+                      <h3 className="text-base font-900 text-stone-900" style={{ fontFamily:"'Fraunces',serif" }}>My Skill Listings</h3>
+                      <a href="/listings/create" className="text-xs font-700 text-white bg-[#2d6a4f] px-4 py-2 rounded-xl">+ Create Listing</a>
                     </div>
                     {listings.length === 0 ? (
                       <div className="card p-12 text-center">
                         <p className="text-4xl mb-3">📋</p>
-                        <h4 className="text-base font-900 text-stone-900 mb-1" style={{ fontFamily: "'Fraunces', serif" }}>No listings yet</h4>
+                        <h4 className="text-base font-900 text-stone-900 mb-1" style={{ fontFamily:"'Fraunces',serif" }}>No listings yet</h4>
                         <p className="text-xs text-stone-400 mb-5">Create a skill listing to start teaching!</p>
-                        <a href="/listings/create" className="inline-block text-xs font-700 text-white bg-[#2d6a4f] px-5 py-2.5 rounded-xl hover:bg-[#1a4a36] transition-colors">Create your first listing →</a>
+                        <a href="/listings/create" className="inline-block text-xs font-700 text-white bg-[#2d6a4f] px-5 py-2.5 rounded-xl">Create your first listing →</a>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-2">
@@ -635,22 +688,22 @@ export default function ProfilePage() {
                             <div key={listing.id} className="listing-row card px-5 py-4 flex items-center gap-4 justify-between flex-wrap">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                                  <span className="text-xs font-700 px-2.5 py-0.5 rounded-full" style={{ background: fmt.bg, color: fmt.color }}>{fmt.label}</span>
+                                  <span className="text-xs font-700 px-2.5 py-0.5 rounded-full" style={{ background:fmt.bg, color:fmt.color }}>{fmt.label}</span>
                                   {listing.skills && <span className="text-xs text-stone-400">{listing.skills.name}</span>}
-                                  <span className={`text-xs font-700 px-2.5 py-0.5 rounded-full ${listing.is_active ? "bg-green-50 text-green-700" : "bg-stone-100 text-stone-400"}`}>
+                                  <span className={`text-xs font-700 px-2.5 py-0.5 rounded-full ${listing.is_active?"bg-green-50 text-green-700":"bg-stone-100 text-stone-400"}`}>
                                     {listing.is_active ? "● Active" : "○ Paused"}
                                   </span>
                                 </div>
-                                <p className="text-sm font-800 text-stone-900 mb-0.5" style={{ fontFamily: "'Fraunces', serif" }}>{listing.title}</p>
+                                <p className="text-sm font-800 text-stone-900 mb-0.5" style={{ fontFamily:"'Fraunces',serif" }}>{listing.title}</p>
                                 <p className="text-xs text-stone-400">{listing.duration} min session</p>
                               </div>
                               <div className="text-right shrink-0 mr-2">
-                                <div className="text-xl font-900 text-[#2d6a4f]" style={{ fontFamily: "'Fraunces', serif" }}>{listing.credit_price} cr</div>
+                                <div className="text-xl font-900 text-[#2d6a4f]" style={{ fontFamily:"'Fraunces',serif" }}>{listing.credit_price} cr</div>
                                 <div className="text-xs text-stone-400">per session</div>
                               </div>
                               <div className="flex gap-2 shrink-0">
-                                <button onClick={() => openEditListing(listing)} style={{ padding: "6px 14px", borderRadius: 9, background: "#f5f0e8", border: "1.5px solid #e8e2d9", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#555", fontFamily: "'DM Sans',sans-serif" }}>✏️ Edit</button>
-                                <button onClick={() => setConfirmDeleteId(listing.id)} style={{ padding: "6px 14px", borderRadius: 9, background: "#fef2f2", border: "1.5px solid #fecaca", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#dc2626", fontFamily: "'DM Sans',sans-serif" }}>🗑</button>
+                                <button onClick={() => openEditListing(listing)} style={{ padding:"6px 14px", borderRadius:9, background:"#f5f0e8", border:"1.5px solid #e8e2d9", fontSize:12, fontWeight:700, cursor:"pointer", color:"#555", fontFamily:"'DM Sans',sans-serif" }}>✏️ Edit</button>
+                                <button onClick={() => setConfirmDeleteId(listing.id)} style={{ padding:"6px 14px", borderRadius:9, background:"#fef2f2", border:"1.5px solid #fecaca", fontSize:12, fontWeight:700, cursor:"pointer", color:"#dc2626", fontFamily:"'DM Sans',sans-serif" }}>🗑</button>
                               </div>
                             </div>
                           );
@@ -662,11 +715,11 @@ export default function ProfilePage() {
 
                 {activeTab === "badges" && (
                   <div>
-                    <h3 className="text-base font-900 text-stone-900 mb-3" style={{ fontFamily: "'Fraunces', serif" }}>Earned Badges</h3>
+                    <h3 className="text-base font-900 text-stone-900 mb-3" style={{ fontFamily:"'Fraunces',serif" }}>Earned Badges</h3>
                     {earnedBadges.length === 0 ? (
                       <div className="card p-12 text-center">
                         <p className="text-4xl mb-3">🏅</p>
-                        <h4 className="text-base font-900 text-stone-900 mb-1" style={{ fontFamily: "'Fraunces', serif" }}>No badges yet</h4>
+                        <h4 className="text-base font-900 text-stone-900 mb-1" style={{ fontFamily:"'Fraunces',serif" }}>No badges yet</h4>
                         <p className="text-xs text-stone-400">Complete sessions, answer bounties, and participate!</p>
                       </div>
                     ) : (
@@ -674,7 +727,7 @@ export default function ProfilePage() {
                         {earnedBadges.map((b, i) => (
                           <div key={i} className="card p-5 text-center">
                             <div className="text-4xl mb-3">{b.icon}</div>
-                            <p className="text-sm font-800 text-stone-900 mb-1" style={{ fontFamily: "'Fraunces', serif" }}>{b.name}</p>
+                            <p className="text-sm font-800 text-stone-900 mb-1" style={{ fontFamily:"'Fraunces',serif" }}>{b.name}</p>
                             <p className="text-xs text-stone-400 leading-relaxed">{b.desc}</p>
                           </div>
                         ))}
@@ -685,26 +738,26 @@ export default function ProfilePage() {
 
                 {activeTab === "activity" && (
                   <div>
-                    <h3 className="text-base font-900 text-stone-900 mb-3" style={{ fontFamily: "'Fraunces', serif" }}>Credit Activity</h3>
+                    <h3 className="text-base font-900 text-stone-900 mb-3" style={{ fontFamily:"'Fraunces',serif" }}>Credit Activity</h3>
                     {transactions.length === 0 ? (
                       <div className="card p-12 text-center">
                         <p className="text-4xl mb-3">📊</p>
-                        <h4 className="text-base font-900 text-stone-900 mb-1" style={{ fontFamily: "'Fraunces', serif" }}>No transactions yet</h4>
+                        <h4 className="text-base font-900 text-stone-900 mb-1" style={{ fontFamily:"'Fraunces',serif" }}>No transactions yet</h4>
                         <p className="text-xs text-stone-400">Your credit history will appear here.</p>
                       </div>
                     ) : (
                       <div className="card overflow-hidden">
                         {transactions.map((tx, i) => (
-                          <div key={tx.id} className="tx-row flex items-center justify-between gap-3 px-5 py-3.5" style={{ borderBottom: i < transactions.length - 1 ? "1px solid #f5f0e8" : "none" }}>
+                          <div key={tx.id} className="tx-row flex items-center justify-between gap-3 px-5 py-3.5" style={{ borderBottom:i<transactions.length-1?"1px solid #f5f0e8":"none" }}>
                             <div className="flex items-center gap-3">
-                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 ${tx.amount > 0 ? "bg-green-50" : "bg-red-50"}`}>{TX_ICONS[tx.type] || "💳"}</div>
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 ${tx.amount>0?"bg-green-50":"bg-red-50"}`}>{TX_ICONS[tx.type]||"💳"}</div>
                               <div>
-                                <p className="text-sm font-600 text-stone-700">{tx.description || tx.type.replace(/_/g, " ")}</p>
-                                <p className="text-xs text-stone-400">{new Date(tx.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                                <p className="text-sm font-600 text-stone-700">{tx.description||tx.type.replace(/_/g," ")}</p>
+                                <p className="text-xs text-stone-400">{new Date(tx.created_at).toLocaleDateString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</p>
                               </div>
                             </div>
-                            <div className="text-base font-900 shrink-0" style={{ fontFamily: "'Fraunces', serif", color: tx.amount > 0 ? "#2d6a4f" : "#dc2626" }}>
-                              {tx.amount > 0 ? "+" : ""}{tx.amount} cr
+                            <div className="text-base font-900 shrink-0" style={{ fontFamily:"'Fraunces',serif", color:tx.amount>0?"#2d6a4f":"#dc2626" }}>
+                              {tx.amount>0?"+":""}{tx.amount} cr
                             </div>
                           </div>
                         ))}
@@ -717,28 +770,55 @@ export default function ProfilePage() {
 
             {/* RIGHT SIDEBAR */}
             <div className="flex flex-col gap-3">
+
+              {/* ── Champion card in sidebar ── */}
+              {rank > 0 && (
+                <div style={{ background:rankBgColor||"#1a3d2e", borderRadius:20, padding:"18px 20px", color:"#fff" }}>
+                  <div style={{ fontSize:9, fontWeight:800, opacity:.55, textTransform:"uppercase", letterSpacing:".12em", marginBottom:10 }}>🏆 This Week's Status</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
+                    <span style={{ fontSize:40 }}>{rank===1?"👑":rank===2?"🥈":"🥉"}</span>
+                    <div>
+                      <div style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900 }}>#{rank} on Leaderboard</div>
+                      {profile.champion_title && <div style={{ fontSize:12, opacity:.65 }}>🏆 {profile.champion_title}</div>}
+                    </div>
+                  </div>
+                  {hasMulti && (
+                    <div style={{ background:"rgba(255,255,255,.12)", borderRadius:10, padding:"10px 12px", marginBottom:10, display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:18 }}>⚡</span>
+                      <div>
+                        <div style={{ fontSize:12, fontWeight:800 }}>{profile.xp_multiplier}x XP Multiplier Active</div>
+                        <div style={{ fontSize:10, opacity:.6 }}>Every XP you earn this week is boosted</div>
+                      </div>
+                    </div>
+                  )}
+                  <a href="/leaderboard" style={{ display:"block", textAlign:"center", background:"rgba(255,255,255,.15)", borderRadius:10, padding:"9px", fontSize:12, fontWeight:700, color:"#fff", border:"1px solid rgba(255,255,255,.2)" }}>
+                    View Full Leaderboard →
+                  </a>
+                </div>
+              )}
+
               <div className="card p-5">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-800 text-stone-400 uppercase tracking-widest">Badge Tier</p>
-                  <span className="text-xs font-800 px-2.5 py-0.5 rounded-full" style={{ background: badge.bg, color: badge.color }}>{badge.emoji} {badge.name}</span>
+                  <span className="text-xs font-800 px-2.5 py-0.5 rounded-full" style={{ background:badge.bg, color:badge.color }}>{badge.emoji} {badge.name}</span>
                 </div>
-                <div className="rounded-xl p-3 mb-4 flex items-center gap-3 border" style={{ background: badge.bg, borderColor: `${badge.color}22` }}>
+                <div className="rounded-xl p-3 mb-4 flex items-center gap-3 border" style={{ background:badge.bg, borderColor:`${badge.color}22` }}>
                   <span className="text-3xl">{badge.emoji}</span>
                   <div>
-                    <p className="text-sm font-900" style={{ fontFamily: "'Fraunces', serif", color: badge.color }}>{badge.name}</p>
-                    <p className="text-xs font-500" style={{ color: badge.color, opacity: 0.75 }}>{badge.desc}</p>
+                    <p className="text-sm font-900" style={{ fontFamily:"'Fraunces',serif", color:badge.color }}>{badge.name}</p>
+                    <p className="text-xs font-500" style={{ color:badge.color, opacity:.75 }}>{badge.desc}</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 mb-4">
                   {[
-                    { icon: "⚡", val: profile.xp,          label: "XP"       },
-                    { icon: "📚", val: sessions,             label: "Sessions" },
-                    { icon: "⭐", val: avgRating.toFixed(2), label: "Rating"   },
+                    { icon:"⚡", val:profile.xp,          label:"XP"       },
+                    { icon:"📚", val:sessions,             label:"Sessions" },
+                    { icon:"⭐", val:avgRating.toFixed(2), label:"Rating"   },
                   ].map(s => (
                     <div key={s.label} className="bg-stone-50 rounded-xl p-2.5 text-center">
                       <div className="text-sm mb-1">{s.icon}</div>
-                      <div className="text-base font-900 text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>{s.val}</div>
-                      <div className="text-xs text-stone-400 font-600 uppercase tracking-wide" style={{ fontSize: 9 }}>{s.label}</div>
+                      <div className="text-base font-900 text-stone-900" style={{ fontFamily:"'Fraunces',serif" }}>{s.val}</div>
+                      <div className="text-xs text-stone-400 font-600 uppercase tracking-wide" style={{ fontSize:9 }}>{s.label}</div>
                     </div>
                   ))}
                 </div>
@@ -746,9 +826,9 @@ export default function ProfilePage() {
                   <div>
                     <p className="text-xs font-700 text-stone-600 mb-3">Next: {nextBadge.emoji} {nextBadge.name}</p>
                     {[
-                      { label: "XP",       current: profile.xp, req: nextBadge.xpReq       },
-                      { label: "Sessions", current: sessions,    req: nextBadge.sessionsReq  },
-                      { label: "Rating",   current: avgRating,   req: nextBadge.ratingReq    },
+                      { label:"XP",       current:profile.xp, req:nextBadge.xpReq       },
+                      { label:"Sessions", current:sessions,    req:nextBadge.sessionsReq  },
+                      { label:"Rating",   current:avgRating,   req:nextBadge.ratingReq    },
                     ].filter(r => r.req > 0).map(r => {
                       const done = r.current >= r.req;
                       const pct  = Math.min((r.current / r.req) * 100, 100);
@@ -756,21 +836,21 @@ export default function ProfilePage() {
                         <div key={r.label} className="mb-2.5">
                           <div className="flex justify-between mb-1">
                             <span className="text-xs text-stone-500 font-600">{r.label}</span>
-                            <span className={`text-xs font-700 ${done ? "text-[#2d6a4f]" : "text-stone-400"}`}>
-                              {done ? "✓" : `${typeof r.current === "number" && r.current % 1 !== 0 ? r.current.toFixed(2) : r.current} / ${r.req}`}
+                            <span className={`text-xs font-700 ${done?"text-[#2d6a4f]":"text-stone-400"}`}>
+                              {done ? "✓" : `${typeof r.current==="number"&&r.current%1!==0?r.current.toFixed(2):r.current} / ${r.req}`}
                             </span>
                           </div>
-                          <div className="progress-bar"><div className="progress-fill" style={{ width: `${pct}%`, background: done ? "#2d6a4f" : "#cbd5e1" }} /></div>
+                          <div className="progress-bar"><div className="progress-fill" style={{ width:`${pct}%`, background:done?"#2d6a4f":"#cbd5e1" }} /></div>
                         </div>
                       );
                     })}
                   </div>
                 )}
                 <div className="pt-3 mt-1 border-t border-stone-100">
-                  <p className="text-xs font-700 text-stone-300 uppercase tracking-widest mb-2" style={{ fontSize: 9 }}>All Tiers</p>
+                  <p className="text-xs font-700 text-stone-300 uppercase tracking-widest mb-2" style={{ fontSize:9 }}>All Tiers</p>
                   <div className="flex flex-wrap gap-1.5">
                     {BADGE_TIERS.map(t => (
-                      <span key={t.name} className="text-xs font-700 px-2 py-0.5 rounded-full" style={{ background: t.name === badge.name ? t.bg : "#f5f0e8", color: t.name === badge.name ? t.color : "#ccc" }}>
+                      <span key={t.name} className="text-xs font-700 px-2 py-0.5 rounded-full" style={{ background:t.name===badge.name?t.bg:"#f5f0e8", color:t.name===badge.name?t.color:"#ccc" }}>
                         {t.emoji} {t.name}
                       </span>
                     ))}
@@ -784,30 +864,30 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-3">
                     <span className="text-xl">💫</span>
                     <div>
-                      <div className="text-2xl font-900 text-amber-700 leading-none" style={{ fontFamily: "'Fraunces', serif" }}>{rep}<span className="text-sm text-amber-400">/100</span></div>
+                      <div className="text-2xl font-900 text-amber-700 leading-none" style={{ fontFamily:"'Fraunces',serif" }}>{rep}<span className="text-sm text-amber-400">/100</span></div>
                       <div className="text-xs font-700 text-amber-700">{repLabel}</div>
                     </div>
                   </div>
-                  <svg viewBox="0 0 52 52" className="w-11 h-11 shrink-0" style={{ transform: "rotate(-90deg)" }}>
+                  <svg viewBox="0 0 52 52" className="w-11 h-11 shrink-0" style={{ transform:"rotate(-90deg)" }}>
                     <circle cx="26" cy="26" r="21" fill="none" stroke="#fde68a" strokeWidth="5" />
-                    <circle cx="26" cy="26" r="21" fill="none" stroke="#f59e0b" strokeWidth="5" strokeDasharray={`${(Math.min(rep, 100) / 100) * 131.9} 131.9`} strokeLinecap="round" />
+                    <circle cx="26" cy="26" r="21" fill="none" stroke="#f59e0b" strokeWidth="5" strokeDasharray={`${(Math.min(rep,100)/100)*131.9} 131.9`} strokeLinecap="round" />
                   </svg>
                 </div>
                 {[
-                  { icon: "⭐", label: "Rating",   pts: Math.min(Math.round(avgRating * sessions * 4), 80), max: 80, detail: `${avgRating.toFixed(2)} avg × ${sessions} sessions` },
-                  { icon: "📚", label: "Sessions", pts: Math.min(sessions * 2, 15),                         max: 15, detail: `${sessions} × 2 pts` },
-                  { icon: "🔄", label: "Repeats",  pts: Math.min(repeatClients * 5, 10),                    max: 10, detail: `${repeatClients} repeat clients × 5` },
-                  { icon: "⚠️", label: "Disputes", pts: disputes * -15,                                      max: 0,  detail: disputes === 0 ? "No disputes ✓" : `${disputes} × -15` },
+                  { icon:"⭐", label:"Rating",   pts:Math.min(Math.round(avgRating*sessions*4),80), max:80, detail:`${avgRating.toFixed(2)} avg × ${sessions} sessions` },
+                  { icon:"📚", label:"Sessions", pts:Math.min(sessions*2,15),                       max:15, detail:`${sessions} × 2 pts` },
+                  { icon:"🔄", label:"Repeats",  pts:Math.min(repeatClients*5,10),                  max:10, detail:`${repeatClients} repeat clients × 5` },
+                  { icon:"⚠️", label:"Disputes", pts:disputes*-15,                                  max:0,  detail:disputes===0?"No disputes ✓":`${disputes} × -15` },
                 ].map(r => (
                   <div key={r.label} className="mb-3">
                     <div className="flex justify-between mb-1">
                       <span className="text-xs font-700 text-stone-600">{r.icon} {r.label}</span>
-                      <span className={`text-xs font-800 ${r.pts > 0 ? "text-[#2d6a4f]" : r.pts < 0 ? "text-red-500" : "text-stone-400"}`}>
-                        {r.pts > 0 ? `+${r.pts}` : r.pts < 0 ? `${r.pts}` : "✓"}{r.pts !== 0 ? " pts" : ""}
+                      <span className={`text-xs font-800 ${r.pts>0?"text-[#2d6a4f]":r.pts<0?"text-red-500":"text-stone-400"}`}>
+                        {r.pts>0?`+${r.pts}`:r.pts<0?`${r.pts}`:"✓"}{r.pts!==0?" pts":""}
                       </span>
                     </div>
                     <p className="text-xs text-stone-400 mb-1">{r.detail}</p>
-                    {r.max > 0 && <div className="progress-bar"><div className="progress-fill" style={{ width: `${Math.min((r.pts / r.max) * 100, 100)}%`, background: "#f59e0b" }} /></div>}
+                    {r.max>0 && <div className="progress-bar"><div className="progress-fill" style={{ width:`${Math.min((r.pts/r.max)*100,100)}%`, background:"#f59e0b" }} /></div>}
                   </div>
                 ))}
               </div>
