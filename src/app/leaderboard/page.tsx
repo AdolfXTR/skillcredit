@@ -3,17 +3,17 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { bayesianAvg } from "@/lib/ratings";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 type LeaderboardUser = {
   id: string; full_name: string; username: string;
   credits: number; xp: number; level: string;
+  avatar_url?: string | null;
 };
 type RatedUser = {
   id: string; full_name: string; username: string;
   level: string; bayesian_avg: number; rating_count: number;
+  avatar_url?: string | null;
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const LEVEL_COLORS: Record<string, { color: string; bg: string; ring: string }> = {
   Legend:      { color:"#d97706", bg:"#fffbeb", ring:"#fde68a" },
   Master:      { color:"#0891b2", bg:"#e0f2fe", ring:"#bae6fd" },
@@ -59,7 +59,27 @@ function Stars({ value, size = 13 }: { value: number; size?: number }) {
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+function UserAvatar({ name, level, avatarUrl, size = 44, isDark = false }: {
+  name: string; level: string; avatarUrl?: string | null; size?: number; isDark?: boolean;
+}) {
+  const lc = LEVEL_COLORS[level] || LEVEL_COLORS.Seedling;
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
+      background: avatarUrl ? "transparent" : (isDark ? "rgba(255,255,255,.2)" : lc.bg),
+      border: `2px solid ${isDark ? "rgba(255,255,255,.3)" : lc.ring}`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.36, fontWeight: 800,
+      color: isDark ? "#fff" : lc.color,
+    }}>
+      {avatarUrl
+        ? <img src={avatarUrl} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        : initials(name)
+      }
+    </div>
+  );
+}
+
 export default function LeaderboardPage() {
   const [tab,        setTab]        = useState<"xp"|"credits"|"rating">("xp");
   const [leaders,    setLeaders]    = useState<LeaderboardUser[]>([]);
@@ -69,7 +89,6 @@ export default function LeaderboardPage() {
   const [loading,    setLoading]    = useState(true);
   const [rateLoad,   setRateLoad]   = useState(true);
 
-  // ── XP / Credits fetch ────────────────────────────────────────────────────
   useEffect(() => {
     if (tab === "rating") return;
     const load = async () => {
@@ -78,7 +97,7 @@ export default function LeaderboardPage() {
       if (user) setMyId(user.id);
       const { data, error } = await supabase
         .from("profiles")
-        .select("id,full_name,username,credits,xp,level")
+        .select("id,full_name,username,credits,xp,level,avatar_url")
         .order(tab === "credits" ? "credits" : "xp", { ascending: false })
         .limit(20);
       if (error || !data || !data.length) {
@@ -92,19 +111,16 @@ export default function LeaderboardPage() {
     load();
   }, [tab]);
 
-  // ── Top Rated fetch ───────────────────────────────────────────────────────
   useEffect(() => {
     if (tab !== "rating") return;
     const load = async () => {
       setRateLoad(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setMyId(user.id);
-
       try {
-        // Try Bayesian view first
         const { data: vd, error: ve } = await supabase
           .from("user_rating_stats")
-          .select(`rated_id, bayesian_avg, rating_count, profiles:rated_id(full_name,username,level)`)
+          .select(`rated_id, bayesian_avg, rating_count, profiles:rated_id(full_name,username,level,avatar_url)`)
           .order("bayesian_avg", { ascending: false })
           .gt("rating_count", 0)
           .limit(20);
@@ -115,14 +131,14 @@ export default function LeaderboardPage() {
             full_name:    r.profiles?.full_name  || "Unknown",
             username:     r.profiles?.username   || "unknown",
             level:        r.profiles?.level      || "Seedling",
+            avatar_url:   r.profiles?.avatar_url || null,
             bayesian_avg: parseFloat((r.bayesian_avg || 0).toFixed(2)),
             rating_count: r.rating_count,
           })));
         } else {
-          // Fallback: compute from raw ratings
           const { data: raw } = await supabase
             .from("ratings")
-            .select(`rated_id, overall, profiles:rated_id(full_name,username,level)`);
+            .select(`rated_id, overall, profiles:rated_id(full_name,username,level,avatar_url)`);
           if (raw && raw.length) {
             const g: Record<string, { overalls:number[]; p:any }> = {};
             (raw as any[]).forEach(r => {
@@ -133,7 +149,7 @@ export default function LeaderboardPage() {
               Object.entries(g)
                 .map(([id, { overalls, p }]) => ({
                   id, full_name: p?.full_name||"Unknown", username: p?.username||"unknown",
-                  level: p?.level||"Seedling",
+                  level: p?.level||"Seedling", avatar_url: p?.avatar_url||null,
                   bayesian_avg: parseFloat(bayesianAvg(overalls).toFixed(2)),
                   rating_count: overalls.length,
                 }))
@@ -148,7 +164,6 @@ export default function LeaderboardPage() {
     load();
   }, [tab]);
 
-  // ── Derived ───────────────────────────────────────────────────────────────
   const sorted      = [...leaders].sort((a,b) => tab==="credits" ? b.credits-a.credits : b.xp-a.xp);
   const myRank      = me ? sorted.findIndex(u => u.id === me.id) + 1 : 0;
   const myRatedRank = myId ? ratedUsers.findIndex(u => u.id === myId) + 1 : 0;
@@ -157,7 +172,6 @@ export default function LeaderboardPage() {
   const busy        = isRating ? rateLoad : loading;
   const top3        = isRating ? ratedUsers.slice(0,3) : sorted.slice(0,3);
 
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight:"100vh", background:"#f5f5f0", fontFamily:"'DM Sans',sans-serif" }}>
       <style>{`
@@ -165,8 +179,6 @@ export default function LeaderboardPage() {
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0} a{text-decoration:none;color:inherit}
         @keyframes fadeUp  {from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
         @keyframes shimmer {0%{background-position:-200% 0}100%{background-position:200% 0}}
-        @keyframes glow    {0%,100%{box-shadow:0 4px 24px rgba(45,106,79,.25)}50%{box-shadow:0 8px 40px rgba(45,106,79,.45)}}
-        @keyframes starglow{0%,100%{box-shadow:0 4px 24px rgba(245,158,11,.2)}50%{box-shadow:0 8px 40px rgba(245,158,11,.45)}}
         @keyframes skel    {0%,100%{opacity:.5}50%{opacity:1}}
         .tab-btn{border:none;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .14s}
         .row{transition:background .13s;cursor:pointer}
@@ -177,7 +189,6 @@ export default function LeaderboardPage() {
         .xpbar{background:linear-gradient(90deg,#2d6a4f,#52b788);background-size:200%;animation:shimmer 2.5s infinite;border-radius:999px;height:100%}
       `}</style>
 
-      {/* ── NAV ──────────────────────────────────────────────────────────────── */}
       <nav style={{ background:"rgba(255,255,255,.97)", backdropFilter:"blur(16px)", borderBottom:"1.5px solid #e8e2d9", padding:"0 32px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100 }}>
         <a href="/dashboard">
           <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#2d6a4f" }}>Skill</span>
@@ -195,14 +206,12 @@ export default function LeaderboardPage() {
 
       <div style={{ maxWidth:860, margin:"0 auto", padding:"36px 24px 80px" }}>
 
-        {/* HEADER */}
         <div style={{ textAlign:"center", marginBottom:32, animation:"fadeUp .4s ease" }}>
           <div style={{ fontSize:11, fontWeight:800, color:"#2d6a4f", letterSpacing:".12em", textTransform:"uppercase", marginBottom:8 }}>Community Rankings</div>
           <h1 style={{ fontFamily:"'Fraunces',serif", fontSize:42, fontWeight:900, color:"#1a1a1a", letterSpacing:"-.5px", marginBottom:10 }}>Leaderboard 🏆</h1>
           <p style={{ fontSize:14, color:"#aaa" }}>Top contributors, biggest earners, and highest rated teachers.</p>
         </div>
 
-        {/* WEEKLY BONUSES */}
         <div style={{ display:"flex", gap:12, marginBottom:32, justifyContent:"center", animation:"fadeUp .4s .05s ease both" }}>
           {WEEKLY.map(b => (
             <div key={b.rank} style={{ background:"#fff", borderRadius:16, padding:"16px 28px", textAlign:"center", border:"1.5px solid #e8e2d9", flex:1, maxWidth:160 }}>
@@ -213,7 +222,6 @@ export default function LeaderboardPage() {
           ))}
         </div>
 
-        {/* TAB SWITCHER */}
         <div style={{ display:"flex", justifyContent:"center", marginBottom:24, animation:"fadeUp .4s .1s ease both" }}>
           <div style={{ display:"flex", gap:3, background:"#fff", borderRadius:14, padding:4, border:"1.5px solid #e8e2d9", boxShadow:"0 2px 8px rgba(0,0,0,.04)" }}>
             {([
@@ -232,7 +240,6 @@ export default function LeaderboardPage() {
           </div>
         </div>
 
-        {/* RATING TAB INFO PILL */}
         {isRating && (
           <div style={{ textAlign:"center", marginBottom:20, animation:"fadeUp .3s ease" }}>
             <span style={{ fontSize:12, color:"#b45309", fontWeight:700, background:"#fffbeb", padding:"7px 18px", borderRadius:999, border:"1.5px solid #fde68a", display:"inline-flex", alignItems:"center", gap:6 }}>
@@ -241,11 +248,11 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {/* MY RANK BANNER — XP/Credits */}
         {!isRating && myRank > 0 && me && (
           <div style={{ background:"#e8f4e8", borderRadius:14, padding:"14px 22px", marginBottom:20, display:"flex", justifyContent:"space-between", alignItems:"center", border:"1.5px solid #2d6a4f", animation:"fadeUp .3s ease" }}>
             <div style={{ display:"flex", gap:12, alignItems:"center" }}>
               <span style={{ fontSize:22 }}>{medal(myRank)}</span>
+              <UserAvatar name={me.full_name} level={me.level} avatarUrl={me.avatar_url} size={36} />
               <div>
                 <div style={{ fontSize:13, fontWeight:700, color:"#2d6a4f" }}>Your rank</div>
                 <div style={{ fontSize:12, color:"#555" }}>@{me.username} · {LEVEL_ICONS[me.level]} {me.level}</div>
@@ -257,11 +264,11 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {/* MY RANK BANNER — Rating */}
         {isRating && myRated && myRatedRank > 0 && (
           <div style={{ background:"#fffbeb", borderRadius:14, padding:"14px 22px", marginBottom:20, display:"flex", justifyContent:"space-between", alignItems:"center", border:"1.5px solid #fde68a", animation:"fadeUp .3s ease" }}>
             <div style={{ display:"flex", gap:12, alignItems:"center" }}>
               <span style={{ fontSize:22 }}>{medal(myRatedRank)}</span>
+              <UserAvatar name={myRated.full_name} level={myRated.level} avatarUrl={myRated.avatar_url} size={36} />
               <div>
                 <div style={{ fontSize:13, fontWeight:700, color:"#b45309" }}>Your rating rank</div>
                 <div style={{ fontSize:12, color:"#666" }}>@{myRated.username} · {myRated.rating_count} review{myRated.rating_count!==1?"s":""}</div>
@@ -274,7 +281,6 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {/* NOT RANKED YET — Rating */}
         {isRating && !myRated && !rateLoad && (
           <div style={{ background:"#f5f0e8", borderRadius:14, padding:"14px 22px", marginBottom:20, display:"flex", alignItems:"center", gap:12, border:"1.5px dashed #d4cfc6", animation:"fadeUp .3s ease" }}>
             <span style={{ fontSize:20 }}>⭐</span>
@@ -283,18 +289,18 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {/* ── PODIUM TOP 3 ──────────────────────────────────────────────────── */}
+        {/* PODIUM TOP 3 */}
         {!busy && top3.length >= 3 && (() => {
           const podiumData = [
-            { user: top3[1], pos: 2, medal: "🥈", scale: 1,    extra: {} },
-            { user: top3[0], pos: 1, medal: "🥇", scale: 1.04, extra: { background: isRating ? "linear-gradient(135deg,#b45309,#92400e)" : "linear-gradient(135deg,#2d6a4f,#1b4332)", color: "#fff" } },
-            { user: top3[2], pos: 3, medal: "🥉", scale: 1,    extra: {} },
+            { user: top3[1], pos: 2, m: "🥈", scale: 1,    extra: {} },
+            { user: top3[0], pos: 1, m: "🥇", scale: 1.04, extra: { isDark: true } },
+            { user: top3[2], pos: 3, m: "🥉", scale: 1,    extra: {} },
           ];
           return (
             <div style={{ display:"flex", gap:12, marginBottom:20, alignItems:"flex-end", animation:"fadeUp .4s .15s ease both" }}>
-              {podiumData.map(({ user, pos, medal: m, scale, extra }) => {
+              {podiumData.map(({ user, pos, m, scale, extra }) => {
                 const lc = LEVEL_COLORS[(user as any).level || "Seedling"] || LEVEL_COLORS.Seedling;
-                const isDark = !!extra.color;
+                const isDark = (extra as any).isDark || false;
                 return (
                   <a key={(user as any).id || pos} href={`/profile/${(user as any).username}`}
                     className="pod"
@@ -302,25 +308,24 @@ export default function LeaderboardPage() {
                              border:`1.5px solid ${isDark?"transparent":lc.ring}`,
                              transform:`scale(${scale})`,
                              boxShadow: pos===1 ? (isRating ? "0 8px 32px rgba(180,83,9,.3)" : "0 8px 32px rgba(45,106,79,.3)") : "0 2px 8px rgba(0,0,0,.04)",
-                             ...(isDark ? extra : { background:"#fff" }) }}>
+                             background: isDark ? (isRating ? "linear-gradient(135deg,#b45309,#92400e)" : "linear-gradient(135deg,#2d6a4f,#1b4332)") : "#fff",
+                             color: isDark ? "#fff" : "inherit" }}>
                     <div style={{ fontSize: pos===1?38:32, marginBottom:10 }}>{m}</div>
-                    {/* Avatar */}
-                    <div style={{ width:pos===1?56:48, height:pos===1?56:48, borderRadius:"50%",
-                                  background: isDark ? "rgba(255,255,255,.2)" : lc.bg,
-                                  border: `2px solid ${isDark?"rgba(255,255,255,.3)":lc.ring}`,
-                                  display:"flex", alignItems:"center", justifyContent:"center",
-                                  fontSize:pos===1?22:18, fontWeight:800,
-                                  color: isDark?"#fff":lc.color, margin:"0 auto 10px" }}>
-                      {initials((user as any).full_name)}
+                    <div style={{ display:"flex", justifyContent:"center", marginBottom:10 }}>
+                      <UserAvatar
+                        name={(user as any).full_name}
+                        level={(user as any).level}
+                        avatarUrl={(user as any).avatar_url}
+                        size={pos===1?56:48}
+                        isDark={isDark}
+                      />
                     </div>
-                    {/* Name */}
                     <div style={{ fontSize:pos===1?14:13, fontWeight:800, color:isDark?"#fff":"#333", marginBottom:2 }}>
                       {(user as any).full_name.split(" ")[0]}
                     </div>
                     <div style={{ fontSize:11, color:isDark?"rgba(255,255,255,.6)":"#bbb", marginBottom:10 }}>
                       @{(user as any).username}
                     </div>
-                    {/* Score */}
                     {isRating ? (
                       <>
                         <div style={{ fontFamily:"'Fraunces',serif", fontSize:pos===1?26:20, fontWeight:900, color:isDark?"#fff":pos===2?"#94a3b8":"#b45309", lineHeight:1 }}>
@@ -343,21 +348,16 @@ export default function LeaderboardPage() {
           );
         })()}
 
-        {/* ── FULL LIST ─────────────────────────────────────────────────────── */}
+        {/* FULL LIST */}
         <div style={{ background:"#fff", borderRadius:20, border:"1.5px solid #e8e2d9", overflow:"hidden", animation:"fadeUp .4s .2s ease both" }}>
-
-          {/* List header */}
           <div style={{ padding:"14px 24px", borderBottom:"1px solid #f5f0e8", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <span style={{ fontSize:12, fontWeight:700, color:"#aaa", textTransform:"uppercase", letterSpacing:".06em" }}>
               {isRating ? "Ranked by Bayesian Average Rating" : tab==="xp" ? "Ranked by Total XP Earned" : "Ranked by Credits Held"}
             </span>
-            {isRating && (
-              <span style={{ fontSize:10, color:"#ccc", fontWeight:600 }}>C=5 · m=3.5</span>
-            )}
+            {isRating && <span style={{ fontSize:10, color:"#ccc", fontWeight:600 }}>C=5 · m=3.5</span>}
           </div>
 
           {busy ? (
-            /* Skeleton */
             <div>
               {[1,2,3,4,5,6].map(i => (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:14, padding:"16px 24px", borderBottom:"1px solid #f5f0e8" }}>
@@ -372,7 +372,6 @@ export default function LeaderboardPage() {
               ))}
             </div>
           ) : isRating ? (
-            /* ── Rating rows ── */
             ratedUsers.length === 0 ? (
               <div style={{ textAlign:"center", padding:"64px 0" }}>
                 <div style={{ fontSize:44, marginBottom:12 }}>⭐</div>
@@ -383,63 +382,48 @@ export default function LeaderboardPage() {
               const lc   = LEVEL_COLORS[user.level] || LEVEL_COLORS.Seedling;
               const isMe = user.id === myId;
               return (
-                <a key={user.id} href={`/profile/${user.username}`}
-                  className="row"
+                <a key={user.id} href={`/profile/${user.username}`} className="row"
                   style={{ display:"flex", alignItems:"center", padding:"15px 24px", background:isMe?"#fffbeb":"#fff", borderBottom:i<ratedUsers.length-1?"1px solid #f5f0e8":"none" }}>
-                  {/* Rank */}
                   <div style={{ width:46, textAlign:"center", flexShrink:0 }}>
                     <span style={{ fontSize:i<3?22:13, fontWeight:700, color:i<3?undefined:"#ccc" }}>{medal(i+1)}</span>
                   </div>
-                  {/* Avatar */}
-                  <div style={{ width:44, height:44, borderRadius:"50%", background:lc.bg, border:`2px solid ${lc.ring}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:800, color:lc.color, flexShrink:0, marginRight:14 }}>
-                    {initials(user.full_name)}
+                  <div style={{ marginRight:14 }}>
+                    <UserAvatar name={user.full_name} level={user.level} avatarUrl={user.avatar_url} size={44} />
                   </div>
-                  {/* Name + level */}
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
-                      <span style={{ fontSize:14, fontWeight:700, color:"#1a1a1a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                        {user.full_name}
-                      </span>
+                      <span style={{ fontSize:14, fontWeight:700, color:"#1a1a1a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.full_name}</span>
                       {isMe && <span style={{ fontSize:9, background:"#2d6a4f", color:"#fff", padding:"2px 7px", borderRadius:999, fontWeight:800, flexShrink:0 }}>YOU</span>}
                       {i===0 && <span style={{ fontSize:9, background:"#fffbeb", color:"#b45309", padding:"2px 7px", borderRadius:999, fontWeight:800, border:"1px solid #fde68a", flexShrink:0 }}>TOP RATED ⭐</span>}
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:3 }}>
                       <span style={{ fontSize:11, color:"#bbb" }}>@{user.username}</span>
-                      <span style={{ fontSize:10, background:lc.bg, color:lc.color, padding:"1px 7px", borderRadius:999, fontWeight:700 }}>
-                        {LEVEL_ICONS[user.level]} {user.level}
-                      </span>
+                      <span style={{ fontSize:10, background:lc.bg, color:lc.color, padding:"1px 7px", borderRadius:999, fontWeight:700 }}>{LEVEL_ICONS[user.level]} {user.level}</span>
                     </div>
                   </div>
-                  {/* Score */}
                   <div style={{ textAlign:"right", flexShrink:0 }}>
                     <div style={{ fontFamily:"'Fraunces',serif", fontSize:22, fontWeight:900, color:i===0?"#b45309":i===1?"#94a3b8":i===2?"#92400e":"#555", lineHeight:1, marginBottom:3 }}>
                       {user.bayesian_avg.toFixed(2)}
                     </div>
                     <Stars value={user.bayesian_avg} size={12} />
-                    <div style={{ fontSize:10, color:"#bbb", fontWeight:600, marginTop:2 }}>
-                      {user.rating_count} review{user.rating_count!==1?"s":""}
-                    </div>
+                    <div style={{ fontSize:10, color:"#bbb", fontWeight:600, marginTop:2 }}>{user.rating_count} review{user.rating_count!==1?"s":""}</div>
                   </div>
                 </a>
               );
             })
           ) : (
-            /* ── XP / Credits rows ── */
             sorted.map((user, i) => {
               const lc   = LEVEL_COLORS[user.level] || LEVEL_COLORS.Seedling;
               const isMe = me?.id === user.id;
               return (
                 <div key={user.id} className="row"
                   style={{ display:"flex", alignItems:"center", padding:"15px 24px", background:isMe?"#f0fdf4":"#fff", borderBottom:i<sorted.length-1?"1px solid #f5f0e8":"none" }}>
-                  {/* Rank */}
                   <div style={{ width:46, textAlign:"center", flexShrink:0 }}>
                     <span style={{ fontSize:i<3?22:13, fontWeight:700, color:i<3?undefined:"#ccc" }}>{medal(i+1)}</span>
                   </div>
-                  {/* Avatar */}
-                  <div style={{ width:44, height:44, borderRadius:"50%", background:lc.bg, border:`2px solid ${lc.ring}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:800, color:lc.color, flexShrink:0, marginRight:14 }}>
-                    {initials(user.full_name)}
+                  <div style={{ marginRight:14 }}>
+                    <UserAvatar name={user.full_name} level={user.level} avatarUrl={user.avatar_url} size={44} />
                   </div>
-                  {/* Name + level */}
                   <div style={{ flex:1 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ fontSize:14, fontWeight:700, color:"#1a1a1a" }}>{user.full_name}</span>
@@ -447,12 +431,9 @@ export default function LeaderboardPage() {
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:3 }}>
                       <span style={{ fontSize:11, color:"#bbb" }}>@{user.username}</span>
-                      <span style={{ fontSize:10, background:lc.bg, color:lc.color, padding:"1px 7px", borderRadius:999, fontWeight:700 }}>
-                        {LEVEL_ICONS[user.level]} {user.level}
-                      </span>
+                      <span style={{ fontSize:10, background:lc.bg, color:lc.color, padding:"1px 7px", borderRadius:999, fontWeight:700 }}>{LEVEL_ICONS[user.level]} {user.level}</span>
                     </div>
                   </div>
-                  {/* Score */}
                   <div style={{ textAlign:"right" }}>
                     <div style={{ fontFamily:"'Fraunces',serif", fontSize:22, fontWeight:800, color:"#2d6a4f", lineHeight:1 }}>
                       {tab==="xp" ? user.xp : user.credits}
@@ -465,7 +446,6 @@ export default function LeaderboardPage() {
           )}
         </div>
 
-        {/* Footer formula note */}
         {isRating && !rateLoad && ratedUsers.length > 0 && (
           <p style={{ textAlign:"center", fontSize:11, color:"#ccc", fontWeight:600, marginTop:16 }}>
             Formula: (C × m + Σ ratings) ÷ (C + n) · C=5, m=3.5 (global mean)

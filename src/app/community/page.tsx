@@ -4,19 +4,20 @@ import { supabase } from "@/lib/supabase";
 
 type Profile = {
   id: string; full_name: string; username: string; credits: number; xp: number; level: string;
+  avatar_url?: string | null;
 };
 type ForumPost = {
   id: string; author_id: string; skill_id: string | null; title: string; body: string;
   image_url?: string | null; is_answered: boolean; accepted_answer_id: string | null;
   upvotes: number; status: string; created_at: string;
-  author?: { full_name: string; username: string; level: string };
+  author?: { full_name: string; username: string; level: string; avatar_url?: string | null };
   skill?: { name: string; category: string };
   answer_count?: number;
 };
 type ForumAnswer = {
   id: string; post_id: string; author_id: string; content: string; image_url?: string | null;
   upvotes: number; is_accepted: boolean; credits_awarded: boolean; created_at: string;
-  author?: { full_name: string; username: string; level: string };
+  author?: { full_name: string; username: string; level: string; avatar_url?: string | null };
 };
 type Skill = { id: string; name: string; category: string };
 
@@ -55,11 +56,18 @@ function getInitials(name: string) {
   return name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?";
 }
 
-function Avatar({ name, level, size = 40 }: { name: string; level?: string; size?: number }) {
+function Avatar({ name, level, avatarUrl, size = 40 }: { name: string; level?: string; avatarUrl?: string | null; size?: number }) {
   const bg = LEVEL_COLORS[level || "Seedling"] || "#2d6a4f";
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.3, fontWeight: 800, color: "#fff", flexShrink: 0, boxShadow: `0 0 0 2px white, 0 0 0 3px ${bg}33` }}>
-      {getInitials(name)}
+    <div style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
+      background: avatarUrl ? "transparent" : bg,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.3, fontWeight: 800, color: "#fff",
+      boxShadow: `0 0 0 2px white, 0 0 0 3px ${bg}33` }}>
+      {avatarUrl
+        ? <img src={avatarUrl} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        : getInitials(name)
+      }
     </div>
   );
 }
@@ -94,7 +102,6 @@ function ImageUploader({ onUploaded, label = "📷 Add Photo" }: { onUploaded: (
     onUploaded(data.publicUrl);
     setUploading(false); setDone(true);
   }
-
   function clear() { setPreview(null); setDone(false); onUploaded(null); if (inputRef.current) inputRef.current.value = ""; }
 
   return (
@@ -107,7 +114,7 @@ function ImageUploader({ onUploaded, label = "📷 Add Photo" }: { onUploaded: (
           <button onClick={clear} style={{ position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: "50%", background: "#1a1a1a", color: "#fff", border: "none", cursor: "pointer", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
       ) : (
-        <button onClick={() => inputRef.current?.click()} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 10, background: "#f5f0e8", border: "1.5px dashed #d4cec7", color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
+        <button onClick={() => inputRef.current?.click()} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 10, background: "#f5f0e8", border: "1.5px dashed #d4cec7", color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           {label}
         </button>
       )}
@@ -116,19 +123,14 @@ function ImageUploader({ onUploaded, label = "📷 Add Photo" }: { onUploaded: (
   );
 }
 
-// ── SHARED NAVBAR ──
 function Navbar({ profile, currentPath = "/community" }: { profile: Profile | null; currentPath?: string }) {
   const links = [
-    ["Dashboard", "/dashboard"],
-    ["Browse", "/listings"],
-    ["Bounties", "/bounties"],
-    ["Community", "/community"],
-    ["Sessions", "/sessions"],
-    ["Messages", "/messages"],
+    ["Dashboard", "/dashboard"], ["Browse", "/listings"], ["Bounties", "/bounties"],
+    ["Community", "/community"], ["Sessions", "/sessions"], ["Messages", "/messages"],
   ];
   return (
     <nav style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid #e8e2d9", padding: "0 28px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-      <a href="/dashboard" style={{ display: "flex", alignItems: "center" }}>
+      <a href="/dashboard">
         <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
         <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
       </a>
@@ -146,12 +148,12 @@ function Navbar({ profile, currentPath = "/community" }: { profile: Profile | nu
       </div>
       {profile ? (
         <a href="/profile" style={{ display: "flex", alignItems: "center", gap: 9, padding: "5px 14px 5px 6px", borderRadius: 999, background: "#f5f0e8", border: "1.5px solid #e8e2d9" }}>
-          <Avatar name={profile.full_name} level={profile.level} size={28} />
+          <Avatar name={profile.full_name} level={profile.level} avatarUrl={profile.avatar_url} size={28} />
           <span style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>@{profile.username}</span>
           <span style={{ fontSize: 12, fontWeight: 800, color: "#2d6a4f" }}>{profile.credits} cr</span>
         </a>
       ) : (
-        <a href="/login" style={{ padding: "8px 20px", borderRadius: 999, background: "#2d6a4f", color: "#fff", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>Sign in</a>
+        <a href="/login" style={{ padding: "8px 20px", borderRadius: 999, background: "#2d6a4f", color: "#fff", fontSize: 13, fontWeight: 700 }}>Sign in</a>
       )}
     </nav>
   );
@@ -196,7 +198,7 @@ export default function CommunityPage() {
   async function loadPosts() {
     const { data } = await supabase
       .from("forum_posts")
-      .select(`*, author:profiles!forum_posts_author_id_fkey(full_name, username, level), skill:skills(name, category)`)
+      .select(`*, author:profiles!forum_posts_author_id_fkey(full_name, username, level, avatar_url), skill:skills(name, category)`)
       .neq("status", "archived")
       .order("created_at", { ascending: false });
     const withCounts = await Promise.all((data || []).map(async (p: ForumPost) => {
@@ -210,7 +212,7 @@ export default function CommunityPage() {
     setLoadingAnswers(true);
     const { data } = await supabase
       .from("forum_answers")
-      .select(`*, author:profiles!forum_answers_author_id_fkey(full_name, username, level)`)
+      .select(`*, author:profiles!forum_answers_author_id_fkey(full_name, username, level, avatar_url)`)
       .eq("post_id", postId)
       .order("is_accepted", { ascending: false })
       .order("upvotes", { ascending: false });
@@ -314,10 +316,9 @@ export default function CommunityPage() {
         .img-zoom:hover { opacity: 0.9; }
         .tab-pill { padding: 8px 18px; border-radius: 999px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
         select, input, textarea { outline: none; font-family: 'DM Sans', sans-serif; }
-        select:focus, input:focus, textarea:focus { border-color: #2d6a4f !important; }
+        select:focus, input:focus, textarea:focus { border-color: #2d6a4f !important; box-shadow: 0 0 0 3px rgba(45,106,79,0.1); }
       `}</style>
 
-      {/* LIGHTBOX */}
       {lightbox && (
         <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", padding: 24, animation: "fadeIn 0.2s ease" }}>
           <img src={lightbox} alt="full" style={{ maxWidth: "88vw", maxHeight: "88vh", borderRadius: 16 }} />
@@ -327,10 +328,8 @@ export default function CommunityPage() {
 
       <Navbar profile={profile} currentPath="/community" />
 
-      {/* ── THREAD VIEW ── */}
       {openPost ? (
         <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 20px", animation: "fadeUp 0.3s ease" }}>
-          {/* Breadcrumb */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24, fontSize: 13, color: "#aaa", fontWeight: 600 }}>
             <a href="/dashboard" style={{ color: "#2d6a4f", fontWeight: 700 }}>Dashboard</a>
             <span>›</span>
@@ -339,17 +338,12 @@ export default function CommunityPage() {
             <span style={{ color: "#888", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{openPost.title}</span>
           </div>
 
-          {/* Question Card */}
           <div style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8e2d9", padding: "28px 30px", marginBottom: 20, boxShadow: "0 2px 16px rgba(0,0,0,0.04)" }}>
-            {/* Solved badge top */}
             {openPost.is_answered && (
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 800, padding: "5px 14px", borderRadius: 999, background: "#dcfce7", color: "#15803d", marginBottom: 16 }}>
-                ✅ SOLVED
-              </div>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 800, padding: "5px 14px", borderRadius: 999, background: "#dcfce7", color: "#15803d", marginBottom: 16 }}>✅ SOLVED</div>
             )}
-
             <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-              <Avatar name={openPost.author?.full_name || "?"} level={openPost.author?.level} size={48} />
+              <Avatar name={openPost.author?.full_name || "?"} level={openPost.author?.level} avatarUrl={openPost.author?.avatar_url} size={48} />
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 14, fontWeight: 800, color: "#1a1a1a" }}>{openPost.author?.full_name}</span>
@@ -366,16 +360,13 @@ export default function CommunityPage() {
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 12, alignItems: "center", paddingTop: 16, borderTop: "1px solid #f0ece4" }}>
-                  <button onClick={() => handleUpvotePost(openPost)} className="btn-hover" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 999, background: "#f5f0e8", border: "1.5px solid #e8e2d9", color: "#555", fontSize: 13, fontWeight: 700 }}>
-                    ▲ {openPost.upvotes}
-                  </button>
+                  <button onClick={() => handleUpvotePost(openPost)} className="btn-hover" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 999, background: "#f5f0e8", border: "1.5px solid #e8e2d9", color: "#555", fontSize: 13, fontWeight: 700 }}>▲ {openPost.upvotes}</button>
                   <span style={{ fontSize: 13, color: "#bbb", fontWeight: 600 }}>💬 {answers.length} {answers.length === 1 ? "answer" : "answers"}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Answers section header */}
           <div style={{ fontSize: 11, fontWeight: 800, color: "#bbb", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14, paddingLeft: 4 }}>
             {answers.length} {answers.length === 1 ? "Answer" : "Answers"}
           </div>
@@ -407,7 +398,7 @@ export default function CommunityPage() {
                     </div>
                   )}
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                    <Avatar name={answer.author?.full_name || "?"} level={answer.author?.level} size={40} />
+                    <Avatar name={answer.author?.full_name || "?"} level={answer.author?.level} avatarUrl={answer.author?.avatar_url} size={40} />
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                         <span style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{answer.author?.full_name}</span>
@@ -421,13 +412,9 @@ export default function CommunityPage() {
                         </div>
                       )}
                       <div style={{ display: "flex", gap: 10, alignItems: "center", paddingTop: 12, borderTop: "1px solid #f0ece4" }}>
-                        <button onClick={() => handleUpvoteAnswer(answer)} className="btn-hover" style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 999, background: "#f5f0e8", border: "1.5px solid #e8e2d9", color: "#555", fontSize: 12, fontWeight: 700 }}>
-                          ▲ {answer.upvotes}
-                        </button>
+                        <button onClick={() => handleUpvoteAnswer(answer)} className="btn-hover" style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 999, background: "#f5f0e8", border: "1.5px solid #e8e2d9", color: "#555", fontSize: 12, fontWeight: 700 }}>▲ {answer.upvotes}</button>
                         {profile && openPost.author_id === profile.id && !openPost.is_answered && (
-                          <button onClick={() => handleAcceptAnswer(answer)} className="btn-hover" style={{ padding: "6px 18px", borderRadius: 999, background: "#2d6a4f", color: "#fff", fontSize: 12, fontWeight: 800, border: "none", boxShadow: "0 4px 12px rgba(45,106,79,0.3)" }}>
-                            ✓ Accept (+2 cr)
-                          </button>
+                          <button onClick={() => handleAcceptAnswer(answer)} className="btn-hover" style={{ padding: "6px 18px", borderRadius: 999, background: "#2d6a4f", color: "#fff", fontSize: 12, fontWeight: 800, border: "none", boxShadow: "0 4px 12px rgba(45,106,79,0.3)" }}>✓ Accept (+2 cr)</button>
                         )}
                       </div>
                     </div>
@@ -437,16 +424,14 @@ export default function CommunityPage() {
             </div>
           )}
 
-          {/* Write answer box */}
           {profile ? (
             <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9", padding: "24px 28px", boxShadow: "0 4px 20px rgba(0,0,0,0.05)" }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: "#bbb", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>Your Answer</div>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <Avatar name={profile.full_name} level={profile.level} size={40} />
+                <Avatar name={profile.full_name} level={profile.level} avatarUrl={profile.avatar_url} size={40} />
                 <div style={{ flex: 1 }}>
-                  <textarea value={newAnswer} onChange={e => setNewAnswer(e.target.value)}
-                    placeholder="Share a detailed, helpful answer…"
-                    style={{ width: "100%", minHeight: 110, padding: "12px 14px", borderRadius: 12, border: "1.5px solid #e8e2d9", fontSize: 14, resize: "vertical", lineHeight: 1.6, marginBottom: 12, transition: "border-color 0.15s" }} />
+                  <textarea value={newAnswer} onChange={e => setNewAnswer(e.target.value)} placeholder="Share a detailed, helpful answer…"
+                    style={{ width: "100%", minHeight: 110, padding: "12px 14px", borderRadius: 12, border: "1.5px solid #e8e2d9", fontSize: 14, resize: "vertical", lineHeight: 1.6, marginBottom: 12 }} />
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                       <ImageUploader onUploaded={url => setAnswerImageUrl(url)} label="📷 Photo" />
@@ -455,7 +440,7 @@ export default function CommunityPage() {
                       </span>
                     </div>
                     <button onClick={handleSubmitAnswer} disabled={newAnswer.trim().length < 20 || answering} className="btn-hover"
-                      style={{ padding: "10px 24px", borderRadius: 999, background: newAnswer.trim().length < 20 ? "#e8e2d9" : "#2d6a4f", color: newAnswer.trim().length < 20 ? "#aaa" : "#fff", fontSize: 14, fontWeight: 700, border: "none", boxShadow: newAnswer.trim().length >= 20 ? "0 4px 16px rgba(45,106,79,0.25)" : "none" }}>
+                      style={{ padding: "10px 24px", borderRadius: 999, background: newAnswer.trim().length < 20 ? "#e8e2d9" : "#2d6a4f", color: newAnswer.trim().length < 20 ? "#aaa" : "#fff", fontSize: 14, fontWeight: 700, border: "none" }}>
                       {answering ? "Posting…" : "Post Answer →"}
                     </button>
                   </div>
@@ -470,16 +455,12 @@ export default function CommunityPage() {
         </div>
 
       ) : (
-        /* ── MAIN COMMUNITY VIEW ── */
         <div style={{ maxWidth: 1140, margin: "0 auto", padding: "36px 24px" }}>
-
-          {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 30, animation: "fadeUp 0.3s ease" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#bbb", fontWeight: 600, marginBottom: 8 }}>
                 <a href="/dashboard" style={{ color: "#2d6a4f", fontWeight: 700 }}>Dashboard</a>
-                <span>›</span>
-                <span>Community</span>
+                <span>›</span><span>Community</span>
               </div>
               <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 36, fontWeight: 900, color: "#111", letterSpacing: "-0.5px", lineHeight: 1.1 }}>Community</h1>
               <p style={{ color: "#888", marginTop: 6, fontSize: 15, fontWeight: 500 }}>Ask questions · Share knowledge · Earn credits</p>
@@ -492,7 +473,6 @@ export default function CommunityPage() {
             )}
           </div>
 
-          {/* Tabs */}
           <div style={{ display: "flex", gap: 4, marginBottom: 28, background: "#ede9e1", padding: 4, borderRadius: 999, width: "fit-content", animation: "fadeUp 0.3s 0.05s ease both" }}>
             {[["feed", "🏠 Feed"], ["forum", "💬 Forum"], ["groups", "🗂 Groups"]].map(([t, l]) => (
               <button key={t} className="tab-pill" onClick={() => setTab(t as any)}
@@ -503,11 +483,7 @@ export default function CommunityPage() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 24, alignItems: "start", animation: "fadeUp 0.3s 0.1s ease both" }}>
-
-            {/* LEFT — Main content */}
             <div>
-
-              {/* FEED TAB */}
               {tab === "feed" && (
                 <div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 24 }}>
@@ -531,14 +507,13 @@ export default function CommunityPage() {
                 </div>
               )}
 
-              {/* FORUM TAB */}
               {tab === "forum" && (
                 <div>
                   <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
                     <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
                       <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "#bbb" }}>🔍</span>
                       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search questions…"
-                        style={{ width: "100%", padding: "10px 14px 10px 36px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14, background: "#fff", transition: "border-color 0.15s" }} />
+                        style={{ width: "100%", padding: "10px 14px 10px 36px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14, background: "#fff" }} />
                     </div>
                     <select value={filterSkill} onChange={e => setFilterSkill(e.target.value)} style={{ padding: "10px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 13, background: "#fff", color: "#333", cursor: "pointer" }}>
                       <option value="all">All Skills</option>
@@ -561,7 +536,6 @@ export default function CommunityPage() {
                 </div>
               )}
 
-              {/* GROUPS TAB */}
               {tab === "groups" && (
                 <div>
                   {Object.entries(skillsByCategory).map(([category, catSkills]) => {
@@ -595,10 +569,7 @@ export default function CommunityPage() {
               )}
             </div>
 
-            {/* RIGHT — Sidebar */}
             <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 74 }}>
-
-              {/* Earn credits CTA */}
               <div style={{ borderRadius: 18, padding: "22px", background: "linear-gradient(145deg, #1a4a36, #2d6a4f 60%, #3a8a63)", color: "#fff", boxShadow: "0 8px 32px rgba(45,106,79,0.25)" }}>
                 <div style={{ fontSize: 28, marginBottom: 10 }}>💰</div>
                 <div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Earn Credits</div>
@@ -608,7 +579,6 @@ export default function CommunityPage() {
                 </button>
               </div>
 
-              {/* Top Contributors */}
               <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9", padding: "20px 22px" }}>
                 <div style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a", marginBottom: 16 }}>🏆 Top Contributors</div>
                 {posts.length === 0 ? (
@@ -616,13 +586,13 @@ export default function CommunityPage() {
                 ) : Object.entries(
                   posts.reduce((acc, p) => {
                     const name = p.author?.full_name || "?";
-                    acc[name] = { count: (acc[name]?.count || 0) + 1, username: p.author?.username || "", level: p.author?.level || "Seedling" };
+                    acc[name] = { count: (acc[name]?.count || 0) + 1, username: p.author?.username || "", level: p.author?.level || "Seedling", avatar_url: p.author?.avatar_url || null };
                     return acc;
-                  }, {} as Record<string, { count: number; username: string; level: string }>)
+                  }, {} as Record<string, { count: number; username: string; level: string; avatar_url: string | null }>)
                 ).sort((a, b) => b[1].count - a[1].count).slice(0, 5).map(([name, info], i) => (
                   <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: i < 4 ? 12 : 0 }}>
                     <span style={{ fontSize: 14, width: 22, textAlign: "center" }}>{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}</span>
-                    <Avatar name={name} level={info.level} size={32} />
+                    <Avatar name={name} level={info.level} avatarUrl={info.avatar_url} size={32} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a" }}>{name}</div>
                       <div style={{ fontSize: 11, color: "#bbb" }}>{info.count} post{info.count !== 1 ? "s" : ""}</div>
@@ -631,7 +601,6 @@ export default function CommunityPage() {
                 ))}
               </div>
 
-              {/* Guidelines */}
               <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9", padding: "20px 22px" }}>
                 <div style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a", marginBottom: 14 }}>📋 Guidelines</div>
                 {["Be respectful and constructive", "Tag your skill topic", "No spam or self-promotion", "Credit helpful answers", "Report inappropriate content"].map((rule, i) => (
@@ -642,7 +611,6 @@ export default function CommunityPage() {
                 ))}
               </div>
 
-              {/* Back to Dashboard */}
               <a href="/dashboard" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 14, background: "#f5f0e8", border: "1.5px solid #e8e2d9", color: "#555", fontSize: 13, fontWeight: 700, transition: "all 0.15s" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#eee9e0"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#f5f0e8"; }}>
@@ -653,7 +621,6 @@ export default function CommunityPage() {
         </div>
       )}
 
-      {/* ASK MODAL */}
       {showPostModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20, animation: "fadeIn 0.2s ease" }}>
           <div style={{ background: "#fff", borderRadius: 22, padding: "32px", maxWidth: 560, width: "100%", maxHeight: "92vh", overflowY: "auto", boxShadow: "0 24px 80px rgba(0,0,0,0.25)", animation: "fadeUp 0.25s ease" }}>
@@ -664,39 +631,34 @@ export default function CommunityPage() {
               </div>
               <button onClick={() => setShowPostModal(false)} style={{ width: 34, height: 34, borderRadius: "50%", background: "#f5f0e8", border: "none", fontSize: 16, cursor: "pointer", color: "#888" }}>✕</button>
             </div>
-
             <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 8 }}>Skill / Topic</label>
+              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: 8 }}>Skill / Topic</label>
               <select value={newPost.skill_id} onChange={e => setNewPost(p => ({ ...p, skill_id: e.target.value }))}
                 style={{ width: "100%", padding: "11px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14, background: "#fff", cursor: "pointer" }}>
                 <option value="">Select a skill (optional)</option>
                 {skills.map(s => <option key={s.id} value={s.id}>{CATEGORY_ICONS[s.category]} {s.name} — {s.category}</option>)}
               </select>
             </div>
-
             <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 8 }}>Question *</label>
+              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: 8 }}>Question *</label>
               <input value={newPost.title} onChange={e => setNewPost(p => ({ ...p, title: e.target.value.slice(0, 120) }))}
                 placeholder="What do you want to know? Be specific…"
-                style={{ width: "100%", padding: "11px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14, transition: "border-color 0.15s" }} />
+                style={{ width: "100%", padding: "11px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14 }} />
               <div style={{ fontSize: 11, color: "#ccc", textAlign: "right", marginTop: 4 }}>{newPost.title.length}/120</div>
             </div>
-
             <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 8 }}>Details *</label>
+              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: 8 }}>Details *</label>
               <textarea value={newPost.body} onChange={e => setNewPost(p => ({ ...p, body: e.target.value.slice(0, 1000) }))}
                 placeholder="Add context, what you've tried, what you need help with…"
-                style={{ width: "100%", minHeight: 120, padding: "11px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14, resize: "vertical", lineHeight: 1.6, transition: "border-color 0.15s" }} />
+                style={{ width: "100%", minHeight: 120, padding: "11px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14, resize: "vertical", lineHeight: 1.6 }} />
               <div style={{ fontSize: 11, color: "#ccc", textAlign: "right" }}>{newPost.body.length}/1000</div>
             </div>
-
             <div style={{ marginBottom: 24 }}>
-              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 8 }}>
-                Photo <span style={{ fontWeight: 500, color: "#bbb", textTransform: "none", fontSize: 12, letterSpacing: 0 }}>(optional)</span>
+              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: 8 }}>
+                Photo <span style={{ fontWeight: 500, color: "#bbb", textTransform: "none" as const, fontSize: 12, letterSpacing: 0 }}>(optional)</span>
               </label>
               <ImageUploader onUploaded={url => setPostImageUrl(url)} label="📷 Attach a photo" />
             </div>
-
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setShowPostModal(false)} className="btn-hover" style={{ flex: 1, padding: "12px", borderRadius: 12, background: "#f5f0e8", color: "#666", fontWeight: 700, fontSize: 14, border: "none" }}>Cancel</button>
               <button onClick={handlePostQuestion} disabled={!newPost.title.trim() || !newPost.body.trim() || posting} className="btn-hover"
@@ -716,8 +678,13 @@ function PostCard({ fp, idx, onClick, onLightbox }: { fp: ForumPost; idx: number
     <div className="post-card" onClick={onClick}
       style={{ background: "#fff", borderRadius: 16, border: `1.5px solid ${fp.is_answered ? "#86efac44" : "#e8e2d9"}`, padding: "18px 22px", marginBottom: 10, animation: `fadeUp 0.3s ${idx * 0.04}s ease both`, boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
-        <div style={{ width: 34, height: 34, borderRadius: "50%", background: LEVEL_COLORS[fp.author?.level || "Seedling"] || "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
-          {getInitials(fp.author?.full_name || "?")}
+        <div style={{ width: 34, height: 34, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
+          background: fp.author?.avatar_url ? "transparent" : (LEVEL_COLORS[fp.author?.level || "Seedling"] || "#2d6a4f"),
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff" }}>
+          {fp.author?.avatar_url
+            ? <img src={fp.author.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : getInitials(fp.author?.full_name || "?")
+          }
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>{fp.author?.full_name}</span>

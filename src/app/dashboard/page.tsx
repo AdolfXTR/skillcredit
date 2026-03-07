@@ -10,17 +10,17 @@ type Profile = {
 type Activity = { id: string; type: string; title: string; body: string; created_at: string; is_read: boolean; link?: string };
 
 const BADGE_TIERS = [
-  { name: "Seedling", emoji: "🌱", color: "#2d6a4f", bg: "#dcfce7", desc: "Just getting started",  xpReq: 0,    sessionsReq: 0,  ratingReq: 0   },
-  { name: "Rising",   emoji: "⭐", color: "#b45309", bg: "#fef3c7", desc: "Building momentum",     xpReq: 100,  sessionsReq: 0,  ratingReq: 0   },
-  { name: "Pro",      emoji: "🔥", color: "#7c3aed", bg: "#ede9fe", desc: "Proven skill sharer",   xpReq: 500,  sessionsReq: 5,  ratingReq: 0   },
-  { name: "Elite",    emoji: "💎", color: "#dc2626", bg: "#fee2e2", desc: "Top performer",          xpReq: 2000, sessionsReq: 20, ratingReq: 4.0 },
-  { name: "Legend",   emoji: "👑", color: "#d97706", bg: "#fffbeb", desc: "Community pillar",       xpReq: 5000, sessionsReq: 50, ratingReq: 4.5 },
+  { name: "Seedling", emoji: "🌱", color: "#2d6a4f", bg: "#dcfce7", desc: "Just getting started",  xpReq: 0,    sessionsReq: 0  },
+  { name: "Rising",   emoji: "⭐", color: "#b45309", bg: "#fef3c7", desc: "Building momentum",     xpReq: 100,  sessionsReq: 0  },
+  { name: "Pro",      emoji: "🔥", color: "#7c3aed", bg: "#ede9fe", desc: "Proven skill sharer",   xpReq: 500,  sessionsReq: 5  },
+  { name: "Elite",    emoji: "💎", color: "#dc2626", bg: "#fee2e2", desc: "Top performer",          xpReq: 2000, sessionsReq: 20 },
+  { name: "Legend",   emoji: "👑", color: "#d97706", bg: "#fffbeb", desc: "Community pillar",       xpReq: 5000, sessionsReq: 50 },
 ];
 
-function getBadgeTier(xp: number, sessions: number, rating: number) {
+function getBadgeTier(xp: number, sessions: number) {
   for (let i = BADGE_TIERS.length - 1; i >= 0; i--) {
     const t = BADGE_TIERS[i];
-    if (xp >= t.xpReq && sessions >= t.sessionsReq && rating >= t.ratingReq) return t;
+    if (xp >= t.xpReq && sessions >= t.sessionsReq) return t;
   }
   return BADGE_TIERS[0];
 }
@@ -194,7 +194,7 @@ export default function Dashboard() {
   if (!profile) return null;
 
   const levelInfo = getLevelInfo(profile.xp);
-  const badge     = getBadgeTier(profile.xp, sessions, avgRating ?? 0);
+  const badge     = getBadgeTier(profile.xp, sessions);
   const nextBadge = getNextBadge(badge);
   const initials  = profile.full_name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "??";
   const xpNext    = XP_TO_NEXT[levelInfo.name] || 100;
@@ -340,8 +340,8 @@ export default function Dashboard() {
               <h1 style={{ fontFamily:"'Fraunces',serif", fontSize:24, fontWeight:900, color:"#111", lineHeight:1.1, marginBottom:6 }}>{profile.full_name}</h1>
               <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
                 <span style={{ fontSize:12, color:"#aaa" }}>@{profile.username}</span>
-                <span style={{ fontSize:11, fontWeight:800, padding:"3px 10px", borderRadius:999, background:`${levelInfo.color}15`, color:levelInfo.color }}>{LEVEL_ICONS[levelInfo.name]} {levelInfo.name}</span>
-                <span style={{ fontSize:11, fontWeight:800, padding:"3px 10px", borderRadius:999, background:badge.bg, color:badge.color, border:`1px solid ${badge.color}22` }}>{badge.emoji} {badge.name}</span>
+                <span style={{ fontSize:11, fontWeight:800, padding:"3px 10px", borderRadius:999, background:`${levelInfo.color}15`, color:levelInfo.color }} title="Your XP Level">{LEVEL_ICONS[levelInfo.name]} Lvl: {levelInfo.name}</span>
+                <span style={{ fontSize:11, fontWeight:800, padding:"3px 10px", borderRadius:999, background:badge.bg, color:badge.color, border:`1px solid ${badge.color}22` }} title="Your Badge Tier">{badge.emoji} Badge: {badge.name}</span>
                 {avgRating !== null && (
                   <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:999, background:"#fffbeb", color:"#b45309", border:"1px solid #fde68a" }}>
                     ⭐ {avgRating.toFixed(2)} · {ratingCount} review{ratingCount !== 1 ? "s" : ""}
@@ -438,8 +438,11 @@ export default function Dashboard() {
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div className="card" style={{ padding:"20px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                <div style={{ fontSize:11, fontWeight:800, color:"#bbb", letterSpacing:"0.1em", textTransform:"uppercase" }}>Your Badge</div>
-                <span style={{ fontSize:11, fontWeight:800, padding:"4px 12px", borderRadius:999, background:badge.bg, color:badge.color, border:`1px solid ${badge.color}22` }}>{badge.emoji} {badge.name}</span>
+                <div style={{ fontSize:11, fontWeight:800, color:"#bbb", letterSpacing:"0.1em", textTransform:"uppercase" }}>Your Badge & Level</div>
+                <div style={{ display:"flex", gap:5 }}>
+                  <span style={{ fontSize:11, fontWeight:800, padding:"4px 10px", borderRadius:999, background:`${levelInfo.color}15`, color:levelInfo.color }}>{LEVEL_ICONS[levelInfo.name]} {levelInfo.name}</span>
+                  <span style={{ fontSize:11, fontWeight:800, padding:"4px 10px", borderRadius:999, background:badge.bg, color:badge.color, border:`1px solid ${badge.color}22` }}>{badge.emoji} {badge.name}</span>
+                </div>
               </div>
               <div style={{ background:badge.bg, borderRadius:14, padding:"14px 16px", marginBottom:14, display:"flex", alignItems:"center", gap:12 }}>
                 <span style={{ fontSize:32 }}>{badge.emoji}</span>
@@ -473,9 +476,8 @@ export default function Dashboard() {
                     <span style={{ color:"#aaa" }}>{nextBadge.desc}</span>
                   </div>
                   {[
-                    { icon:"⚡", label:"XP",         current:profile.xp,    req:nextBadge.xpReq       },
-                    { icon:"📚", label:"Sessions",   current:sessions,      req:nextBadge.sessionsReq },
-                    { icon:"⭐", label:"Avg Rating", current:avgRating ?? 0, req:nextBadge.ratingReq   },
+                    { icon:"⚡", label:"XP",       current:profile.xp, req:nextBadge.xpReq       },
+                    { icon:"📚", label:"Sessions", current:sessions,   req:nextBadge.sessionsReq },
                   ].filter(r => r.req > 0).map(r => {
                     const done = r.current >= r.req;
                     const pct  = Math.min((r.current / r.req) * 100, 100);
@@ -495,11 +497,17 @@ export default function Dashboard() {
                   })}
                 </div>
               )}
+              {/* ── ALL TIERS: now shows all 7 LEVELS, highlights current level ── */}
               <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:12, paddingTop:12, borderTop:"1px solid #f0ece4" }}>
                 <div style={{ fontSize:10, fontWeight:800, color:"#ccc", width:"100%", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>All Tiers</div>
-                {BADGE_TIERS.map(t => (
-                  <span key={t.name} style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:999, background:t.name === badge.name ? t.bg : "#f5f0e8", color:t.name === badge.name ? t.color : "#bbb", border:t.name === badge.name ? `1px solid ${t.color}33` : "none" }}>
-                    {t.emoji} {t.name}
+                {LEVELS.map(t => (
+                  <span key={t.name} style={{
+                    fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:999,
+                    background: t.name === levelInfo.name ? `${t.color}18` : "#f5f0e8",
+                    color: t.name === levelInfo.name ? t.color : "#bbb",
+                    border: t.name === levelInfo.name ? `1px solid ${t.color}33` : "none",
+                  }}>
+                    {LEVEL_ICONS[t.name]} {t.name}
                   </span>
                 ))}
               </div>

@@ -19,10 +19,10 @@ type Session = {
     title: string;
     format: string;
     description?: string;
-    meeting_link?: string | null;   // ← NEW
+    meeting_link?: string | null;
   };
-  teacher?: { id: string; full_name: string; username: string; level: string };
-  learner?:  { id: string; full_name: string; username: string; level: string };
+  teacher?: { id: string; full_name: string; username: string; level: string; avatar_url?: string | null };
+  learner?:  { id: string; full_name: string; username: string; level: string; avatar_url?: string | null };
 };
 
 type Profile = {
@@ -32,6 +32,7 @@ type Profile = {
   credits: number;
   xp: number;
   level: string;
+  avatar_url?: string | null;
 };
 
 type RatingForm = {
@@ -75,6 +76,44 @@ function timeFromNow(iso: string) {
   return `${past ? "" : "in "}${Math.round(abs / 86_400_000)}d${past ? " ago" : ""}`;
 }
 
+// ─── AVATAR COMPONENT ─────────────────────────────────────────────────────────
+function Avatar({
+  profile,
+  size = 40,
+  statusDot,
+}: {
+  profile: { full_name: string; level: string; avatar_url?: string | null };
+  size?: number;
+  statusDot?: string;
+}) {
+  const color = LEVEL_COLORS[profile.level] || "#2d6a4f";
+  return (
+    <div style={{ position: "relative", flexShrink: 0, width: size, height: size }}>
+      <div style={{
+        width: size, height: size, borderRadius: "50%", overflow: "hidden",
+        background: profile.avatar_url ? "transparent" : color,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: size * 0.34, fontWeight: 800, color: "#fff",
+      }}>
+        {profile.avatar_url
+          ? <img src={profile.avatar_url} alt={profile.full_name}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          : getInitials(profile.full_name)
+        }
+      </div>
+      {statusDot && (
+        <div style={{
+          position: "absolute", bottom: -1, right: -1,
+          width: size * 0.3, height: size * 0.3,
+          borderRadius: "50%", background: statusDot,
+          border: "2px solid #fff",
+        }} />
+      )}
+    </div>
+  );
+}
+
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const [hover, setHover] = useState(0);
   return (
@@ -113,21 +152,16 @@ const LEARNER_RATES_TEACHER = [
 // ── MEETING LINK BUTTON ───────────────────────────────────────────────────────
 function MeetingLinkButton({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
-
-  // Detect platform
   const icon =
     url.includes("meet.google") ? "🎥" :
     url.includes("zoom.us")     ? "💙" :
     url.includes("discord.gg")  ? "💜" :
-    url.includes("teams.micro") ? "🔵" :
-    "🔗";
-
+    url.includes("teams.micro") ? "🔵" : "🔗";
   const label =
     url.includes("meet.google") ? "Google Meet" :
-    url.includes("zoom.us")     ? "Zoom"         :
-    url.includes("discord.gg")  ? "Discord"      :
-    url.includes("teams.micro") ? "Teams"        :
-    "Join Meeting";
+    url.includes("zoom.us")     ? "Zoom" :
+    url.includes("discord.gg")  ? "Discord" :
+    url.includes("teams.micro") ? "Teams" : "Join Meeting";
 
   const copyLink = async () => {
     await navigator.clipboard.writeText(url);
@@ -193,8 +227,8 @@ export default function SessionsPage() {
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("sessions")
         .select(`*, listing:listings(title, format, description, meeting_link),
-          teacher:profiles!sessions_teacher_id_fkey(id, full_name, username, level),
-          learner:profiles!sessions_learner_id_fkey(id, full_name, username, level)`)
+          teacher:profiles!sessions_teacher_id_fkey(id, full_name, username, level, avatar_url),
+          learner:profiles!sessions_learner_id_fkey(id, full_name, username, level, avatar_url)`)
         .or(`teacher_id.eq.${user.id},learner_id.eq.${user.id}`)
         .order("created_at", { ascending: false }),
       supabase.from("ratings").select("session_id").eq("rater_id", user.id),
@@ -288,8 +322,8 @@ export default function SessionsPage() {
 
       const { data: completedSession } = await supabase.from("sessions")
         .select(`*, listing:listings(title, format, description, meeting_link),
-          teacher:profiles!sessions_teacher_id_fkey(id, full_name, username, level),
-          learner:profiles!sessions_learner_id_fkey(id, full_name, username, level)`)
+          teacher:profiles!sessions_teacher_id_fkey(id, full_name, username, level, avatar_url),
+          learner:profiles!sessions_learner_id_fkey(id, full_name, username, level, avatar_url)`)
         .eq("id", session.id).single();
 
       await loadData(); setActionLoading(null);
@@ -422,10 +456,9 @@ export default function SessionsPage() {
             <a key={l} href={h} className={`navlink${h === "/sessions" ? " active" : ""}`}>{l}</a>
           ))}
         </div>
+        {/* Navbar avatar */}
         <a href="/profile" className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-stone-50 border border-stone-200 hover:bg-stone-100 transition-colors">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-800" style={{ background: LEVEL_COLORS[profile?.level || "Seedling"] || "#2d6a4f" }}>
-            {getInitials(profile?.full_name || "")}
-          </div>
+          {profile && <Avatar profile={profile} size={28} />}
           <span className="text-sm font-600 text-stone-700">@{profile?.username}</span>
           <span className="text-xs font-800 text-[#2d6a4f] bg-green-50 px-2.5 py-0.5 rounded-full border border-green-200">{profile?.credits} cr</span>
         </a>
@@ -511,19 +544,15 @@ export default function SessionsPage() {
             const otherDone  = isTeacher ? session.learner_completed : session.teacher_completed;
             const isExpanded = expandedId === session.id;
             const hasRated   = alreadyRated.has(session.id);
-            const levelColor = LEVEL_COLORS[other?.level || "Seedling"] || "#2d6a4f";
             const meetingLink = session.listing?.meeting_link;
 
             return (
               <div key={session.id} className="session-card bg-white rounded-2xl border border-stone-200 overflow-hidden fade-up" style={{ animationDelay: `${idx * .04}s`, borderLeft: `3px solid ${cfg.dot}` }}>
 
                 <div className="px-5 py-4 flex items-center gap-4">
-                  <div className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-800" style={{ background: levelColor }}>
-                      {getInitials(other?.full_name || "?")}
-                    </div>
-                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white" style={{ background: cfg.dot }} />
-                  </div>
+                  {/* Session partner avatar */}
+                  {other && <Avatar profile={other} size={40} statusDot={cfg.dot} />}
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className="text-sm font-800 text-stone-900">{other?.full_name || "Unknown"}</span>
@@ -637,14 +666,10 @@ export default function SessionsPage() {
                   </div>
                 </div>
 
-                {/* ── MEETING LINK BANNER (confirmed sessions only) ── */}
+                {/* ── MEETING LINK BANNER ── */}
                 {session.status === "confirmed" && meetingLink && (
-                  <div className="px-5 pb-4">
-                    <MeetingLinkButton url={meetingLink} />
-                  </div>
+                  <div className="px-5 pb-4"><MeetingLinkButton url={meetingLink} /></div>
                 )}
-
-                {/* ── NO LINK NOTICE (teacher only, confirmed) ── */}
                 {session.status === "confirmed" && !meetingLink && isTeacher && (
                   <div className="px-5 pb-4">
                     <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
