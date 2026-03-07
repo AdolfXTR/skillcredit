@@ -4,20 +4,24 @@ import { supabase } from "@/lib/supabase";
 
 type Profile = {
   id: string; full_name: string; username: string; credits: number; xp: number; level: string;
-  avatar_url?: string | null;
+  avatar_url?: string | null; xp_multiplier?: number; champion_title?: string | null; champion_streak?: number;
+};
+type WeeklyChamp = {
+  user_id: string; full_name: string; username: string; avatar_url: string | null;
+  champion_title: string | null; champion_streak: number; xp: number; xp_multiplier: number;
 };
 type ForumPost = {
   id: string; author_id: string; skill_id: string | null; title: string; body: string;
   image_url?: string | null; is_answered: boolean; accepted_answer_id: string | null;
   upvotes: number; status: string; created_at: string;
-  author?: { full_name: string; username: string; level: string; avatar_url?: string | null };
+  author?: { full_name: string; username: string; level: string; avatar_url?: string | null; xp_multiplier?: number; champion_title?: string | null };
   skill?: { name: string; category: string };
   answer_count?: number;
 };
 type ForumAnswer = {
   id: string; post_id: string; author_id: string; content: string; image_url?: string | null;
   upvotes: number; is_accepted: boolean; credits_awarded: boolean; created_at: string;
-  author?: { full_name: string; username: string; level: string; avatar_url?: string | null };
+  author?: { full_name: string; username: string; level: string; avatar_url?: string | null; xp_multiplier?: number; champion_title?: string | null };
 };
 type Skill = { id: string; name: string; category: string };
 
@@ -55,19 +59,69 @@ function timeAgo(iso: string) {
 function getInitials(name: string) {
   return name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?";
 }
+function getRank(xp_multiplier?: number): 0 | 1 | 2 | 3 {
+  if (!xp_multiplier || xp_multiplier < 1.1) return 0;
+  if (xp_multiplier >= 1.25) return 1;
+  if (xp_multiplier >= 1.15) return 2;
+  return 3;
+}
 
-function Avatar({ name, level, avatarUrl, size = 40 }: { name: string; level?: string; avatarUrl?: string | null; size?: number }) {
-  const bg = LEVEL_COLORS[level || "Seedling"] || "#2d6a4f";
+function PremiumAvatar({ name, level, avatarUrl, size = 40, xp_multiplier }:
+  { name: string; level?: string; avatarUrl?: string | null; size?: number; xp_multiplier?: number }) {
+  const bg   = LEVEL_COLORS[level || "Seedling"] || "#2d6a4f";
+  const rank = getRank(xp_multiplier);
+  const anim = rank === 1 ? "goldPulse 2s ease infinite" : rank === 2 ? "silverPulse 2s ease infinite" : rank === 3 ? "bronzePulse 2s ease infinite" : undefined;
+  const badge = rank === 1 ? "👑" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
-      background: avatarUrl ? "transparent" : bg,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.3, fontWeight: 800, color: "#fff",
-      boxShadow: `0 0 0 2px white, 0 0 0 3px ${bg}33` }}>
-      {avatarUrl
-        ? <img src={avatarUrl} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        : getInitials(name)
-      }
+    <div style={{ position: "relative", flexShrink: 0, display: "inline-block" }}>
+      <div style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden",
+        background: avatarUrl ? "transparent" : bg,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: size * 0.3, fontWeight: 800, color: "#fff",
+        boxShadow: rank === 0 ? `0 0 0 2px white, 0 0 0 3px ${bg}33` : undefined,
+        animation: anim }}>
+        {avatarUrl ? <img src={avatarUrl} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : getInitials(name)}
+      </div>
+      {badge && <span style={{ position: "absolute", bottom: -2, right: -4, fontSize: size * 0.3, lineHeight: 1, filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.4))" }}>{badge}</span>}
+    </div>
+  );
+}
+
+function ChampionShoutout({ champ, onDismiss }: { champ: WeeklyChamp; onDismiss: () => void }) {
+  return (
+    <div style={{ position: "relative", background: "linear-gradient(135deg,#0d1f15 0%,#1a3d2e 40%,#2d6a4f 100%)", borderRadius: 18, padding: "22px 24px", marginBottom: 16, overflow: "hidden", border: "1.5px solid rgba(255,215,0,0.25)", boxShadow: "0 8px 32px rgba(45,106,79,0.3)", animation: "fadeUp 0.4s ease" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,transparent,#ffd700,#e8a800,#ffd700,transparent)", backgroundSize: "200% 100%", animation: "shimmer 2s linear infinite" }} />
+      <button onClick={onDismiss} style={{ position: "absolute", top: 12, right: 12, background: "rgba(255,255,255,0.1)", border: "none", color: "rgba(255,255,255,0.5)", width: 26, height: 26, borderRadius: "50%", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 800, color: "rgba(255,215,0,0.7)", background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.2)", padding: "3px 10px", borderRadius: 999, marginBottom: 14, letterSpacing: 1.5, textTransform: "uppercase" }}>
+        📌 Pinned · This Week's Champion
+      </div>
+      <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", fontSize: 20, animation: "crownBounce 1.5s ease infinite" }}>👑</div>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", overflow: "hidden", background: "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 900, color: "#fff", animation: "goldRing 2s ease infinite", marginTop: 8 }}>
+            {champ.avatar_url ? <img src={champ.avatar_url} alt={champ.full_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : getInitials(champ.full_name)}
+          </div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 17, fontWeight: 900, color: "#fff", fontFamily: "'Fraunces',serif", lineHeight: 1.2, marginBottom: 4 }}>
+            🎉 {champ.full_name} is this week's Champion!
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>@{champ.username}</span>
+            {champ.champion_title && (
+              <span style={{ fontSize: 10, fontWeight: 800, background: "rgba(255,215,0,0.15)", color: "#ffd700", padding: "2px 10px", borderRadius: 999, border: "1px solid rgba(255,215,0,0.3)" }}>
+                {champ.champion_title}{champ.champion_streak > 1 ? ` x${champ.champion_streak} 🔥` : ""}
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>{champ.xp.toLocaleString()} XP · Earned 1.25x XP multiplier + 20 bonus credits</div>
+        </div>
+        <a href="/leaderboard" style={{ flexShrink: 0, fontSize: 12, fontWeight: 800, color: "#ffd700", background: "rgba(255,215,0,0.12)", padding: "8px 16px", borderRadius: 20, border: "1px solid rgba(255,215,0,0.3)", textDecoration: "none", whiteSpace: "nowrap" }}
+          onMouseOver={e => { e.currentTarget.style.background = "rgba(255,215,0,0.25)"; }}
+          onMouseOut={e  => { e.currentTarget.style.background = "rgba(255,215,0,0.12)"; }}>
+          Leaderboard →
+        </a>
+      </div>
     </div>
   );
 }
@@ -86,7 +140,6 @@ function ImageUploader({ onUploaded, label = "📷 Add Photo" }: { onUploaded: (
   const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
-
   async function handleFile(file: File) {
     if (!file.type.startsWith("image/")) return;
     if (file.size > 5 * 1024 * 1024) { alert("Max 5MB"); return; }
@@ -99,11 +152,9 @@ function ImageUploader({ onUploaded, label = "📷 Add Photo" }: { onUploaded: (
     const { error } = await supabase.storage.from("forum-images").upload(path, file, { upsert: true });
     if (error) { console.error(error); setUploading(false); return; }
     const { data } = supabase.storage.from("forum-images").getPublicUrl(path);
-    onUploaded(data.publicUrl);
-    setUploading(false); setDone(true);
+    onUploaded(data.publicUrl); setUploading(false); setDone(true);
   }
   function clear() { setPreview(null); setDone(false); onUploaded(null); if (inputRef.current) inputRef.current.value = ""; }
-
   return (
     <div>
       {preview ? (
@@ -114,71 +165,59 @@ function ImageUploader({ onUploaded, label = "📷 Add Photo" }: { onUploaded: (
           <button onClick={clear} style={{ position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: "50%", background: "#1a1a1a", color: "#fff", border: "none", cursor: "pointer", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
       ) : (
-        <button onClick={() => inputRef.current?.click()} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 10, background: "#f5f0e8", border: "1.5px dashed #d4cec7", color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-          {label}
-        </button>
+        <button onClick={() => inputRef.current?.click()} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 10, background: "#f5f0e8", border: "1.5px dashed #d4cec7", color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{label}</button>
       )}
       <input ref={inputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
     </div>
   );
 }
 
-function Navbar({ profile, currentPath = "/community" }: { profile: Profile | null; currentPath?: string }) {
-  const links = [
-    ["Dashboard", "/dashboard"], ["Browse", "/listings"], ["Bounties", "/bounties"],
-    ["Community", "/community"], ["Sessions", "/sessions"], ["Messages", "/messages"],
-  ];
+function Navbar({ profile }: { profile: Profile | null }) {
+  const links = [["Dashboard","/dashboard"],["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]];
   return (
     <nav style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid #e8e2d9", padding: "0 28px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-      <a href="/dashboard">
-        <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
-        <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
-      </a>
-      <div style={{ display: "flex", gap: 2 }}>
-        {links.map(([l, h]) => (
-          <a key={l} href={h} style={{
-            padding: "7px 13px", borderRadius: 8, fontSize: 13, fontWeight: 600, transition: "all 0.12s", display: "inline-block",
-            background: h === currentPath ? "#e6f2ec" : "transparent",
-            color: h === currentPath ? "#2d6a4f" : "#666",
-          }}
-            onMouseEnter={e => { if (h !== currentPath) { (e.currentTarget as HTMLElement).style.background = "#eee9e0"; (e.currentTarget as HTMLElement).style.color = "#1a1a1a"; } }}
-            onMouseLeave={e => { if (h !== currentPath) { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "#666"; } }}
+      <a href="/dashboard"><span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#2d6a4f" }}>Skill</span><span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#1a1a1a" }}>Credit</span></a>
+      <div style={{ display:"flex", gap:2 }}>
+        {links.map(([l,h]) => (
+          <a key={l} href={h} style={{ padding:"7px 13px", borderRadius:8, fontSize:13, fontWeight:600, transition:"all 0.12s", display:"inline-block", background:h==="/community"?"#e6f2ec":"transparent", color:h==="/community"?"#2d6a4f":"#666" }}
+            onMouseEnter={e => { if(h!=="/community"){(e.currentTarget as HTMLElement).style.background="#eee9e0";(e.currentTarget as HTMLElement).style.color="#1a1a1a";} }}
+            onMouseLeave={e => { if(h!=="/community"){(e.currentTarget as HTMLElement).style.background="transparent";(e.currentTarget as HTMLElement).style.color="#666";} }}
           >{l}</a>
         ))}
       </div>
       {profile ? (
-        <a href="/profile" style={{ display: "flex", alignItems: "center", gap: 9, padding: "5px 14px 5px 6px", borderRadius: 999, background: "#f5f0e8", border: "1.5px solid #e8e2d9" }}>
-          <Avatar name={profile.full_name} level={profile.level} avatarUrl={profile.avatar_url} size={28} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>@{profile.username}</span>
-          <span style={{ fontSize: 12, fontWeight: 800, color: "#2d6a4f" }}>{profile.credits} cr</span>
+        <a href="/profile" style={{ display:"flex", alignItems:"center", gap:9, padding:"5px 14px 5px 6px", borderRadius:999, background:"#f5f0e8", border:"1.5px solid #e8e2d9" }}>
+          <PremiumAvatar name={profile.full_name} level={profile.level} avatarUrl={profile.avatar_url} size={28} xp_multiplier={profile.xp_multiplier} />
+          <span style={{ fontSize:13, fontWeight:600, color:"#333" }}>@{profile.username}</span>
+          <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f" }}>{profile.credits} cr</span>
         </a>
-      ) : (
-        <a href="/login" style={{ padding: "8px 20px", borderRadius: 999, background: "#2d6a4f", color: "#fff", fontSize: 13, fontWeight: 700 }}>Sign in</a>
-      )}
+      ) : <a href="/login" style={{ padding:"8px 20px", borderRadius:999, background:"#2d6a4f", color:"#fff", fontSize:13, fontWeight:700 }}>Sign in</a>}
     </nav>
   );
 }
 
 export default function CommunityPage() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [posts, setPosts] = useState<ForumPost[]>([]);
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"feed" | "forum" | "groups">("forum");
-  const [filterSkill, setFilterSkill] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<"all" | "open" | "answered">("all");
-  const [search, setSearch] = useState("");
+  const [profile, setProfile]             = useState<Profile | null>(null);
+  const [posts, setPosts]                 = useState<ForumPost[]>([]);
+  const [skills, setSkills]               = useState<Skill[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [tab, setTab]                     = useState<"feed"|"forum"|"groups">("forum");
+  const [filterSkill, setFilterSkill]     = useState<string>("all");
+  const [filterStatus, setFilterStatus]   = useState<"all"|"open"|"answered">("all");
+  const [search, setSearch]               = useState("");
   const [showPostModal, setShowPostModal] = useState(false);
-  const [newPost, setNewPost] = useState({ title: "", body: "", skill_id: "" });
-  const [postImageUrl, setPostImageUrl] = useState<string | null>(null);
-  const [posting, setPosting] = useState(false);
-  const [openPost, setOpenPost] = useState<ForumPost | null>(null);
-  const [answers, setAnswers] = useState<ForumAnswer[]>([]);
-  const [newAnswer, setNewAnswer] = useState("");
+  const [newPost, setNewPost]             = useState({ title:"", body:"", skill_id:"" });
+  const [postImageUrl, setPostImageUrl]   = useState<string | null>(null);
+  const [posting, setPosting]             = useState(false);
+  const [openPost, setOpenPost]           = useState<ForumPost | null>(null);
+  const [answers, setAnswers]             = useState<ForumAnswer[]>([]);
+  const [newAnswer, setNewAnswer]         = useState("");
   const [answerImageUrl, setAnswerImageUrl] = useState<string | null>(null);
-  const [answering, setAnswering] = useState(false);
+  const [answering, setAnswering]         = useState(false);
   const [loadingAnswers, setLoadingAnswers] = useState(false);
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [lightbox, setLightbox]           = useState<string | null>(null);
+  const [weeklyChamp, setWeeklyChamp]     = useState<WeeklyChamp | null>(null);
+  const [shoutoutDismissed, setShoutoutDismissed] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -186,235 +225,215 @@ export default function CommunityPage() {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      const { data: prof } = await supabase.from("profiles")
+        .select("*,xp_multiplier,champion_title,champion_streak")
+        .eq("id", user.id).single();
       setProfile(prof);
     }
     const { data: skillList } = await supabase.from("skills").select("*").order("category");
     setSkills(skillList || []);
     await loadPosts();
+    await loadChampion();
     setLoading(false);
   }
 
+  async function loadChampion() {
+    try {
+      const { data } = await supabase.from("weekly_champions").select("user_id,week_start").eq("rank",1).order("week_start",{ascending:false}).limit(1).single();
+      if (!data) return;
+      if ((Date.now() - new Date(data.week_start).getTime()) / (1000*60*60*24) > 14) return;
+      const { data: prof } = await supabase.from("profiles").select("full_name,username,avatar_url,champion_title,champion_streak,xp,xp_multiplier").eq("id",data.user_id).single();
+      if (prof) setWeeklyChamp({ user_id: data.user_id, ...prof } as WeeklyChamp);
+    } catch { /* table may not exist yet */ }
+  }
+
   async function loadPosts() {
-    const { data } = await supabase
-      .from("forum_posts")
-      .select(`*, author:profiles!forum_posts_author_id_fkey(full_name, username, level, avatar_url), skill:skills(name, category)`)
-      .neq("status", "archived")
-      .order("created_at", { ascending: false });
-    const withCounts = await Promise.all((data || []).map(async (p: ForumPost) => {
-      const { count } = await supabase.from("forum_answers").select("*", { count: "exact", head: true }).eq("post_id", p.id);
-      return { ...p, answer_count: count || 0 };
+    const { data } = await supabase.from("forum_posts")
+      .select(`*, author:profiles!forum_posts_author_id_fkey(full_name,username,level,avatar_url,xp_multiplier,champion_title), skill:skills(name,category)`)
+      .neq("status","archived").order("created_at",{ascending:false});
+    const withCounts = await Promise.all((data||[]).map(async (p: ForumPost) => {
+      const { count } = await supabase.from("forum_answers").select("*",{count:"exact",head:true}).eq("post_id",p.id);
+      return { ...p, answer_count: count||0 };
     }));
     setPosts(withCounts);
   }
 
   async function loadAnswers(postId: string) {
     setLoadingAnswers(true);
-    const { data } = await supabase
-      .from("forum_answers")
-      .select(`*, author:profiles!forum_answers_author_id_fkey(full_name, username, level, avatar_url)`)
-      .eq("post_id", postId)
-      .order("is_accepted", { ascending: false })
-      .order("upvotes", { ascending: false });
-    setAnswers(data || []);
-    setLoadingAnswers(false);
+    const { data } = await supabase.from("forum_answers")
+      .select(`*, author:profiles!forum_answers_author_id_fkey(full_name,username,level,avatar_url,xp_multiplier,champion_title)`)
+      .eq("post_id",postId).order("is_accepted",{ascending:false}).order("upvotes",{ascending:false});
+    setAnswers(data||[]); setLoadingAnswers(false);
   }
 
   async function handlePostQuestion() {
-    if (!profile || !newPost.title.trim() || !newPost.body.trim()) return;
+    if (!profile||!newPost.title.trim()||!newPost.body.trim()) return;
     setPosting(true);
-    const { data: createdPost, error } = await supabase.from("forum_posts").insert({
-      author_id: profile.id, skill_id: newPost.skill_id || null,
-      title: newPost.title.trim(), body: newPost.body.trim(),
-      image_url: postImageUrl || null, status: "open",
-    }).select().single();
-    if (error) { console.error(error); alert("Error: " + error.message); setPosting(false); return; }
-    if (createdPost) {
-      setShowPostModal(false); setNewPost({ title: "", body: "", skill_id: "" }); setPostImageUrl(null);
-      await loadPosts(); setOpenPost(createdPost as ForumPost); setAnswers([]);
-    }
+    const { data: createdPost, error } = await supabase.from("forum_posts").insert({ author_id:profile.id, skill_id:newPost.skill_id||null, title:newPost.title.trim(), body:newPost.body.trim(), image_url:postImageUrl||null, status:"open" }).select().single();
+    if (error) { console.error(error); alert("Error: "+error.message); setPosting(false); return; }
+    if (createdPost) { setShowPostModal(false); setNewPost({title:"",body:"",skill_id:""}); setPostImageUrl(null); await loadPosts(); setOpenPost(createdPost as ForumPost); setAnswers([]); }
     setPosting(false);
   }
 
   async function handleSubmitAnswer() {
-    if (!profile || !openPost || newAnswer.trim().length < 20) return;
+    if (!profile||!openPost||newAnswer.trim().length<20) return;
     setAnswering(true);
-    await supabase.from("forum_answers").insert({ post_id: openPost.id, author_id: profile.id, content: newAnswer.trim(), image_url: answerImageUrl || null });
-    if (openPost.author_id !== profile.id) {
-      await supabase.from("notifications").insert({ user_id: openPost.author_id, type: "platform", title: "New answer on your question 💬", body: `${profile.full_name} answered: "${openPost.title}"`, link: `/community` });
-    }
-    setNewAnswer(""); setAnswerImageUrl(null);
-    await loadAnswers(openPost.id);
-    setAnswering(false);
+    await supabase.from("forum_answers").insert({ post_id:openPost.id, author_id:profile.id, content:newAnswer.trim(), image_url:answerImageUrl||null });
+    if (openPost.author_id !== profile.id) await supabase.from("notifications").insert({ user_id:openPost.author_id, type:"platform", title:"New answer on your question 💬", body:`${profile.full_name} answered: "${openPost.title}"`, link:`/community` });
+    setNewAnswer(""); setAnswerImageUrl(null); await loadAnswers(openPost.id); setAnswering(false);
   }
 
   async function handleAcceptAnswer(answer: ForumAnswer) {
-    if (!openPost || !profile || openPost.author_id !== profile.id) return;
-    await supabase.from("forum_answers").update({ is_accepted: true }).eq("id", answer.id);
-    await supabase.from("forum_posts").update({ is_answered: true, accepted_answer_id: answer.id, status: "answered" }).eq("id", openPost.id);
+    if (!openPost||!profile||openPost.author_id!==profile.id) return;
+    await supabase.from("forum_answers").update({is_accepted:true}).eq("id",answer.id);
+    await supabase.from("forum_posts").update({is_answered:true,accepted_answer_id:answer.id,status:"answered"}).eq("id",openPost.id);
     if (!answer.credits_awarded) {
-      await supabase.from("forum_answers").update({ credits_awarded: true }).eq("id", answer.id);
-      const { data: ap } = await supabase.from("profiles").select("credits").eq("id", answer.author_id).single();
-      await supabase.from("profiles").update({ credits: (ap?.credits || 0) + 2 }).eq("id", answer.author_id);
-      await supabase.from("credit_transactions").insert({ user_id: answer.author_id, amount: 2, type: "forum_earn", reference_id: openPost.id, description: "Forum answer accepted — 2 credits earned" });
-      await supabase.from("notifications").insert({ user_id: answer.author_id, type: "achievement", title: "Your answer was accepted! 🎉", body: `You earned 2 credits for your answer on "${openPost.title}"`, link: `/community` });
+      await supabase.from("forum_answers").update({credits_awarded:true}).eq("id",answer.id);
+      const { data: ap } = await supabase.from("profiles").select("credits").eq("id",answer.author_id).single();
+      await supabase.from("profiles").update({credits:(ap?.credits||0)+2}).eq("id",answer.author_id);
+      await supabase.from("credit_transactions").insert({user_id:answer.author_id,amount:2,type:"forum_earn",reference_id:openPost.id,description:"Forum answer accepted — 2 credits earned"});
+      await supabase.from("notifications").insert({user_id:answer.author_id,type:"achievement",title:"Your answer was accepted! 🎉",body:`You earned 2 credits for your answer on "${openPost.title}"`,link:`/community`});
     }
-    await supabase.rpc("increment_xp", { user_id: answer.author_id, amount: 15 });
+    await supabase.rpc("increment_xp",{user_id:answer.author_id,amount:15});
     await loadAnswers(openPost.id); await loadPosts();
-    setOpenPost(prev => prev ? { ...prev, is_answered: true } : null);
+    setOpenPost(prev => prev ? {...prev,is_answered:true} : null);
   }
 
-  async function handleUpvotePost(fp: ForumPost) {
-    if (!profile) return;
-    await supabase.from("forum_posts").update({ upvotes: fp.upvotes + 1 }).eq("id", fp.id);
-    await loadPosts();
-  }
-
-  async function handleUpvoteAnswer(answer: ForumAnswer) {
-    if (!profile) return;
-    await supabase.from("forum_answers").update({ upvotes: answer.upvotes + 1 }).eq("id", answer.id);
-    await loadAnswers(openPost!.id);
-  }
+  async function handleUpvotePost(fp: ForumPost) { if (!profile) return; await supabase.from("forum_posts").update({upvotes:fp.upvotes+1}).eq("id",fp.id); await loadPosts(); }
+  async function handleUpvoteAnswer(answer: ForumAnswer) { if (!profile) return; await supabase.from("forum_answers").update({upvotes:answer.upvotes+1}).eq("id",answer.id); await loadAnswers(openPost!.id); }
 
   const filteredPosts = posts.filter(p => {
-    const matchSkill = filterSkill === "all" || p.skill_id === filterSkill;
-    const matchStatus = filterStatus === "all" || (filterStatus === "answered" ? p.is_answered : !p.is_answered);
-    const matchSearch = !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.body.toLowerCase().includes(search.toLowerCase());
-    return matchSkill && matchStatus && matchSearch;
+    const matchSkill  = filterSkill==="all"||p.skill_id===filterSkill;
+    const matchStatus = filterStatus==="all"||(filterStatus==="answered"?p.is_answered:!p.is_answered);
+    const matchSearch = !search||p.title.toLowerCase().includes(search.toLowerCase())||p.body.toLowerCase().includes(search.toLowerCase());
+    return matchSkill&&matchStatus&&matchSearch;
   });
-
-  const skillsByCategory = skills.reduce((acc, s) => {
-    if (!acc[s.category]) acc[s.category] = [];
-    acc[s.category].push(s);
-    return acc;
-  }, {} as Record<string, Skill[]>);
+  const skillsByCategory = skills.reduce((acc,s)=>{ if(!acc[s.category]) acc[s.category]=[]; acc[s.category].push(s); return acc; },{} as Record<string,Skill[]>);
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#f7f5f0", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"#f7f5f0", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'DM Sans',sans-serif" }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;900&family=DM+Sans:wght@400;600;700&display=swap');`}</style>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ width: 36, height: 36, border: "3px solid #2d6a4f", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.7s linear infinite", margin: "0 auto 16px" }} />
-        <p style={{ color: "#999", fontSize: 14, fontWeight: 500 }}>Loading community…</p>
+      <div style={{ textAlign:"center" }}>
+        <div style={{ width:36, height:36, border:"3px solid #2d6a4f", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.7s linear infinite", margin:"0 auto 16px" }} />
+        <p style={{ color:"#999", fontSize:14, fontWeight:500 }}>Loading community…</p>
       </div>
     </div>
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f7f5f0", fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"#f7f5f0", fontFamily:"'DM Sans',sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        a { text-decoration: none; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .post-card { transition: box-shadow 0.2s, transform 0.2s; cursor: pointer; }
-        .post-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.1); transform: translateY(-2px); }
-        .btn-hover { transition: all 0.15s; cursor: pointer; }
-        .btn-hover:hover { opacity: 0.85; transform: translateY(-1px); }
-        .img-zoom { cursor: zoom-in; transition: opacity 0.15s; }
-        .img-zoom:hover { opacity: 0.9; }
-        .tab-pill { padding: 8px 18px; border-radius: 999px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
-        select, input, textarea { outline: none; font-family: 'DM Sans', sans-serif; }
-        select:focus, input:focus, textarea:focus { border-color: #2d6a4f !important; box-shadow: 0 0 0 3px rgba(45,106,79,0.1); }
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0} a{text-decoration:none}
+        @keyframes spin        {to{transform:rotate(360deg)}}
+        @keyframes fadeUp      {from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+        @keyframes fadeIn      {from{opacity:0}to{opacity:1}}
+        @keyframes shimmer     {0%{background-position:-200% 0}100%{background-position:200% 0}}
+        @keyframes crownBounce {0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-5px) rotate(5deg)}}
+        @keyframes goldPulse   {0%,100%{box-shadow:0 0 0 3px #e8a800,0 0 14px rgba(232,168,0,.7),0 0 28px rgba(255,215,0,.3)}50%{box-shadow:0 0 0 3px #ffd700,0 0 22px rgba(255,215,0,1),0 0 44px rgba(255,215,0,.5)}}
+        @keyframes silverPulse {0%,100%{box-shadow:0 0 0 3px #aaa,0 0 10px rgba(180,180,180,.6)}50%{box-shadow:0 0 0 3px #ddd,0 0 18px rgba(220,220,220,.9)}}
+        @keyframes bronzePulse {0%,100%{box-shadow:0 0 0 3px #a0522d,0 0 10px rgba(160,82,45,.6)}50%{box-shadow:0 0 0 3px #cd7f32,0 0 18px rgba(205,127,50,.8)}}
+        @keyframes goldRing    {0%,100%{box-shadow:0 0 0 2.5px #e8a800,0 0 12px rgba(232,168,0,.6)}50%{box-shadow:0 0 0 2.5px #ffd700,0 0 22px rgba(255,215,0,.9)}}
+        .post-card{transition:box-shadow .2s,transform .2s;cursor:pointer}
+        .post-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.1);transform:translateY(-2px)}
+        .btn-hover{transition:all .15s;cursor:pointer}
+        .btn-hover:hover{opacity:.85;transform:translateY(-1px)}
+        .img-zoom{cursor:zoom-in;transition:opacity .15s}
+        .img-zoom:hover{opacity:.9}
+        .tab-pill{padding:8px 18px;border-radius:999px;font-size:13px;font-weight:700;border:none;cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif}
+        select,input,textarea{outline:none;font-family:'DM Sans',sans-serif}
+        select:focus,input:focus,textarea:focus{border-color:#2d6a4f!important;box-shadow:0 0 0 3px rgba(45,106,79,.1)}
       `}</style>
 
       {lightbox && (
-        <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", padding: 24, animation: "fadeIn 0.2s ease" }}>
-          <img src={lightbox} alt="full" style={{ maxWidth: "88vw", maxHeight: "88vh", borderRadius: 16 }} />
-          <button onClick={() => setLightbox(null)} style={{ position: "absolute", top: 20, right: 20, width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", fontSize: 16, cursor: "pointer" }}>✕</button>
+        <div onClick={()=>setLightbox(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", cursor:"zoom-out", padding:24, animation:"fadeIn 0.2s ease" }}>
+          <img src={lightbox} alt="full" style={{ maxWidth:"88vw", maxHeight:"88vh", borderRadius:16 }} />
+          <button onClick={()=>setLightbox(null)} style={{ position:"absolute", top:20, right:20, width:40, height:40, borderRadius:"50%", background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.2)", color:"#fff", fontSize:16, cursor:"pointer" }}>✕</button>
         </div>
       )}
 
-      <Navbar profile={profile} currentPath="/community" />
+      <Navbar profile={profile} />
 
       {openPost ? (
-        <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 20px", animation: "fadeUp 0.3s ease" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24, fontSize: 13, color: "#aaa", fontWeight: 600 }}>
-            <a href="/dashboard" style={{ color: "#2d6a4f", fontWeight: 700 }}>Dashboard</a>
+        /* ── POST DETAIL ── */
+        <div style={{ maxWidth:720, margin:"0 auto", padding:"32px 20px", animation:"fadeUp 0.3s ease" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:24, fontSize:13, color:"#aaa", fontWeight:600 }}>
+            <a href="/dashboard" style={{ color:"#2d6a4f", fontWeight:700 }}>Dashboard</a>
             <span>›</span>
-            <button onClick={() => setOpenPost(null)} style={{ background: "none", border: "none", color: "#2d6a4f", fontWeight: 700, fontSize: 13, cursor: "pointer", padding: 0 }}>Community</button>
+            <button onClick={()=>setOpenPost(null)} style={{ background:"none", border:"none", color:"#2d6a4f", fontWeight:700, fontSize:13, cursor:"pointer", padding:0 }}>Community</button>
             <span>›</span>
-            <span style={{ color: "#888", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{openPost.title}</span>
+            <span style={{ color:"#888", maxWidth:280, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{openPost.title}</span>
           </div>
 
-          <div style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8e2d9", padding: "28px 30px", marginBottom: 20, boxShadow: "0 2px 16px rgba(0,0,0,0.04)" }}>
-            {openPost.is_answered && (
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 800, padding: "5px 14px", borderRadius: 999, background: "#dcfce7", color: "#15803d", marginBottom: 16 }}>✅ SOLVED</div>
-            )}
-            <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-              <Avatar name={openPost.author?.full_name || "?"} level={openPost.author?.level} avatarUrl={openPost.author?.avatar_url} size={48} />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: "#1a1a1a" }}>{openPost.author?.full_name}</span>
-                  <span style={{ fontSize: 12, color: "#bbb" }}>@{openPost.author?.username}</span>
+          <div style={{ background:"#fff", borderRadius:20, border:"1.5px solid #e8e2d9", padding:"28px 30px", marginBottom:20, boxShadow:"0 2px 16px rgba(0,0,0,0.04)" }}>
+            {openPost.is_answered && <div style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:800, padding:"5px 14px", borderRadius:999, background:"#dcfce7", color:"#15803d", marginBottom:16 }}>✅ SOLVED</div>}
+            <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
+              <PremiumAvatar name={openPost.author?.full_name||"?"} level={openPost.author?.level} avatarUrl={openPost.author?.avatar_url} size={48} xp_multiplier={openPost.author?.xp_multiplier} />
+              <div style={{ flex:1 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8, flexWrap:"wrap" }}>
+                  <span style={{ fontSize:14, fontWeight:800, color:"#1a1a1a" }}>{openPost.author?.full_name}</span>
+                  <span style={{ fontSize:12, color:"#bbb" }}>@{openPost.author?.username}</span>
+                  {openPost.author?.champion_title && getRank(openPost.author.xp_multiplier)>0 && (
+                    <span style={{ fontSize:10, fontWeight:800, background:"rgba(255,215,0,0.15)", color:"#b8860b", padding:"2px 8px", borderRadius:999, border:"1px solid rgba(255,215,0,0.3)" }}>
+                      {openPost.author.champion_title}
+                    </span>
+                  )}
                   {openPost.skill && <SkillTag skill={openPost.skill} />}
-                  <span style={{ marginLeft: "auto", fontSize: 12, color: "#bbb" }}>{timeAgo(openPost.created_at)}</span>
+                  <span style={{ marginLeft:"auto", fontSize:12, color:"#bbb" }}>{timeAgo(openPost.created_at)}</span>
                 </div>
-                <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 900, color: "#111", lineHeight: 1.3, marginBottom: 14 }}>{openPost.title}</h2>
-                <p style={{ color: "#555", fontSize: 15, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: openPost.image_url ? 16 : 0 }}>{openPost.body}</p>
+                <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:24, fontWeight:900, color:"#111", lineHeight:1.3, marginBottom:14 }}>{openPost.title}</h2>
+                <p style={{ color:"#555", fontSize:15, lineHeight:1.8, whiteSpace:"pre-wrap", marginBottom:openPost.image_url?16:0 }}>{openPost.body}</p>
                 {openPost.image_url && (
-                  <div style={{ marginBottom: 16, marginTop: 4 }}>
-                    <img src={openPost.image_url} alt="attachment" className="img-zoom" onClick={() => setLightbox(openPost.image_url!)} style={{ maxWidth: "100%", maxHeight: 360, borderRadius: 12, border: "1.5px solid #e8e2d9", display: "block" }} />
-                    <span style={{ fontSize: 11, color: "#ccc", marginTop: 5, display: "block" }}>Click to enlarge</span>
+                  <div style={{ marginBottom:16, marginTop:4 }}>
+                    <img src={openPost.image_url} alt="attachment" className="img-zoom" onClick={()=>setLightbox(openPost.image_url!)} style={{ maxWidth:"100%", maxHeight:360, borderRadius:12, border:"1.5px solid #e8e2d9", display:"block" }} />
+                    <span style={{ fontSize:11, color:"#ccc", marginTop:5, display:"block" }}>Click to enlarge</span>
                   </div>
                 )}
-                <div style={{ display: "flex", gap: 12, alignItems: "center", paddingTop: 16, borderTop: "1px solid #f0ece4" }}>
-                  <button onClick={() => handleUpvotePost(openPost)} className="btn-hover" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 999, background: "#f5f0e8", border: "1.5px solid #e8e2d9", color: "#555", fontSize: 13, fontWeight: 700 }}>▲ {openPost.upvotes}</button>
-                  <span style={{ fontSize: 13, color: "#bbb", fontWeight: 600 }}>💬 {answers.length} {answers.length === 1 ? "answer" : "answers"}</span>
+                <div style={{ display:"flex", gap:12, alignItems:"center", paddingTop:16, borderTop:"1px solid #f0ece4" }}>
+                  <button onClick={()=>handleUpvotePost(openPost)} className="btn-hover" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 14px", borderRadius:999, background:"#f5f0e8", border:"1.5px solid #e8e2d9", color:"#555", fontSize:13, fontWeight:700 }}>▲ {openPost.upvotes}</button>
+                  <span style={{ fontSize:13, color:"#bbb", fontWeight:600 }}>💬 {answers.length} {answers.length===1?"answer":"answers"}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 800, color: "#bbb", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14, paddingLeft: 4 }}>
-            {answers.length} {answers.length === 1 ? "Answer" : "Answers"}
-          </div>
+          <div style={{ fontSize:11, fontWeight:800, color:"#bbb", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:14, paddingLeft:4 }}>{answers.length} {answers.length===1?"Answer":"Answers"}</div>
 
           {loadingAnswers ? (
-            <div style={{ textAlign: "center", padding: 48 }}>
-              <div style={{ width: 28, height: 28, border: "2.5px solid #2d6a4f", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.7s linear infinite", margin: "0 auto" }} />
-            </div>
-          ) : answers.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 24px", background: "#fff", borderRadius: 16, border: "1.5px solid #e8e2d9", marginBottom: 20 }}>
-              <div style={{ fontSize: 36, marginBottom: 10 }}>🤔</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#888" }}>No answers yet</div>
-              <div style={{ fontSize: 13, color: "#bbb", marginTop: 4 }}>Be the first to help out!</div>
+            <div style={{ textAlign:"center", padding:48 }}><div style={{ width:28, height:28, border:"2.5px solid #2d6a4f", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.7s linear infinite", margin:"0 auto" }} /></div>
+          ) : answers.length===0 ? (
+            <div style={{ textAlign:"center", padding:"40px 24px", background:"#fff", borderRadius:16, border:"1.5px solid #e8e2d9", marginBottom:20 }}>
+              <div style={{ fontSize:36, marginBottom:10 }}>🤔</div>
+              <div style={{ fontSize:16, fontWeight:700, color:"#888" }}>No answers yet</div>
+              <div style={{ fontSize:13, color:"#bbb", marginTop:4 }}>Be the first to help out!</div>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:20 }}>
               {answers.map((answer, idx) => (
-                <div key={answer.id} style={{
-                  background: answer.is_accepted ? "linear-gradient(135deg, #f0fdf4, #dcfce7)" : "#fff",
-                  borderRadius: 16, border: `1.5px solid ${answer.is_accepted ? "#86efac" : "#e8e2d9"}`,
-                  padding: "22px 26px",
-                  boxShadow: answer.is_accepted ? "0 4px 20px rgba(34,197,94,0.1)" : "0 2px 8px rgba(0,0,0,0.03)",
-                  animation: `fadeUp 0.3s ${idx * 0.05}s ease both`,
-                }}>
+                <div key={answer.id} style={{ background:answer.is_accepted?"linear-gradient(135deg,#f0fdf4,#dcfce7)":"#fff", borderRadius:16, border:`1.5px solid ${answer.is_accepted?"#86efac":"#e8e2d9"}`, padding:"22px 26px", boxShadow:answer.is_accepted?"0 4px 20px rgba(34,197,94,0.1)":"0 2px 8px rgba(0,0,0,0.03)", animation:`fadeUp 0.3s ${idx*0.05}s ease both` }}>
                   {answer.is_accepted && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: "#15803d", letterSpacing: "0.04em" }}>✅ ACCEPTED ANSWER</span>
-                      {answer.credits_awarded && <span style={{ fontSize: 11, background: "#fff", border: "1px solid #86efac", color: "#15803d", padding: "2px 10px", borderRadius: 999, fontWeight: 700 }}>+2 credits</span>}
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+                      <span style={{ fontSize:12, fontWeight:800, color:"#15803d", letterSpacing:"0.04em" }}>✅ ACCEPTED ANSWER</span>
+                      {answer.credits_awarded && <span style={{ fontSize:11, background:"#fff", border:"1px solid #86efac", color:"#15803d", padding:"2px 10px", borderRadius:999, fontWeight:700 }}>+2 credits</span>}
                     </div>
                   )}
-                  <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                    <Avatar name={answer.author?.full_name || "?"} level={answer.author?.level} avatarUrl={answer.author?.avatar_url} size={40} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{answer.author?.full_name}</span>
-                        <span style={{ fontSize: 12, color: "#bbb" }}>@{answer.author?.username}</span>
-                        <span style={{ fontSize: 12, color: "#ccc", marginLeft: "auto" }}>{timeAgo(answer.created_at)}</span>
+                  <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+                    <PremiumAvatar name={answer.author?.full_name||"?"} level={answer.author?.level} avatarUrl={answer.author?.avatar_url} size={40} xp_multiplier={answer.author?.xp_multiplier} />
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:14, fontWeight:700, color:"#1a1a1a" }}>{answer.author?.full_name}</span>
+                        <span style={{ fontSize:12, color:"#bbb" }}>@{answer.author?.username}</span>
+                        {answer.author?.champion_title && getRank(answer.author.xp_multiplier)>0 && (
+                          <span style={{ fontSize:10, fontWeight:800, background:"rgba(255,215,0,0.12)", color:"#b8860b", padding:"2px 8px", borderRadius:999, border:"1px solid rgba(255,215,0,0.25)" }}>{answer.author.champion_title}</span>
+                        )}
+                        <span style={{ fontSize:12, color:"#ccc", marginLeft:"auto" }}>{timeAgo(answer.created_at)}</span>
                       </div>
-                      <p style={{ color: "#444", fontSize: 15, lineHeight: 1.75, whiteSpace: "pre-wrap", marginBottom: answer.image_url ? 14 : 0 }}>{answer.content}</p>
-                      {answer.image_url && (
-                        <div style={{ marginBottom: 14 }}>
-                          <img src={answer.image_url} alt="attachment" className="img-zoom" onClick={() => setLightbox(answer.image_url!)} style={{ maxWidth: "100%", maxHeight: 260, borderRadius: 10, border: "1.5px solid #e8e2d9", display: "block" }} />
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 10, alignItems: "center", paddingTop: 12, borderTop: "1px solid #f0ece4" }}>
-                        <button onClick={() => handleUpvoteAnswer(answer)} className="btn-hover" style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 999, background: "#f5f0e8", border: "1.5px solid #e8e2d9", color: "#555", fontSize: 12, fontWeight: 700 }}>▲ {answer.upvotes}</button>
-                        {profile && openPost.author_id === profile.id && !openPost.is_answered && (
-                          <button onClick={() => handleAcceptAnswer(answer)} className="btn-hover" style={{ padding: "6px 18px", borderRadius: 999, background: "#2d6a4f", color: "#fff", fontSize: 12, fontWeight: 800, border: "none", boxShadow: "0 4px 12px rgba(45,106,79,0.3)" }}>✓ Accept (+2 cr)</button>
+                      <p style={{ color:"#444", fontSize:15, lineHeight:1.75, whiteSpace:"pre-wrap", marginBottom:answer.image_url?14:0 }}>{answer.content}</p>
+                      {answer.image_url && <div style={{ marginBottom:14 }}><img src={answer.image_url} alt="attachment" className="img-zoom" onClick={()=>setLightbox(answer.image_url!)} style={{ maxWidth:"100%", maxHeight:260, borderRadius:10, border:"1.5px solid #e8e2d9", display:"block" }} /></div>}
+                      <div style={{ display:"flex", gap:10, alignItems:"center", paddingTop:12, borderTop:"1px solid #f0ece4" }}>
+                        <button onClick={()=>handleUpvoteAnswer(answer)} className="btn-hover" style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 12px", borderRadius:999, background:"#f5f0e8", border:"1.5px solid #e8e2d9", color:"#555", fontSize:12, fontWeight:700 }}>▲ {answer.upvotes}</button>
+                        {profile&&openPost.author_id===profile.id&&!openPost.is_answered && (
+                          <button onClick={()=>handleAcceptAnswer(answer)} className="btn-hover" style={{ padding:"6px 18px", borderRadius:999, background:"#2d6a4f", color:"#fff", fontSize:12, fontWeight:800, border:"none", boxShadow:"0 4px 12px rgba(45,106,79,0.3)" }}>✓ Accept (+2 cr)</button>
                         )}
                       </div>
                     </div>
@@ -425,139 +444,129 @@ export default function CommunityPage() {
           )}
 
           {profile ? (
-            <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9", padding: "24px 28px", boxShadow: "0 4px 20px rgba(0,0,0,0.05)" }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: "#bbb", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>Your Answer</div>
-              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <Avatar name={profile.full_name} level={profile.level} avatarUrl={profile.avatar_url} size={40} />
-                <div style={{ flex: 1 }}>
-                  <textarea value={newAnswer} onChange={e => setNewAnswer(e.target.value)} placeholder="Share a detailed, helpful answer…"
-                    style={{ width: "100%", minHeight: 110, padding: "12px 14px", borderRadius: 12, border: "1.5px solid #e8e2d9", fontSize: 14, resize: "vertical", lineHeight: 1.6, marginBottom: 12 }} />
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                      <ImageUploader onUploaded={url => setAnswerImageUrl(url)} label="📷 Photo" />
-                      <span style={{ fontSize: 12, color: newAnswer.length < 20 ? "#f59e0b" : "#aaa" }}>
-                        {newAnswer.length < 20 ? `${20 - newAnswer.length} more chars` : "✓ Ready"}
-                      </span>
+            <div style={{ background:"#fff", borderRadius:18, border:"1.5px solid #e8e2d9", padding:"24px 28px", boxShadow:"0 4px 20px rgba(0,0,0,0.05)" }}>
+              <div style={{ fontSize:11, fontWeight:800, color:"#bbb", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:16 }}>Your Answer</div>
+              <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+                <PremiumAvatar name={profile.full_name} level={profile.level} avatarUrl={profile.avatar_url} size={40} xp_multiplier={profile.xp_multiplier} />
+                <div style={{ flex:1 }}>
+                  <textarea value={newAnswer} onChange={e=>setNewAnswer(e.target.value)} placeholder="Share a detailed, helpful answer…" style={{ width:"100%", minHeight:110, padding:"12px 14px", borderRadius:12, border:"1.5px solid #e8e2d9", fontSize:14, resize:"vertical", lineHeight:1.6, marginBottom:12 }} />
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
+                    <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                      <ImageUploader onUploaded={url=>setAnswerImageUrl(url)} label="📷 Photo" />
+                      <span style={{ fontSize:12, color:newAnswer.length<20?"#f59e0b":"#aaa" }}>{newAnswer.length<20?`${20-newAnswer.length} more chars`:"✓ Ready"}</span>
                     </div>
-                    <button onClick={handleSubmitAnswer} disabled={newAnswer.trim().length < 20 || answering} className="btn-hover"
-                      style={{ padding: "10px 24px", borderRadius: 999, background: newAnswer.trim().length < 20 ? "#e8e2d9" : "#2d6a4f", color: newAnswer.trim().length < 20 ? "#aaa" : "#fff", fontSize: 14, fontWeight: 700, border: "none" }}>
-                      {answering ? "Posting…" : "Post Answer →"}
+                    <button onClick={handleSubmitAnswer} disabled={newAnswer.trim().length<20||answering} className="btn-hover" style={{ padding:"10px 24px", borderRadius:999, background:newAnswer.trim().length<20?"#e8e2d9":"#2d6a4f", color:newAnswer.trim().length<20?"#aaa":"#fff", fontSize:14, fontWeight:700, border:"none" }}>
+                      {answering?"Posting…":"Post Answer →"}
                     </button>
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            <div style={{ textAlign: "center", padding: 28, background: "#fff", borderRadius: 16, border: "1.5px solid #e8e2d9" }}>
-              <a href="/login" style={{ color: "#2d6a4f", fontWeight: 700, fontSize: 15 }}>Sign in to answer →</a>
+            <div style={{ textAlign:"center", padding:28, background:"#fff", borderRadius:16, border:"1.5px solid #e8e2d9" }}>
+              <a href="/login" style={{ color:"#2d6a4f", fontWeight:700, fontSize:15 }}>Sign in to answer →</a>
             </div>
           )}
         </div>
 
       ) : (
-        <div style={{ maxWidth: 1140, margin: "0 auto", padding: "36px 24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 30, animation: "fadeUp 0.3s ease" }}>
+        /* ── MAIN LIST VIEW ── */
+        <div style={{ maxWidth:1140, margin:"0 auto", padding:"36px 24px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:30, animation:"fadeUp 0.3s ease" }}>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#bbb", fontWeight: 600, marginBottom: 8 }}>
-                <a href="/dashboard" style={{ color: "#2d6a4f", fontWeight: 700 }}>Dashboard</a>
+              <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"#bbb", fontWeight:600, marginBottom:8 }}>
+                <a href="/dashboard" style={{ color:"#2d6a4f", fontWeight:700 }}>Dashboard</a>
                 <span>›</span><span>Community</span>
               </div>
-              <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 36, fontWeight: 900, color: "#111", letterSpacing: "-0.5px", lineHeight: 1.1 }}>Community</h1>
-              <p style={{ color: "#888", marginTop: 6, fontSize: 15, fontWeight: 500 }}>Ask questions · Share knowledge · Earn credits</p>
+              <h1 style={{ fontFamily:"'Fraunces',serif", fontSize:36, fontWeight:900, color:"#111", letterSpacing:"-0.5px", lineHeight:1.1 }}>Community</h1>
+              <p style={{ color:"#888", marginTop:6, fontSize:15, fontWeight:500 }}>Ask questions · Share knowledge · Earn credits</p>
             </div>
             {profile && (
-              <button onClick={() => setShowPostModal(true)} className="btn-hover"
-                style={{ padding: "12px 24px", borderRadius: 999, background: "#2d6a4f", color: "#fff", fontSize: 14, fontWeight: 700, border: "none", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 20px rgba(45,106,79,0.3)" }}>
+              <button onClick={()=>setShowPostModal(true)} className="btn-hover" style={{ padding:"12px 24px", borderRadius:999, background:"#2d6a4f", color:"#fff", fontSize:14, fontWeight:700, border:"none", display:"flex", alignItems:"center", gap:8, boxShadow:"0 4px 20px rgba(45,106,79,0.3)" }}>
                 + Ask a Question
               </button>
             )}
           </div>
 
-          <div style={{ display: "flex", gap: 4, marginBottom: 28, background: "#ede9e1", padding: 4, borderRadius: 999, width: "fit-content", animation: "fadeUp 0.3s 0.05s ease both" }}>
-            {[["feed", "🏠 Feed"], ["forum", "💬 Forum"], ["groups", "🗂 Groups"]].map(([t, l]) => (
-              <button key={t} className="tab-pill" onClick={() => setTab(t as any)}
-                style={{ background: tab === t ? "#fff" : "transparent", color: tab === t ? "#1a1a1a" : "#888", boxShadow: tab === t ? "0 2px 8px rgba(0,0,0,0.1)" : "none" }}>
-                {l}
-              </button>
+          <div style={{ display:"flex", gap:4, marginBottom:28, background:"#ede9e1", padding:4, borderRadius:999, width:"fit-content", animation:"fadeUp 0.3s 0.05s ease both" }}>
+            {[["feed","🏠 Feed"],["forum","💬 Forum"],["groups","🗂 Groups"]].map(([t,l]) => (
+              <button key={t} className="tab-pill" onClick={()=>setTab(t as any)} style={{ background:tab===t?"#fff":"transparent", color:tab===t?"#1a1a1a":"#888", boxShadow:tab===t?"0 2px 8px rgba(0,0,0,0.1)":"none" }}>{l}</button>
             ))}
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 24, alignItems: "start", animation: "fadeUp 0.3s 0.1s ease both" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 300px", gap:24, alignItems:"start", animation:"fadeUp 0.3s 0.1s ease both" }}>
             <div>
-              {tab === "feed" && (
+              {/* Champion shoutout pinned above feed and forum */}
+              {weeklyChamp && !shoutoutDismissed && (tab==="feed"||tab==="forum") && (
+                <ChampionShoutout champ={weeklyChamp} onDismiss={()=>setShoutoutDismissed(true)} />
+              )}
+
+              {tab==="feed" && (
                 <div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 24 }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:24 }}>
                     {[
-                      { label: "Total Questions", val: posts.length, icon: "❓", bg: "#eff6ff", color: "#1d4ed8" },
-                      { label: "Answered", val: posts.filter(p => p.is_answered).length, icon: "✅", bg: "#f0fdf4", color: "#15803d" },
-                      { label: "Need Help", val: posts.filter(p => !p.is_answered).length, icon: "⏳", bg: "#fffbeb", color: "#b45309" },
-                    ].map(s => (
-                      <div key={s.label} style={{ background: s.bg, borderRadius: 16, padding: "18px 20px", border: "1.5px solid #e8e2d9" }}>
-                        <div style={{ fontSize: 20, marginBottom: 6 }}>{s.icon}</div>
-                        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 30, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.val}</div>
-                        <div style={{ fontSize: 12, color: "#aaa", fontWeight: 600, marginTop: 4 }}>{s.label}</div>
+                      {label:"Total Questions",val:posts.length,                            icon:"❓",bg:"#eff6ff",color:"#1d4ed8"},
+                      {label:"Answered",        val:posts.filter(p=>p.is_answered).length,  icon:"✅",bg:"#f0fdf4",color:"#15803d"},
+                      {label:"Need Help",       val:posts.filter(p=>!p.is_answered).length, icon:"⏳",bg:"#fffbeb",color:"#b45309"},
+                    ].map(s=>(
+                      <div key={s.label} style={{ background:s.bg, borderRadius:16, padding:"18px 20px", border:"1.5px solid #e8e2d9" }}>
+                        <div style={{ fontSize:20, marginBottom:6 }}>{s.icon}</div>
+                        <div style={{ fontFamily:"'Fraunces',serif", fontSize:30, fontWeight:900, color:s.color, lineHeight:1 }}>{s.val}</div>
+                        <div style={{ fontSize:12, color:"#aaa", fontWeight:600, marginTop:4 }}>{s.label}</div>
                       </div>
                     ))}
                   </div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: "#bbb", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 12 }}>Recent Activity</div>
-                  {posts.slice(0, 8).map((fp, idx) => (
-                    <PostCard key={fp.id} fp={fp} idx={idx} onClick={async () => { setOpenPost(fp); await loadAnswers(fp.id); }} onLightbox={setLightbox} />
-                  ))}
-                  {posts.length === 0 && <EmptyState message="No posts yet — be first!" onAsk={profile ? () => setShowPostModal(true) : undefined} />}
+                  <div style={{ fontSize:11, fontWeight:800, color:"#bbb", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:12 }}>Recent Activity</div>
+                  {posts.slice(0,8).map((fp,idx)=><PostCard key={fp.id} fp={fp} idx={idx} onClick={async()=>{setOpenPost(fp);await loadAnswers(fp.id);}} onLightbox={setLightbox} />)}
+                  {posts.length===0 && <EmptyState message="No posts yet — be first!" onAsk={profile?()=>setShowPostModal(true):undefined} />}
                 </div>
               )}
 
-              {tab === "forum" && (
+              {tab==="forum" && (
                 <div>
-                  <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
-                    <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
-                      <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "#bbb" }}>🔍</span>
-                      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search questions…"
-                        style={{ width: "100%", padding: "10px 14px 10px 36px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14, background: "#fff" }} />
+                  <div style={{ display:"flex", gap:10, marginBottom:18, flexWrap:"wrap" }}>
+                    <div style={{ flex:1, minWidth:200, position:"relative" }}>
+                      <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", fontSize:14, color:"#bbb" }}>🔍</span>
+                      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search questions…" style={{ width:"100%", padding:"10px 14px 10px 36px", borderRadius:12, border:"1.5px solid #e2ddd6", fontSize:14, background:"#fff" }} />
                     </div>
-                    <select value={filterSkill} onChange={e => setFilterSkill(e.target.value)} style={{ padding: "10px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 13, background: "#fff", color: "#333", cursor: "pointer" }}>
+                    <select value={filterSkill} onChange={e=>setFilterSkill(e.target.value)} style={{ padding:"10px 14px", borderRadius:12, border:"1.5px solid #e2ddd6", fontSize:13, background:"#fff", color:"#333", cursor:"pointer" }}>
                       <option value="all">All Skills</option>
-                      {skills.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      {skills.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
-                    <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)} style={{ padding: "10px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 13, background: "#fff", color: "#333", cursor: "pointer" }}>
+                    <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value as any)} style={{ padding:"10px 14px", borderRadius:12, border:"1.5px solid #e2ddd6", fontSize:13, background:"#fff", color:"#333", cursor:"pointer" }}>
                       <option value="all">All Status</option>
                       <option value="open">Open</option>
                       <option value="answered">Answered</option>
                     </select>
                   </div>
-                  <div style={{ fontSize: 12, color: "#bbb", fontWeight: 600, marginBottom: 14 }}>
-                    {filteredPosts.length} question{filteredPosts.length !== 1 ? "s" : ""}{search && ` for "${search}"`}
-                  </div>
-                  {filteredPosts.length === 0
-                    ? <EmptyState message="No questions found" onAsk={profile ? () => setShowPostModal(true) : undefined} />
-                    : filteredPosts.map((fp, idx) => (
-                      <PostCard key={fp.id} fp={fp} idx={idx} onClick={async () => { setOpenPost(fp); await loadAnswers(fp.id); }} onLightbox={setLightbox} />
-                    ))}
+                  <div style={{ fontSize:12, color:"#bbb", fontWeight:600, marginBottom:14 }}>{filteredPosts.length} question{filteredPosts.length!==1?"s":""}{search&&` for "${search}"`}</div>
+                  {filteredPosts.length===0
+                    ? <EmptyState message="No questions found" onAsk={profile?()=>setShowPostModal(true):undefined} />
+                    : filteredPosts.map((fp,idx)=><PostCard key={fp.id} fp={fp} idx={idx} onClick={async()=>{setOpenPost(fp);await loadAnswers(fp.id);}} onLightbox={setLightbox} />)}
                 </div>
               )}
 
-              {tab === "groups" && (
+              {tab==="groups" && (
                 <div>
-                  {Object.entries(skillsByCategory).map(([category, catSkills]) => {
-                    const cfg = CATEGORY_COLORS[category] || { bg: "#f0ece4", color: "#555", accent: "#888" };
+                  {Object.entries(skillsByCategory).map(([category,catSkills])=>{
+                    const cfg = CATEGORY_COLORS[category]||{bg:"#f0ece4",color:"#555",accent:"#888"};
                     return (
-                      <div key={category} style={{ marginBottom: 24 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                          <span style={{ fontSize: 18 }}>{CATEGORY_ICONS[category]}</span>
-                          <span style={{ fontSize: 12, fontWeight: 800, color: cfg.color, letterSpacing: "0.06em", textTransform: "uppercase" }}>{category}</span>
-                          <span style={{ fontSize: 11, color: "#bbb" }}>{catSkills.length} skills</span>
+                      <div key={category} style={{ marginBottom:24 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+                          <span style={{ fontSize:18 }}>{CATEGORY_ICONS[category]}</span>
+                          <span style={{ fontSize:12, fontWeight:800, color:cfg.color, letterSpacing:"0.06em", textTransform:"uppercase" }}>{category}</span>
+                          <span style={{ fontSize:11, color:"#bbb" }}>{catSkills.length} skills</span>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-                          {catSkills.map(skill => {
-                            const qCount = posts.filter(p => p.skill_id === skill.id).length;
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10 }}>
+                          {catSkills.map(skill=>{
+                            const qCount = posts.filter(p=>p.skill_id===skill.id).length;
                             return (
-                              <div key={skill.id} className="post-card" onClick={() => { setFilterSkill(skill.id); setTab("forum"); }}
-                                style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #e8e2d9", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div key={skill.id} className="post-card" onClick={()=>{setFilterSkill(skill.id);setTab("forum");}} style={{ background:"#fff", borderRadius:14, border:"1.5px solid #e8e2d9", padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                                 <div>
-                                  <div style={{ fontWeight: 800, fontSize: 14, color: "#1a1a1a", marginBottom: 5 }}>{skill.name}</div>
-                                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: cfg.bg, color: cfg.color }}>{qCount} question{qCount !== 1 ? "s" : ""}</span>
+                                  <div style={{ fontWeight:800, fontSize:14, color:"#1a1a1a", marginBottom:5 }}>{skill.name}</div>
+                                  <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:999, background:cfg.bg, color:cfg.color }}>{qCount} question{qCount!==1?"s":""}</span>
                                 </div>
-                                <div style={{ width: 42, height: 42, borderRadius: 12, background: cfg.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{CATEGORY_ICONS[category]}</div>
+                                <div style={{ width:42, height:42, borderRadius:12, background:cfg.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>{CATEGORY_ICONS[category]}</div>
                               </div>
                             );
                           })}
@@ -569,51 +578,64 @@ export default function CommunityPage() {
               )}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 74 }}>
-              <div style={{ borderRadius: 18, padding: "22px", background: "linear-gradient(145deg, #1a4a36, #2d6a4f 60%, #3a8a63)", color: "#fff", boxShadow: "0 8px 32px rgba(45,106,79,0.25)" }}>
-                <div style={{ fontSize: 28, marginBottom: 10 }}>💰</div>
-                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Earn Credits</div>
-                <p style={{ fontSize: 13, opacity: 0.8, lineHeight: 1.65, marginBottom: 16 }}>Answer questions and get accepted → <strong style={{ opacity: 1 }}>+2 credits</strong> + <strong style={{ opacity: 1 }}>+15 XP</strong></p>
-                <button onClick={() => setTab("forum")} className="btn-hover" style={{ width: "100%", padding: "10px", borderRadius: 12, background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 13, fontWeight: 700, border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer" }}>
-                  See Open Questions →
-                </button>
+            {/* ── SIDEBAR ── */}
+            <div style={{ display:"flex", flexDirection:"column", gap:14, position:"sticky", top:74 }}>
+              {/* Mini champion card when shoutout dismissed */}
+              {weeklyChamp && shoutoutDismissed && (
+                <div style={{ background:"linear-gradient(135deg,#1a3d2e,#2d6a4f)", borderRadius:16, padding:"14px 16px", border:"1.5px solid rgba(255,215,0,0.25)" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <span style={{ fontSize:18, animation:"crownBounce 2s ease infinite" }}>👑</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:10, fontWeight:800, color:"rgba(255,215,0,0.7)", textTransform:"uppercase", letterSpacing:1 }}>Champion</div>
+                      <div style={{ fontSize:13, fontWeight:800, color:"#fff", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{weeklyChamp.full_name}</div>
+                    </div>
+                    <a href="/leaderboard" style={{ fontSize:11, color:"#ffd700", fontWeight:700, textDecoration:"none" }}>View →</a>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ borderRadius:18, padding:"22px", background:"linear-gradient(145deg,#1a4a36,#2d6a4f 60%,#3a8a63)", color:"#fff", boxShadow:"0 8px 32px rgba(45,106,79,0.25)" }}>
+                <div style={{ fontSize:28, marginBottom:10 }}>💰</div>
+                <div style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:800, marginBottom:6 }}>Earn Credits</div>
+                <p style={{ fontSize:13, opacity:0.8, lineHeight:1.65, marginBottom:16 }}>Answer questions and get accepted → <strong style={{ opacity:1 }}>+2 credits</strong> + <strong style={{ opacity:1 }}>+15 XP</strong></p>
+                <button onClick={()=>setTab("forum")} className="btn-hover" style={{ width:"100%", padding:"10px", borderRadius:12, background:"rgba(255,255,255,0.15)", color:"#fff", fontSize:13, fontWeight:700, border:"1px solid rgba(255,255,255,0.25)", cursor:"pointer" }}>See Open Questions →</button>
               </div>
 
-              <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9", padding: "20px 22px" }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a", marginBottom: 16 }}>🏆 Top Contributors</div>
-                {posts.length === 0 ? (
-                  <div style={{ fontSize: 13, color: "#bbb", textAlign: "center", padding: "12px 0" }}>No activity yet</div>
+              <div style={{ background:"#fff", borderRadius:18, border:"1.5px solid #e8e2d9", padding:"20px 22px" }}>
+                <div style={{ fontSize:13, fontWeight:800, color:"#1a1a1a", marginBottom:16 }}>🏆 Top Contributors</div>
+                {posts.length===0 ? (
+                  <div style={{ fontSize:13, color:"#bbb", textAlign:"center", padding:"12px 0" }}>No activity yet</div>
                 ) : Object.entries(
-                  posts.reduce((acc, p) => {
-                    const name = p.author?.full_name || "?";
-                    acc[name] = { count: (acc[name]?.count || 0) + 1, username: p.author?.username || "", level: p.author?.level || "Seedling", avatar_url: p.author?.avatar_url || null };
+                  posts.reduce((acc,p)=>{
+                    const name = p.author?.full_name||"?";
+                    acc[name]={count:(acc[name]?.count||0)+1,username:p.author?.username||"",level:p.author?.level||"Seedling",avatar_url:p.author?.avatar_url||null,xp_multiplier:p.author?.xp_multiplier};
                     return acc;
-                  }, {} as Record<string, { count: number; username: string; level: string; avatar_url: string | null }>)
-                ).sort((a, b) => b[1].count - a[1].count).slice(0, 5).map(([name, info], i) => (
-                  <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: i < 4 ? 12 : 0 }}>
-                    <span style={{ fontSize: 14, width: 22, textAlign: "center" }}>{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}</span>
-                    <Avatar name={name} level={info.level} avatarUrl={info.avatar_url} size={32} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a" }}>{name}</div>
-                      <div style={{ fontSize: 11, color: "#bbb" }}>{info.count} post{info.count !== 1 ? "s" : ""}</div>
+                  },{} as Record<string,{count:number;username:string;level:string;avatar_url:string|null;xp_multiplier?:number}>)
+                ).sort((a,b)=>b[1].count-a[1].count).slice(0,5).map(([name,info],i)=>(
+                  <div key={name} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:i<4?12:0 }}>
+                    <span style={{ fontSize:14, width:22, textAlign:"center" }}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}</span>
+                    <PremiumAvatar name={name} level={info.level} avatarUrl={info.avatar_url} size={32} xp_multiplier={info.xp_multiplier} />
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a" }}>{name}</div>
+                      <div style={{ fontSize:11, color:"#bbb" }}>{info.count} post{info.count!==1?"s":""}</div>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9", padding: "20px 22px" }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a", marginBottom: 14 }}>📋 Guidelines</div>
-                {["Be respectful and constructive", "Tag your skill topic", "No spam or self-promotion", "Credit helpful answers", "Report inappropriate content"].map((rule, i) => (
-                  <div key={i} style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 6, background: "#e6f2ec", color: "#2d6a4f", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</div>
-                    <span style={{ fontSize: 13, color: "#555", lineHeight: 1.5 }}>{rule}</span>
+              <div style={{ background:"#fff", borderRadius:18, border:"1.5px solid #e8e2d9", padding:"20px 22px" }}>
+                <div style={{ fontSize:13, fontWeight:800, color:"#1a1a1a", marginBottom:14 }}>📋 Guidelines</div>
+                {["Be respectful and constructive","Tag your skill topic","No spam or self-promotion","Credit helpful answers","Report inappropriate content"].map((rule,i)=>(
+                  <div key={i} style={{ display:"flex", gap:10, marginBottom:10, alignItems:"flex-start" }}>
+                    <div style={{ width:20, height:20, borderRadius:6, background:"#e6f2ec", color:"#2d6a4f", fontSize:11, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{i+1}</div>
+                    <span style={{ fontSize:13, color:"#555", lineHeight:1.5 }}>{rule}</span>
                   </div>
                 ))}
               </div>
 
-              <a href="/dashboard" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 14, background: "#f5f0e8", border: "1.5px solid #e8e2d9", color: "#555", fontSize: 13, fontWeight: 700, transition: "all 0.15s" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#eee9e0"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#f5f0e8"; }}>
+              <a href="/dashboard" style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px", borderRadius:14, background:"#f5f0e8", border:"1.5px solid #e8e2d9", color:"#555", fontSize:13, fontWeight:700, transition:"all 0.15s" }}
+                onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#eee9e0";}}
+                onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f5f0e8";}}>
                 🏠 Back to Dashboard
               </a>
             </div>
@@ -621,49 +643,42 @@ export default function CommunityPage() {
         </div>
       )}
 
+      {/* ── ASK MODAL ── */}
       {showPostModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20, animation: "fadeIn 0.2s ease" }}>
-          <div style={{ background: "#fff", borderRadius: 22, padding: "32px", maxWidth: 560, width: "100%", maxHeight: "92vh", overflowY: "auto", boxShadow: "0 24px 80px rgba(0,0,0,0.25)", animation: "fadeUp 0.25s ease" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300, padding:20, animation:"fadeIn 0.2s ease" }}>
+          <div style={{ background:"#fff", borderRadius:22, padding:"32px", maxWidth:560, width:"100%", maxHeight:"92vh", overflowY:"auto", boxShadow:"0 24px 80px rgba(0,0,0,0.25)", animation:"fadeUp 0.25s ease" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
               <div>
-                <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 900, color: "#111" }}>Ask a Question</h2>
-                <p style={{ fontSize: 13, color: "#aaa", marginTop: 3 }}>The community is here to help 🌱</p>
+                <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:24, fontWeight:900, color:"#111" }}>Ask a Question</h2>
+                <p style={{ fontSize:13, color:"#aaa", marginTop:3 }}>The community is here to help 🌱</p>
               </div>
-              <button onClick={() => setShowPostModal(false)} style={{ width: 34, height: 34, borderRadius: "50%", background: "#f5f0e8", border: "none", fontSize: 16, cursor: "pointer", color: "#888" }}>✕</button>
+              <button onClick={()=>setShowPostModal(false)} style={{ width:34, height:34, borderRadius:"50%", background:"#f5f0e8", border:"none", fontSize:16, cursor:"pointer", color:"#888" }}>✕</button>
             </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: 8 }}>Skill / Topic</label>
-              <select value={newPost.skill_id} onChange={e => setNewPost(p => ({ ...p, skill_id: e.target.value }))}
-                style={{ width: "100%", padding: "11px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14, background: "#fff", cursor: "pointer" }}>
+            <div style={{ marginBottom:16 }}>
+              <label style={{ fontSize:12, fontWeight:800, color:"#555", letterSpacing:"0.06em", textTransform:"uppercase" as const, display:"block", marginBottom:8 }}>Skill / Topic</label>
+              <select value={newPost.skill_id} onChange={e=>setNewPost(p=>({...p,skill_id:e.target.value}))} style={{ width:"100%", padding:"11px 14px", borderRadius:12, border:"1.5px solid #e2ddd6", fontSize:14, background:"#fff", cursor:"pointer" }}>
                 <option value="">Select a skill (optional)</option>
-                {skills.map(s => <option key={s.id} value={s.id}>{CATEGORY_ICONS[s.category]} {s.name} — {s.category}</option>)}
+                {skills.map(s=><option key={s.id} value={s.id}>{CATEGORY_ICONS[s.category]} {s.name} — {s.category}</option>)}
               </select>
             </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: 8 }}>Question *</label>
-              <input value={newPost.title} onChange={e => setNewPost(p => ({ ...p, title: e.target.value.slice(0, 120) }))}
-                placeholder="What do you want to know? Be specific…"
-                style={{ width: "100%", padding: "11px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14 }} />
-              <div style={{ fontSize: 11, color: "#ccc", textAlign: "right", marginTop: 4 }}>{newPost.title.length}/120</div>
+            <div style={{ marginBottom:16 }}>
+              <label style={{ fontSize:12, fontWeight:800, color:"#555", letterSpacing:"0.06em", textTransform:"uppercase" as const, display:"block", marginBottom:8 }}>Question *</label>
+              <input value={newPost.title} onChange={e=>setNewPost(p=>({...p,title:e.target.value.slice(0,120)}))} placeholder="What do you want to know? Be specific…" style={{ width:"100%", padding:"11px 14px", borderRadius:12, border:"1.5px solid #e2ddd6", fontSize:14 }} />
+              <div style={{ fontSize:11, color:"#ccc", textAlign:"right", marginTop:4 }}>{newPost.title.length}/120</div>
             </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: 8 }}>Details *</label>
-              <textarea value={newPost.body} onChange={e => setNewPost(p => ({ ...p, body: e.target.value.slice(0, 1000) }))}
-                placeholder="Add context, what you've tried, what you need help with…"
-                style={{ width: "100%", minHeight: 120, padding: "11px 14px", borderRadius: 12, border: "1.5px solid #e2ddd6", fontSize: 14, resize: "vertical", lineHeight: 1.6 }} />
-              <div style={{ fontSize: 11, color: "#ccc", textAlign: "right" }}>{newPost.body.length}/1000</div>
+            <div style={{ marginBottom:16 }}>
+              <label style={{ fontSize:12, fontWeight:800, color:"#555", letterSpacing:"0.06em", textTransform:"uppercase" as const, display:"block", marginBottom:8 }}>Details *</label>
+              <textarea value={newPost.body} onChange={e=>setNewPost(p=>({...p,body:e.target.value.slice(0,1000)}))} placeholder="Add context, what you've tried, what you need help with…" style={{ width:"100%", minHeight:120, padding:"11px 14px", borderRadius:12, border:"1.5px solid #e2ddd6", fontSize:14, resize:"vertical", lineHeight:1.6 }} />
+              <div style={{ fontSize:11, color:"#ccc", textAlign:"right" }}>{newPost.body.length}/1000</div>
             </div>
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ fontSize: 12, fontWeight: 800, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: 8 }}>
-                Photo <span style={{ fontWeight: 500, color: "#bbb", textTransform: "none" as const, fontSize: 12, letterSpacing: 0 }}>(optional)</span>
-              </label>
-              <ImageUploader onUploaded={url => setPostImageUrl(url)} label="📷 Attach a photo" />
+            <div style={{ marginBottom:24 }}>
+              <label style={{ fontSize:12, fontWeight:800, color:"#555", letterSpacing:"0.06em", textTransform:"uppercase" as const, display:"block", marginBottom:8 }}>Photo <span style={{ fontWeight:500, color:"#bbb", textTransform:"none" as const, fontSize:12, letterSpacing:0 }}>(optional)</span></label>
+              <ImageUploader onUploaded={url=>setPostImageUrl(url)} label="📷 Attach a photo" />
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowPostModal(false)} className="btn-hover" style={{ flex: 1, padding: "12px", borderRadius: 12, background: "#f5f0e8", color: "#666", fontWeight: 700, fontSize: 14, border: "none" }}>Cancel</button>
-              <button onClick={handlePostQuestion} disabled={!newPost.title.trim() || !newPost.body.trim() || posting} className="btn-hover"
-                style={{ flex: 2, padding: "12px", borderRadius: 12, background: !newPost.title.trim() || !newPost.body.trim() ? "#e8e2d9" : "#2d6a4f", color: !newPost.title.trim() || !newPost.body.trim() ? "#bbb" : "#fff", fontWeight: 800, fontSize: 14, border: "none" }}>
-                {posting ? "Posting…" : "Post Question →"}
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={()=>setShowPostModal(false)} className="btn-hover" style={{ flex:1, padding:"12px", borderRadius:12, background:"#f5f0e8", color:"#666", fontWeight:700, fontSize:14, border:"none" }}>Cancel</button>
+              <button onClick={handlePostQuestion} disabled={!newPost.title.trim()||!newPost.body.trim()||posting} className="btn-hover" style={{ flex:2, padding:"12px", borderRadius:12, background:!newPost.title.trim()||!newPost.body.trim()?"#e8e2d9":"#2d6a4f", color:!newPost.title.trim()||!newPost.body.trim()?"#bbb":"#fff", fontWeight:800, fontSize:14, border:"none" }}>
+                {posting?"Posting…":"Post Question →"}
               </button>
             </div>
           </div>
@@ -674,38 +689,34 @@ export default function CommunityPage() {
 }
 
 function PostCard({ fp, idx, onClick, onLightbox }: { fp: ForumPost; idx: number; onClick: () => void; onLightbox: (url: string) => void }) {
+  const rank = getRank(fp.author?.xp_multiplier);
   return (
-    <div className="post-card" onClick={onClick}
-      style={{ background: "#fff", borderRadius: 16, border: `1.5px solid ${fp.is_answered ? "#86efac44" : "#e8e2d9"}`, padding: "18px 22px", marginBottom: 10, animation: `fadeUp 0.3s ${idx * 0.04}s ease both`, boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
-        <div style={{ width: 34, height: 34, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
-          background: fp.author?.avatar_url ? "transparent" : (LEVEL_COLORS[fp.author?.level || "Seedling"] || "#2d6a4f"),
-          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff" }}>
-          {fp.author?.avatar_url
-            ? <img src={fp.author.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : getInitials(fp.author?.full_name || "?")
-          }
-        </div>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>{fp.author?.full_name}</span>
-          <span style={{ fontSize: 11, color: "#ccc" }}>@{fp.author?.username}</span>
+    <div className="post-card" onClick={onClick} style={{ background:"#fff", borderRadius:16, border:`1.5px solid ${fp.is_answered?"#86efac44":"#e8e2d9"}`, padding:"18px 22px", marginBottom:10, animation:`fadeUp 0.3s ${idx*0.04}s ease both`, boxShadow:"0 2px 8px rgba(0,0,0,0.03)" }}>
+      <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10 }}>
+        <PremiumAvatar name={fp.author?.full_name||"?"} level={fp.author?.level} avatarUrl={fp.author?.avatar_url} size={34} xp_multiplier={fp.author?.xp_multiplier} />
+        <div style={{ flex:1, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+          <span style={{ fontSize:13, fontWeight:700, color:"#333" }}>{fp.author?.full_name}</span>
+          <span style={{ fontSize:11, color:"#ccc" }}>@{fp.author?.username}</span>
+          {fp.author?.champion_title && rank>0 && (
+            <span style={{ fontSize:10, fontWeight:800, background:"rgba(255,215,0,0.12)", color:"#b8860b", padding:"2px 8px", borderRadius:999, border:"1px solid rgba(255,215,0,0.2)" }}>
+              {rank===1?"👑":rank===2?"🥈":"🥉"} {fp.author.champion_title}
+            </span>
+          )}
           {fp.skill && <SkillTag skill={fp.skill} />}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
           {fp.is_answered
-            ? <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, background: "#dcfce7", color: "#15803d", fontWeight: 800 }}>✓ Solved</span>
-            : <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, background: "#fef3c7", color: "#b45309", fontWeight: 700 }}>Open</span>}
-          <span style={{ fontSize: 11, color: "#ccc" }}>{timeAgo(fp.created_at)}</span>
+            ? <span style={{ fontSize:11, padding:"3px 10px", borderRadius:999, background:"#dcfce7", color:"#15803d", fontWeight:800 }}>✓ Solved</span>
+            : <span style={{ fontSize:11, padding:"3px 10px", borderRadius:999, background:"#fef3c7", color:"#b45309", fontWeight:700 }}>Open</span>}
+          <span style={{ fontSize:11, color:"#ccc" }}>{timeAgo(fp.created_at)}</span>
         </div>
       </div>
-      <div style={{ fontWeight: 700, fontSize: 15, color: "#1a1a1a", marginBottom: 5, lineHeight: 1.4 }}>{fp.title}</div>
-      <div style={{ fontSize: 13, color: "#888", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{fp.body}</div>
-      {fp.image_url && (
-        <img src={fp.image_url} alt="" onClick={e => { e.stopPropagation(); onLightbox(fp.image_url!); }} style={{ maxHeight: 100, borderRadius: 8, border: "1px solid #e8e2d9", marginTop: 10, display: "block", cursor: "zoom-in" }} />
-      )}
-      <div style={{ display: "flex", gap: 14, marginTop: 12, paddingTop: 10, borderTop: "1px solid #f5f0e8", fontSize: 12, color: "#bbb", fontWeight: 600 }}>
+      <div style={{ fontWeight:700, fontSize:15, color:"#1a1a1a", marginBottom:5, lineHeight:1.4 }}>{fp.title}</div>
+      <div style={{ fontSize:13, color:"#888", lineHeight:1.5, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{fp.body}</div>
+      {fp.image_url && <img src={fp.image_url} alt="" onClick={e=>{e.stopPropagation();onLightbox(fp.image_url!);}} style={{ maxHeight:100, borderRadius:8, border:"1px solid #e8e2d9", marginTop:10, display:"block", cursor:"zoom-in" }} />}
+      <div style={{ display:"flex", gap:14, marginTop:12, paddingTop:10, borderTop:"1px solid #f5f0e8", fontSize:12, color:"#bbb", fontWeight:600 }}>
         <span>▲ {fp.upvotes}</span>
-        <span>💬 {fp.answer_count} {fp.answer_count === 1 ? "answer" : "answers"}</span>
+        <span>💬 {fp.answer_count} {fp.answer_count===1?"answer":"answers"}</span>
         {fp.image_url && <span>🖼 Photo</span>}
       </div>
     </div>
@@ -714,10 +725,10 @@ function PostCard({ fp, idx, onClick, onLightbox }: { fp: ForumPost; idx: number
 
 function EmptyState({ message, onAsk }: { message: string; onAsk?: () => void }) {
   return (
-    <div style={{ textAlign: "center", padding: "52px 24px", background: "#fff", borderRadius: 18, border: "1.5px solid #e8e2d9" }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>🌱</div>
-      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 800, color: "#1a1a1a", marginBottom: 6 }}>{message}</div>
-      {onAsk && <button onClick={onAsk} style={{ marginTop: 16, padding: "10px 24px", borderRadius: 999, background: "#2d6a4f", color: "#fff", fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer" }}>Ask the First Question →</button>}
+    <div style={{ textAlign:"center", padding:"52px 24px", background:"#fff", borderRadius:18, border:"1.5px solid #e8e2d9" }}>
+      <div style={{ fontSize:40, marginBottom:12 }}>🌱</div>
+      <div style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:800, color:"#1a1a1a", marginBottom:6 }}>{message}</div>
+      {onAsk && <button onClick={onAsk} style={{ marginTop:16, padding:"10px 24px", borderRadius:999, background:"#2d6a4f", color:"#fff", fontSize:13, fontWeight:700, border:"none", cursor:"pointer" }}>Ask the First Question →</button>}
     </div>
   );
 }

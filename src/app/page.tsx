@@ -2,38 +2,103 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
+// ── Weekly champion type ─────────────────────────────────────────────────────
+type WeeklyChamp = {
+  full_name: string; username: string; avatar_url: string | null;
+  champion_title: string | null; champion_streak: number; xp: number;
+};
+
 const mockCards = [
-  { type: "listing",     title: "Python for Absolute Beginners",                          teacher: "Maria S.",  credits: 15, rating: 4.9, color: "#e8f4e8", accent: "#2d6a4f", tag: "💻" },
-  { type: "bounty",      title: "Help me solve this calculus problem — due tonight!",      credits: 20, answers: 3,  deadline: "2h left",    color: "#fff8e7", accent: "#b45309", tag: "🎯" },
-  { type: "community",   title: "How do I center a div in CSS? I've tried everything 😭", upvotes: 47, answers: 12, color: "#f0f4ff", accent: "#3730a3", tag: "💬" },
-  { type: "listing",     title: "UI/UX Design Fundamentals with Figma",                   teacher: "Reina C.", credits: 12, rating: 5.0, color: "#fdf0f8", accent: "#9d174d", tag: "🎨" },
-  { type: "achievement", title: "🏆 Carlo just earned Top Teacher in JavaScript!",        sub: "23 sessions · 4.9 stars",             color: "#f0fdf4", accent: "#166534", tag: "⭐" },
-  { type: "bounty",      title: "Need someone to review my 5-page business plan",         credits: 35, answers: 1,  deadline: "1 day left", color: "#fff8e7", accent: "#b45309", tag: "🎯" },
-  { type: "listing",     title: "Guitar Basics — From zero to your first song",           teacher: "Sam R.",   credits: 10, rating: 4.7, color: "#fef9f0", accent: "#92400e", tag: "🎵" },
-  { type: "listing",     title: "English Conversation Practice — Job-ready fluency",      teacher: "Lisa M.",  credits: 8,  rating: 4.8, color: "#f0fdf4", accent: "#166534", tag: "🌍" },
+  { type:"listing",     title:"Python for Absolute Beginners",                          teacher:"Maria S.",  credits:15, rating:4.9, color:"#e8f4e8", accent:"#2d6a4f", tag:"💻" },
+  { type:"bounty",      title:"Help me solve this calculus problem — due tonight!",      credits:20, answers:3,  deadline:"2h left",    color:"#fff8e7", accent:"#b45309", tag:"🎯" },
+  { type:"community",   title:"How do I center a div in CSS? I've tried everything 😭", upvotes:47, answers:12, color:"#f0f4ff", accent:"#3730a3", tag:"💬" },
+  { type:"listing",     title:"UI/UX Design Fundamentals with Figma",                   teacher:"Reina C.", credits:12, rating:5.0, color:"#fdf0f8", accent:"#9d174d", tag:"🎨" },
+  { type:"achievement", title:"🏆 Carlo just earned Top Teacher in JavaScript!",        sub:"23 sessions · 4.9 stars",             color:"#f0fdf4", accent:"#166534", tag:"⭐" },
+  { type:"bounty",      title:"Need someone to review my 5-page business plan",         credits:35, answers:1,  deadline:"1 day left", color:"#fff8e7", accent:"#b45309", tag:"🎯" },
+  { type:"listing",     title:"Guitar Basics — From zero to your first song",           teacher:"Sam R.",   credits:10, rating:4.7, color:"#fef9f0", accent:"#92400e", tag:"🎵" },
+  { type:"listing",     title:"English Conversation Practice — Job-ready fluency",      teacher:"Lisa M.",  credits:8,  rating:4.8, color:"#f0fdf4", accent:"#166534", tag:"🌍" },
 ];
 
 const features = [
-  { icon: "🎓", title: "1-on-1 Sessions",   desc: "Book private sessions with verified skill teachers. Credits held in escrow until you're satisfied." },
-  { icon: "🎯", title: "Bounty Tasks",       desc: "Post a problem, set a reward. The community competes to give you the best answer." },
-  { icon: "💬", title: "Community Forum",    desc: "Ask questions, share knowledge, earn credits just by helping others." },
-  { icon: "✅", title: "Skill Verification", desc: "Teachers take quizzes to earn Verified badges — so you always know who's qualified." },
-  { icon: "🔒", title: "Escrow Protection",  desc: "Credits are locked until both parties confirm the session is complete. 100% safe." },
-  { icon: "🏆", title: "XP & Levels",        desc: "Earn XP, level up from Seedling to Legend, unlock badges and climb the leaderboard." },
+  { icon:"🎓", title:"1-on-1 Sessions",   desc:"Book private sessions with verified skill teachers. Credits held in escrow until you're satisfied." },
+  { icon:"🎯", title:"Bounty Tasks",       desc:"Post a problem, set a reward. The community competes to give you the best answer." },
+  { icon:"💬", title:"Community Forum",    desc:"Ask questions, share knowledge, earn credits just by helping others." },
+  { icon:"✅", title:"Skill Verification", desc:"Teachers take quizzes to earn Verified badges — so you always know who's qualified." },
+  { icon:"🔒", title:"Escrow Protection",  desc:"Credits are locked until both parties confirm the session is complete. 100% safe." },
+  { icon:"🏆", title:"XP & Levels",        desc:"Earn XP, level up from Seedling to Legend, unlock badges and climb the leaderboard." },
 ];
 
 const learnTopics = [
-  { emoji: "💻", label: "Coding"         },
-  { emoji: "🌍", label: "English"        },
-  { emoji: "🎸", label: "Guitar"         },
-  { emoji: "🎨", label: "Design"         },
-  { emoji: "📐", label: "Math"           },
-  { emoji: "📊", label: "Business"       },
-  { emoji: "🎬", label: "Video Editing"  },
-  { emoji: "📸", label: "Photography"    },
-  { emoji: "🍳", label: "Cooking"        },
-  { emoji: "🗣️", label: "Public Speaking"},
+  { emoji:"💻", label:"Coding"          },
+  { emoji:"🌍", label:"English"         },
+  { emoji:"🎸", label:"Guitar"          },
+  { emoji:"🎨", label:"Design"          },
+  { emoji:"📐", label:"Math"            },
+  { emoji:"📊", label:"Business"        },
+  { emoji:"🎬", label:"Video Editing"   },
+  { emoji:"📸", label:"Photography"     },
+  { emoji:"🍳", label:"Cooking"         },
+  { emoji:"🗣️", label:"Public Speaking" },
 ];
+
+function getInitials(name: string) {
+  return name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0,2) || "??";
+}
+
+// ── Weekly Champion Banner ───────────────────────────────────────────────────
+function WeeklyChampionBanner({ champ }: { champ: WeeklyChamp }) {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+
+  return (
+    <div style={{ position:"relative", background:"linear-gradient(90deg,#1a3d2e 0%,#2d6a4f 40%,#1a4a35 100%)", overflow:"hidden" }}>
+      {/* Animated gold shimmer line at top */}
+      <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:"linear-gradient(90deg,transparent,#ffd700,#e8a800,#ffd700,transparent)", backgroundSize:"200% 100%", animation:"shimmer 2s linear infinite" }} />
+
+      <div style={{ maxWidth:1200, margin:"0 auto", padding:"12px 32px", display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+        {/* Crown pulse */}
+        <div style={{ animation:"crownBounce 1.5s ease infinite", fontSize:24, flexShrink:0 }}>👑</div>
+
+        {/* Avatar */}
+        <div style={{ position:"relative", flexShrink:0 }}>
+          <div style={{ width:38, height:38, borderRadius:10, overflow:"hidden", background:"#2d6a4f", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", animation:"goldRing 2s ease infinite" }}>
+            {champ.avatar_url
+              ? <img src={champ.avatar_url} alt={champ.full_name} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+              : getInitials(champ.full_name)
+            }
+          </div>
+        </div>
+
+        {/* Text */}
+        <div style={{ flex:1, minWidth:200 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+            <span style={{ fontSize:13, fontWeight:900, color:"#fff", fontFamily:"'Fraunces',serif" }}>
+              🏆 This Week's Champion: {champ.full_name}
+            </span>
+            {champ.champion_title && (
+              <span style={{ fontSize:10, fontWeight:800, background:"rgba(255,215,0,0.2)", color:"#ffd700", padding:"2px 8px", borderRadius:999, border:"1px solid rgba(255,215,0,0.3)" }}>
+                {champ.champion_title}{champ.champion_streak > 1 ? ` ×${champ.champion_streak} 🔥` : ""}
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)", marginTop:2 }}>
+            @{champ.username} · {champ.xp.toLocaleString()} XP · Earned 1.25× XP multiplier + 20 bonus credits
+          </div>
+        </div>
+
+        {/* CTA */}
+        <a href="/leaderboard" style={{ fontSize:12, fontWeight:800, color:"#ffd700", background:"rgba(255,215,0,0.12)", padding:"7px 16px", borderRadius:20, border:"1px solid rgba(255,215,0,0.3)", textDecoration:"none", whiteSpace:"nowrap", flexShrink:0, transition:"all .2s" }}
+          onMouseOver={e => { e.currentTarget.style.background="rgba(255,215,0,0.25)"; }}
+          onMouseOut={e  => { e.currentTarget.style.background="rgba(255,215,0,0.12)"; }}>
+          View Leaderboard →
+        </a>
+
+        {/* Dismiss */}
+        <button onClick={() => setDismissed(true)} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.35)", fontSize:16, cursor:"pointer", flexShrink:0, lineHeight:1, padding:"0 4px" }}>✕</button>
+      </div>
+    </div>
+  );
+}
 
 const SignupPromptModal = ({ onClose }: { onClose: () => void }) => (
   <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, backdropFilter:"blur(8px)", padding:16 }}>
@@ -55,26 +120,61 @@ const SignupPromptModal = ({ onClose }: { onClose: () => void }) => (
 const MiniCard = ({ card, onClick }: { card: typeof mockCards[0]; onClick: () => void }) => (
   <div onClick={onClick}
     style={{ background:card.color, borderRadius:16, padding:"16px 18px", marginBottom:12, breakInside:"avoid", border:"1px solid rgba(0,0,0,0.06)", cursor:"pointer", transition:"transform 0.2s,box-shadow 0.2s" }}
-    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)"; }}
-    onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
+    onMouseEnter={e => { e.currentTarget.style.transform="translateY(-3px)"; e.currentTarget.style.boxShadow="0 8px 24px rgba(0,0,0,0.1)"; }}
+    onMouseLeave={e => { e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="none"; }}>
     <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
       <span style={{ fontSize:14 }}>{card.tag}</span>
       <span style={{ fontSize:10, fontWeight:800, color:card.accent, textTransform:"uppercase", letterSpacing:"0.06em" }}>
-        {card.type === "listing" ? "Skill" : card.type === "bounty" ? "Bounty" : card.type === "achievement" ? "Achievement" : "Forum"}
+        {card.type==="listing"?"Skill":card.type==="bounty"?"Bounty":card.type==="achievement"?"Achievement":"Forum"}
       </span>
     </div>
     <p style={{ fontFamily:"'Fraunces',serif", fontSize:13, fontWeight:800, color:"#111", lineHeight:1.35, marginBottom:6 }}>{card.title}</p>
-    {card.type === "listing"     && "teacher" in card && "credits" in card && <p style={{ fontSize:11, color:"#777" }}>by {(card as any).teacher} · <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong> · ⭐{(card as any).rating}</p>}
-    {card.type === "bounty"      && "credits" in card && <p style={{ fontSize:11, color:"#777" }}>🏆 <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong> reward · ⏱ {(card as any).deadline}</p>}
-    {card.type === "community"   && "upvotes" in card && <p style={{ fontSize:11, color:"#777" }}>▲ {(card as any).upvotes} · 💬 {(card as any).answers} answers</p>}
-    {card.type === "achievement" && "sub" in card     && <p style={{ fontSize:11, color:"#777" }}>{(card as any).sub}</p>}
+    {card.type==="listing"     && "teacher" in card && "credits" in card && <p style={{ fontSize:11, color:"#777" }}>by {(card as any).teacher} · <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong> · ⭐{(card as any).rating}</p>}
+    {card.type==="bounty"      && "credits" in card && <p style={{ fontSize:11, color:"#777" }}>🏆 <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong> reward · ⏱ {(card as any).deadline}</p>}
+    {card.type==="community"   && "upvotes" in card && <p style={{ fontSize:11, color:"#777" }}>▲ {(card as any).upvotes} · 💬 {(card as any).answers} answers</p>}
+    {card.type==="achievement" && "sub" in card     && <p style={{ fontSize:11, color:"#777" }}>{(card as any).sub}</p>}
   </div>
 );
 
 export default function LandingPage() {
-  const [showModal, setShowModal] = useState(false);
-  const [guestMode, setGuestMode] = useState(false);
-  const [scrolled, setScrolled]   = useState(false);
+  const [showModal, setShowModal]     = useState(false);
+  const [guestMode, setGuestMode]     = useState(false);
+  const [scrolled, setScrolled]       = useState(false);
+  const [weeklyChamp, setWeeklyChamp] = useState<WeeklyChamp | null>(null);
+
+  // ── Fetch this week's #1 champion ─────────────────────────────────────────
+  useEffect(() => {
+    const fetchChamp = async () => {
+      try {
+        // Get the most recent week's rank-1 winner
+        const { data } = await supabase
+          .from("weekly_champions")
+          .select("user_id, week_start")
+          .eq("rank", 1)
+          .order("week_start", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (!data) return;
+
+        // Check it's recent (within last 7 days)
+        const weekStart = new Date(data.week_start);
+        const daysSince = (Date.now() - weekStart.getTime()) / (1000*60*60*24);
+        if (daysSince > 14) return; // too old, don't show
+
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("full_name,username,avatar_url,champion_title,champion_streak,xp")
+          .eq("id", data.user_id)
+          .single();
+
+        if (prof) setWeeklyChamp(prof as WeeklyChamp);
+      } catch {
+        // Graceful fallback — no banner if table doesn't exist yet
+      }
+    };
+    fetchChamp();
+  }, []);
 
   // Scroll reveal
   useEffect(() => {
@@ -94,18 +194,22 @@ export default function LandingPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Suppress unused supabase warning — kept for future live stats
-  void supabase;
-
   if (guestMode) return (
     <div style={{ minHeight:"100vh", background:"#faf8f4", fontFamily:"'DM Sans',sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,700;0,800;0,900;1,700&family=DM+Sans:wght@400;500;600;700&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+        @keyframes crownBounce{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-4px) rotate(5deg)}}
+        @keyframes goldRing{0%,100%{box-shadow:0 0 0 2px #e8a800,0 0 10px rgba(232,168,0,.5)}50%{box-shadow:0 0 0 2px #ffd700,0 0 18px rgba(255,215,0,.8)}}
         @media(max-width:600px){.guest-cards{columns:1!important}}
         @media(min-width:601px)and(max-width:900px){.guest-cards{columns:2!important}}
       `}</style>
       {showModal && <SignupPromptModal onClose={() => setShowModal(false)} />}
+
+      {/* Champion banner in guest mode too */}
+      {weeklyChamp && <WeeklyChampionBanner champ={weeklyChamp} />}
+
       <nav style={{ position:"sticky", top:0, zIndex:100, background:"rgba(250,248,244,0.95)", backdropFilter:"blur(12px)", borderBottom:"1.5px solid #e8e2d9", padding:"0 24px", height:58, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#2d6a4f" }}>SkillCredit</span>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
@@ -127,7 +231,7 @@ export default function LandingPage() {
           {mockCards.map((card, i) => <MiniCard key={i} card={card} onClick={() => setShowModal(true)} />)}
         </div>
       </div>
-      <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#fff", borderTop:"1.5px solid #e8e2d9", padding:"12px 20px", display:"flex", justifyContent:"center", alignItems:"center", gap:12, flexWrap:"wrap", boxShadow:"0 -4px 24px rgba(0,0,0,0.07)" }}>
+      <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#fff", borderTop:"1.5px solid #e8e2d9", padding:"12px 20px", display:"flex", justifyContent:"center", alignItems:"center", gap:12, flexWrap:"wrap", boxShadow:"0 -4px 24px rgba(0,0,0,.07)" }}>
         <p style={{ fontSize:13, color:"#444", margin:0, fontWeight:500 }}>Join Filipinos teaching and learning on SkillCredit</p>
         <a href="/signup" style={{ background:"#2d6a4f", color:"#fff", padding:"10px 22px", borderRadius:12, fontWeight:800, fontSize:13, textDecoration:"none" }}>Get started free →</a>
       </div>
@@ -142,9 +246,12 @@ export default function LandingPage() {
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         a{text-decoration:none}
 
-        @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-        @keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:none}}
+        @keyframes fadeUp      {from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+        @keyframes pulse       {0%,100%{opacity:1}50%{opacity:0.4}}
+        @keyframes shimmer     {0%{background-position:-200% 0}100%{background-position:200% 0}}
+        @keyframes crownBounce {0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-5px) rotate(5deg)}}
+        @keyframes goldRing    {0%,100%{box-shadow:0 0 0 2.5px #e8a800,0 0 12px rgba(232,168,0,.6),0 0 24px rgba(232,168,0,.3)}50%{box-shadow:0 0 0 2.5px #ffd700,0 0 22px rgba(255,215,0,.9),0 0 44px rgba(255,215,0,.4)}}
+        @keyframes champSlide  {from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
 
         .reveal{opacity:0;transform:translateY(36px);transition:opacity .7s ease,transform .7s ease}
         .reveal.visible{opacity:1;transform:none}
@@ -165,9 +272,7 @@ export default function LandingPage() {
         .nav-link{transition:color .15s,background .15s}
         .nav-link:hover{color:#2d6a4f!important;background:#eef6ee!important}
         .topic-pill{transition:all .2s}
-        .topic-pill:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.08)}
-        .teacher-chip{transition:transform .18s,box-shadow .18s}
-        .teacher-chip:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.08)!important}
+        .topic-pill:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.08)}
 
         .hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
         .features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
@@ -201,8 +306,11 @@ export default function LandingPage() {
         }
       `}</style>
 
+      {/* ── WEEKLY CHAMPION BANNER — shows only when there's a real winner ── */}
+      {weeklyChamp && <WeeklyChampionBanner champ={weeklyChamp} />}
+
       {/* ── NAVBAR ── */}
-      <nav style={{ position:"sticky", top:0, zIndex:200, background: scrolled ? "rgba(250,248,244,0.97)" : "transparent", backdropFilter: scrolled ? "blur(16px)" : "none", borderBottom: scrolled ? "1.5px solid #e8e2d9" : "1.5px solid transparent", padding:"0 32px", height:60, display:"flex", alignItems:"center", justifyContent:"space-between", transition:"all .3s ease" }}>
+      <nav style={{ position:"sticky", top:0, zIndex:200, background:scrolled?"rgba(250,248,244,0.97)":"transparent", backdropFilter:scrolled?"blur(16px)":"none", borderBottom:scrolled?"1.5px solid #e8e2d9":"1.5px solid transparent", padding:"0 32px", height:60, display:"flex", alignItems:"center", justifyContent:"space-between", transition:"all .3s ease" }}>
         <div style={{ display:"flex", alignItems:"center" }}>
           <span style={{ fontFamily:"'Fraunces',serif", fontSize:22, fontWeight:900, color:"#2d6a4f" }}>Skill</span>
           <span style={{ fontFamily:"'Fraunces',serif", fontSize:22, fontWeight:900, color:"#111" }}>Credit</span>
@@ -223,62 +331,67 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* ── HERO — full viewport ── */}
+      {/* ── HERO ── */}
       <section style={{ minHeight:"calc(100vh - 60px)", display:"flex", alignItems:"center", width:"100%" }}>
         <div style={{ maxWidth:1200, margin:"0 auto", padding:"0 48px", width:"100%" }}>
           <div className="hero-grid">
-
-            {/* Left */}
             <div>
-              {/* Early access badge */}
               <div className="hero-tag" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#e8f4e8", border:"1.5px solid #b7e4c7", padding:"6px 16px", borderRadius:999, marginBottom:24 }}>
                 <span style={{ width:8, height:8, borderRadius:"50%", background:"#2d6a4f", animation:"pulse 2s infinite", display:"inline-block" }} />
                 <span style={{ fontSize:12, color:"#2d6a4f", fontWeight:700 }}>🚀 Early Access — Join the first learners</span>
               </div>
-
-              {/* Bigger headline */}
               <h1 className="hero-h1">
                 <span className="hero-h1-text" style={{ fontFamily:"'Fraunces',serif", fontSize:62, fontWeight:900, color:"#111", lineHeight:1.05, display:"block", marginBottom:20, letterSpacing:"-0.02em" }}>
-                  Share skills.<br />
-                  <em style={{ color:"#2d6a4f", fontStyle:"italic" }}>Earn credits.</em><br />
-                  Keep learning.
+                  Share skills.<br /><em style={{ color:"#2d6a4f", fontStyle:"italic" }}>Earn credits.</em><br />Keep learning.
                 </span>
               </h1>
-
-              {/* Clearer subtext */}
               <p className="hero-p" style={{ fontSize:17, color:"#555", lineHeight:1.75, marginBottom:32, maxWidth:460 }}>
                 Learn any skill by spending credits — or <strong style={{ color:"#2d6a4f" }}>earn credits by teaching what you know</strong>. No cash needed. Ever.
               </p>
-
-              {/* CTA with urgency */}
               <div className="hero-btns">
                 <div className="hero-btns-wrap" style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:12 }}>
-                  <a href="/signup" className="cta-btn"
-                    style={{ background:"#2d6a4f", color:"#fff", padding:"16px 32px", borderRadius:14, fontWeight:800, fontSize:16, boxShadow:"0 6px 24px rgba(45,106,79,0.3)", display:"inline-flex", alignItems:"center", gap:8 }}>
+                  <a href="/signup" className="cta-btn" style={{ background:"#2d6a4f", color:"#fff", padding:"16px 32px", borderRadius:14, fontWeight:800, fontSize:16, boxShadow:"0 6px 24px rgba(45,106,79,0.3)", display:"inline-flex", alignItems:"center", gap:8 }}>
                     🎁 Get 20 free credits — join now
                   </a>
-                  <button onClick={() => setGuestMode(true)} className="ghost-btn"
-                    style={{ background:"#f0ece4", color:"#444", padding:"16px 26px", borderRadius:14, fontWeight:700, fontSize:16, border:"none", cursor:"pointer" }}>
+                  <button onClick={() => setGuestMode(true)} className="ghost-btn" style={{ background:"#f0ece4", color:"#444", padding:"16px 26px", borderRadius:14, fontWeight:700, fontSize:16, border:"none", cursor:"pointer" }}>
                     👀 Browse first
                   </button>
                 </div>
                 <p style={{ fontSize:12, color:"#aaa", marginBottom:28 }}>No credit card required · Free forever to start</p>
               </div>
 
-              {/* Honest early access social proof */}
-              <div className="hero-proof" style={{ display:"flex", alignItems:"center", gap:12, background:"#fff", border:"1.5px solid #e8e2d9", borderRadius:16, padding:"14px 18px", boxShadow:"0 2px 12px rgba(0,0,0,0.04)", maxWidth:420 }}>
-                <div style={{ display:"flex", marginRight:4 }}>
-                  {["#2d6a4f","#b45309","#9d174d","#3730a3","#166534"].map((c, i) => (
-                    <div key={i} style={{ width:28, height:28, borderRadius:"50%", background:c, border:"2px solid #fff", marginLeft: i === 0 ? 0 : -8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, color:"#fff", fontWeight:900 }}>
-                      {["M","S","R","J","L"][i]}
-                    </div>
-                  ))}
+              {/* ── CHAMPION SPOTLIGHT in hero (if winner exists) ── */}
+              {weeklyChamp ? (
+                <div style={{ display:"flex", alignItems:"center", gap:14, background:"linear-gradient(135deg,#1a3d2e,#2d6a4f)", border:"1.5px solid rgba(255,215,0,0.3)", borderRadius:18, padding:"14px 18px", maxWidth:420, animation:"champSlide .5s ease", boxShadow:"0 8px 28px rgba(45,106,79,0.3)" }}>
+                  <span style={{ fontSize:22, animation:"crownBounce 1.5s ease infinite", flexShrink:0 }}>👑</span>
+                  <div style={{ width:40, height:40, borderRadius:11, overflow:"hidden", background:"#2d6a4f", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", animation:"goldRing 2s ease infinite", flexShrink:0 }}>
+                    {weeklyChamp.avatar_url
+                      ? <img src={weeklyChamp.avatar_url} alt={weeklyChamp.full_name} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                      : getInitials(weeklyChamp.full_name)
+                    }
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:10, fontWeight:800, color:"rgba(255,215,0,0.7)", textTransform:"uppercase", letterSpacing:1.5, marginBottom:2 }}>This Week's Champion</div>
+                    <div style={{ fontSize:14, fontWeight:900, color:"#fff", fontFamily:"'Fraunces',serif" }}>{weeklyChamp.full_name}</div>
+                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)" }}>{weeklyChamp.champion_title}{weeklyChamp.champion_streak > 1 ? ` · ${weeklyChamp.champion_streak} week streak 🔥` : ""}</div>
+                  </div>
+                  <a href="/leaderboard" style={{ fontSize:11, fontWeight:800, color:"#ffd700", textDecoration:"none", whiteSpace:"nowrap" }}>View →</a>
                 </div>
-                <div>
-                  <div style={{ fontSize:13, fontWeight:800, color:"#111", lineHeight:1.2 }}>Be among the first learners</div>
-                  <div style={{ fontSize:11, color:"#999", marginTop:2 }}>Early access is open — grab your 20 free credits now 🎁</div>
+              ) : (
+                <div className="hero-proof" style={{ display:"flex", alignItems:"center", gap:12, background:"#fff", border:"1.5px solid #e8e2d9", borderRadius:16, padding:"14px 18px", boxShadow:"0 2px 12px rgba(0,0,0,.04)", maxWidth:420 }}>
+                  <div style={{ display:"flex", marginRight:4 }}>
+                    {["#2d6a4f","#b45309","#9d174d","#3730a3","#166534"].map((c,i) => (
+                      <div key={i} style={{ width:28, height:28, borderRadius:"50%", background:c, border:"2px solid #fff", marginLeft:i===0?0:-8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, color:"#fff", fontWeight:900 }}>
+                        {["M","S","R","J","L"][i]}
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:800, color:"#111", lineHeight:1.2 }}>Be among the first learners</div>
+                    <div style={{ fontSize:11, color:"#999", marginTop:2 }}>Early access is open — grab your 20 free credits now 🎁</div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Right — preview */}
@@ -293,21 +406,32 @@ export default function LandingPage() {
                 </div>
                 <div style={{ padding:14, maxHeight:440, overflowY:"hidden", maskImage:"linear-gradient(to bottom, black 60%, transparent 100%)" }}>
                   <div style={{ columns:2, gap:10 }}>
-                    {mockCards.map((card, i) => (
-                      <div key={i} style={{ background:card.color, borderRadius:13, padding:13, marginBottom:10, breakInside:"avoid", border:"1px solid rgba(0,0,0,0.05)", animation:`fadeUp .5s ${i*.07}s ease both`, transition:"transform .2s,box-shadow .2s" }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.08)"; }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
+                    {/* If we have a real champ, inject their achievement card first */}
+                    {weeklyChamp && (
+                      <div style={{ background:"linear-gradient(135deg,#1a3d2e,#2d6a4f)", borderRadius:13, padding:13, marginBottom:10, breakInside:"avoid", border:"1.5px solid rgba(255,215,0,0.3)", animation:"fadeUp .3s ease both" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:5 }}>
+                          <span style={{ fontSize:11 }}>👑</span>
+                          <span style={{ fontSize:9, fontWeight:800, color:"#ffd700", textTransform:"uppercase", letterSpacing:"0.06em" }}>Champion</span>
+                        </div>
+                        <p style={{ fontFamily:"'Fraunces',serif", fontSize:11, fontWeight:800, color:"#fff", lineHeight:1.3, marginBottom:4 }}>🏆 {weeklyChamp.full_name} is this week's Champion!</p>
+                        <p style={{ fontSize:10, color:"rgba(255,255,255,0.55)" }}>{weeklyChamp.xp.toLocaleString()} XP · {weeklyChamp.champion_title}</p>
+                      </div>
+                    )}
+                    {mockCards.map((card,i) => (
+                      <div key={i} style={{ background:card.color, borderRadius:13, padding:13, marginBottom:10, breakInside:"avoid", border:"1px solid rgba(0,0,0,.05)", animation:`fadeUp .5s ${i*.07}s ease both`, transition:"transform .2s,box-shadow .2s" }}
+                        onMouseEnter={e => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 16px rgba(0,0,0,.08)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="none"; }}>
                         <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:5 }}>
                           <span style={{ fontSize:11 }}>{card.tag}</span>
                           <span style={{ fontSize:9, fontWeight:800, color:card.accent, textTransform:"uppercase", letterSpacing:"0.06em" }}>
-                            {card.type === "listing" ? "Skill" : card.type === "bounty" ? "Bounty" : card.type === "achievement" ? "Win" : "Forum"}
+                            {card.type==="listing"?"Skill":card.type==="bounty"?"Bounty":card.type==="achievement"?"Win":"Forum"}
                           </span>
                         </div>
                         <p style={{ fontFamily:"'Fraunces',serif", fontSize:11, fontWeight:800, color:"#111", lineHeight:1.3, marginBottom:4 }}>{card.title}</p>
-                        {card.type === "listing"     && "teacher" in card && <p style={{ fontSize:10, color:"#888" }}>{(card as any).teacher} · <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong></p>}
-                        {card.type === "bounty"      && "credits" in card && <p style={{ fontSize:10, color:"#888" }}>🏆 <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong> · {(card as any).deadline}</p>}
-                        {card.type === "community"   && "upvotes" in card && <p style={{ fontSize:10, color:"#888" }}>▲ {(card as any).upvotes} · 💬 {(card as any).answers}</p>}
-                        {card.type === "achievement" && "sub" in card     && <p style={{ fontSize:10, color:"#888" }}>{(card as any).sub}</p>}
+                        {card.type==="listing"     && "teacher" in card && <p style={{ fontSize:10, color:"#888" }}>{(card as any).teacher} · <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong></p>}
+                        {card.type==="bounty"      && "credits" in card && <p style={{ fontSize:10, color:"#888" }}>🏆 <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong> · {(card as any).deadline}</p>}
+                        {card.type==="community"   && "upvotes" in card && <p style={{ fontSize:10, color:"#888" }}>▲ {(card as any).upvotes} · 💬 {(card as any).answers}</p>}
+                        {card.type==="achievement" && "sub" in card     && <p style={{ fontSize:10, color:"#888" }}>{(card as any).sub}</p>}
                       </div>
                     ))}
                   </div>
@@ -323,8 +447,7 @@ export default function LandingPage() {
         <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" }}>
           <span style={{ fontSize:12, fontWeight:800, color:"#52b788", letterSpacing:"0.12em", textTransform:"uppercase" }}>The Problem</span>
           <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:40, fontWeight:900, color:"#fff", marginTop:10, marginBottom:16, letterSpacing:"-0.02em", lineHeight:1.15 }}>
-            Learning is expensive.<br />
-            <em style={{ color:"#52b788", fontStyle:"italic" }}>But everyone knows something valuable.</em>
+            Learning is expensive.<br /><em style={{ color:"#52b788", fontStyle:"italic" }}>But everyone knows something valuable.</em>
           </h2>
           <p style={{ fontSize:16, color:"rgba(255,255,255,0.5)", lineHeight:1.8, maxWidth:600, margin:"0 auto 48px" }}>
             Courses cost thousands. Tutors are hard to find. Most skills stay locked inside people who never get to share them.
@@ -349,19 +472,15 @@ export default function LandingPage() {
       <section className="section-pad reveal" style={{ background:"#faf8f4", padding:"72px 48px" }}>
         <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" }}>
           <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" }}>What can you learn?</span>
-          <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:36, fontWeight:900, color:"#111", marginTop:10, marginBottom:8, letterSpacing:"-0.02em" }}>
-            Anything the community knows
-          </h2>
+          <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:36, fontWeight:900, color:"#111", marginTop:10, marginBottom:8, letterSpacing:"-0.02em" }}>Anything the community knows</h2>
           <p style={{ fontSize:15, color:"#666", marginBottom:36 }}>If someone knows it, you can learn it — with credits, not cash.</p>
           <div style={{ display:"flex", gap:10, flexWrap:"wrap", justifyContent:"center" }}>
-            {learnTopics.map((t, i) => (
-              <div key={i} className="topic-pill" style={{ display:"flex", alignItems:"center", gap:8, background:"#fff", border:"1.5px solid #e8e2d9", borderRadius:999, padding:"10px 20px", fontSize:14, fontWeight:700, color:"#333", boxShadow:"0 2px 8px rgba(0,0,0,0.04)", cursor:"default" }}>
+            {learnTopics.map((t,i) => (
+              <div key={i} className="topic-pill" style={{ display:"flex", alignItems:"center", gap:8, background:"#fff", border:"1.5px solid #e8e2d9", borderRadius:999, padding:"10px 20px", fontSize:14, fontWeight:700, color:"#333", boxShadow:"0 2px 8px rgba(0,0,0,.04)", cursor:"default" }}>
                 <span style={{ fontSize:18 }}>{t.emoji}</span> {t.label}
               </div>
             ))}
-            <div style={{ display:"flex", alignItems:"center", gap:8, background:"#e8f4e8", border:"1.5px solid #b7e4c7", borderRadius:999, padding:"10px 20px", fontSize:14, fontWeight:700, color:"#2d6a4f" }}>
-              + much more
-            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, background:"#e8f4e8", border:"1.5px solid #b7e4c7", borderRadius:999, padding:"10px 20px", fontSize:14, fontWeight:700, color:"#2d6a4f" }}>+ much more</div>
           </div>
         </div>
       </section>
@@ -375,12 +494,12 @@ export default function LandingPage() {
           </div>
           <div className="steps-grid">
             {[
-              { icon:"🌱", num:"01", title:"Sign up & get 20 credits",       desc:"Create your profile, list skills you can teach and skills you want to learn. 20 free credits land in your wallet instantly." },
-              { icon:"📚", num:"02", title:"Book sessions or post bounties",  desc:"Find a teacher and book a 1-on-1 session, or post a task bounty and let the community race to help you." },
-              { icon:"⭐", num:"03", title:"Teach, earn, grow",               desc:"Every session you teach earns credits. Every bounty you solve earns credits. Spend them to keep learning — forever." },
+              { icon:"🌱", num:"01", title:"Sign up & get 20 credits",      desc:"Create your profile, list skills you can teach and skills you want to learn. 20 free credits land in your wallet instantly." },
+              { icon:"📚", num:"02", title:"Book sessions or post bounties", desc:"Find a teacher and book a 1-on-1 session, or post a task bounty and let the community race to help you." },
+              { icon:"⭐", num:"03", title:"Teach, earn, grow",              desc:"Every session you teach earns credits. Every bounty you solve earns credits. Spend them to keep learning — forever." },
             ].map(item => (
               <div key={item.num} style={{ background:"#faf8f4", borderRadius:20, padding:"32px 28px", border:"1.5px solid #e8e2d9", position:"relative", overflow:"hidden" }}>
-                <div style={{ position:"absolute", top:-16, right:-16, width:80, height:80, borderRadius:"50%", background:"#e8f4e8", opacity:0.7 }} />
+                <div style={{ position:"absolute", top:-16, right:-16, width:80, height:80, borderRadius:"50%", background:"#e8f4e8", opacity:.7 }} />
                 <span style={{ fontSize:36, display:"block", marginBottom:14 }}>{item.icon}</span>
                 <span style={{ fontSize:11, fontWeight:900, color:"#2d6a4f", letterSpacing:"0.1em" }}>STEP {item.num}</span>
                 <h3 style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:900, color:"#111", margin:"8px 0 10px" }}>{item.title}</h3>
@@ -399,8 +518,8 @@ export default function LandingPage() {
             <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:40, fontWeight:900, color:"#111", marginTop:10, letterSpacing:"-0.02em" }}>Everything you need to learn and earn</h2>
           </div>
           <div className="features-grid">
-            {features.map((f, i) => (
-              <div key={i} className="feature-card" style={{ background:"#fff", borderRadius:18, padding:"28px", border:"1.5px solid #e8e2d9", boxShadow:"0 2px 10px rgba(0,0,0,0.04)" }}>
+            {features.map((f,i) => (
+              <div key={i} className="feature-card" style={{ background:"#fff", borderRadius:18, padding:"28px", border:"1.5px solid #e8e2d9", boxShadow:"0 2px 10px rgba(0,0,0,.04)" }}>
                 <div style={{ width:48, height:48, borderRadius:14, background:"#e8f4e8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, marginBottom:14 }}>{f.icon}</div>
                 <h3 style={{ fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:900, color:"#111", marginBottom:8 }}>{f.title}</h3>
                 <p style={{ fontSize:13, color:"#666", lineHeight:1.7 }}>{f.desc}</p>
@@ -438,24 +557,64 @@ export default function LandingPage() {
               </a>
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              {mockCards.filter(c => c.type === "community" || c.type === "achievement" || c.type === "bounty").slice(0,5).map((card, i) => (
-                <div key={i} style={{ background:card.color, borderRadius:16, padding:"16px 18px", border:"1px solid rgba(0,0,0,0.05)", transition:"transform .2s" }}
-                  onMouseEnter={e => e.currentTarget.style.transform = "translateX(4px)"}
-                  onMouseLeave={e => e.currentTarget.style.transform = "none"}>
+              {mockCards.filter(c => c.type==="community"||c.type==="achievement"||c.type==="bounty").slice(0,5).map((card,i) => (
+                <div key={i} style={{ background:card.color, borderRadius:16, padding:"16px 18px", border:"1px solid rgba(0,0,0,.05)", transition:"transform .2s" }}
+                  onMouseEnter={e => e.currentTarget.style.transform="translateX(4px)"}
+                  onMouseLeave={e => e.currentTarget.style.transform="none"}>
                   <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
                     <span style={{ fontSize:14 }}>{card.tag}</span>
                     <span style={{ fontSize:10, fontWeight:800, color:card.accent, textTransform:"uppercase" }}>
-                      {card.type === "bounty" ? "Bounty" : card.type === "achievement" ? "Achievement" : "Forum"}
+                      {card.type==="bounty"?"Bounty":card.type==="achievement"?"Achievement":"Forum"}
                     </span>
                   </div>
                   <p style={{ fontFamily:"'Fraunces',serif", fontSize:14, fontWeight:800, color:"#111", marginBottom:4, lineHeight:1.3 }}>{card.title}</p>
-                  {card.type === "bounty"      && "credits" in card && <p style={{ fontSize:12, color:"#777" }}>🏆 {(card as any).credits} credits · {(card as any).deadline} · {(card as any).answers} answers</p>}
-                  {card.type === "achievement" && "sub" in card     && <p style={{ fontSize:12, color:"#777" }}>{(card as any).sub}</p>}
-                  {card.type === "community"   && "upvotes" in card && <p style={{ fontSize:12, color:"#777" }}>▲ {(card as any).upvotes} upvotes · 💬 {(card as any).answers} answers</p>}
+                  {card.type==="bounty"      && "credits" in card && <p style={{ fontSize:12, color:"#777" }}>🏆 {(card as any).credits} credits · {(card as any).deadline} · {(card as any).answers} answers</p>}
+                  {card.type==="achievement" && "sub" in card     && <p style={{ fontSize:12, color:"#777" }}>{(card as any).sub}</p>}
+                  {card.type==="community"   && "upvotes" in card && <p style={{ fontSize:12, color:"#777" }}>▲ {(card as any).upvotes} upvotes · 💬 {(card as any).answers} answers</p>}
                 </div>
               ))}
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── LEADERBOARD TEASER — new section showing the rewards system ── */}
+      <section className="section-pad reveal" style={{ background:"linear-gradient(135deg,#0d1f15 0%,#152b1e 50%,#0d1f15 100%)", padding:"80px 48px" }}>
+        <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" }}>
+          <span style={{ fontSize:12, fontWeight:800, color:"#52b788", letterSpacing:"0.12em", textTransform:"uppercase" }}>Leaderboard Rewards</span>
+          <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:38, fontWeight:900, color:"#fff", marginTop:10, marginBottom:12, lineHeight:1.15 }}>
+            Grind hard. Earn rewards.<br /><em style={{ color:"#ffd700", fontStyle:"italic" }}>Wear your crown.</em>
+          </h2>
+          <p style={{ fontSize:15, color:"rgba(255,255,255,0.5)", marginBottom:40, maxWidth:520, margin:"0 auto 40px" }}>
+            Top 3 each week unlock real perks — not just bragging rights.
+          </p>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, maxWidth:700, margin:"0 auto 36px" }}>
+            {[
+              { rank:"#1", icon:"👑", label:"Champion",    color:"#ffd700", bg:"rgba(255,215,0,0.08)",  border:"rgba(255,215,0,0.25)",  perks:["1.25× XP for 7 days","+ 20 credits","Featured listing","Gold avatar border","🏆 Champion title"] },
+              { rank:"#2", icon:"🥈", label:"Runner-up",   color:"#c0c0c0", bg:"rgba(192,192,192,0.08)",border:"rgba(192,192,192,0.2)",  perks:["1.15× XP for 7 days","+ 10 credits","Silver avatar border","🔥 Hot Teacher tag"] },
+              { rank:"#3", icon:"🥉", label:"Third Place", color:"#cd7f32", bg:"rgba(205,127,50,0.08)", border:"rgba(205,127,50,0.2)",   perks:["1.10× XP for 7 days","+ 5 credits","Bronze avatar border","🔥 Hot Teacher tag"] },
+            ].map(r => (
+              <div key={r.rank} style={{ background:r.bg, borderRadius:18, padding:"24px 18px", border:`1.5px solid ${r.border}`, textAlign:"left" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+                  <span style={{ fontSize:28 }}>{r.icon}</span>
+                  <div>
+                    <div style={{ fontSize:18, fontWeight:900, color:r.color, fontFamily:"'Fraunces',serif" }}>{r.rank}</div>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>{r.label}</div>
+                  </div>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  {r.perks.map(p => (
+                    <div key={p} style={{ display:"flex", alignItems:"center", gap:7, fontSize:11, color:"rgba(255,255,255,0.7)", fontWeight:600 }}>
+                      <span style={{ color:r.color, fontSize:10 }}>✓</span> {p}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <a href="/leaderboard" className="cta-btn" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"linear-gradient(135deg,#e8a800,#ffd700)", color:"#1a1a1a", padding:"14px 28px", borderRadius:12, fontWeight:900, fontSize:14, boxShadow:"0 6px 24px rgba(232,168,0,0.4)" }}>
+            👑 See this week's leaderboard →
+          </a>
         </div>
       </section>
 
@@ -503,8 +662,8 @@ export default function LandingPage() {
           <div style={{ display:"flex", gap:16 }}>
             {["Privacy","Terms","Contact"].map(l => (
               <a key={l} href="#" style={{ fontSize:13, color:"#555", fontWeight:600, transition:"color .15s" }}
-                onMouseOver={e => (e.currentTarget.style.color = "#fff")}
-                onMouseOut={e  => (e.currentTarget.style.color = "#555")}>{l}</a>
+                onMouseOver={e => (e.currentTarget.style.color="#fff")}
+                onMouseOut={e  => (e.currentTarget.style.color="#555")}>{l}</a>
             ))}
           </div>
         </div>
