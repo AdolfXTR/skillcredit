@@ -8,7 +8,7 @@ import { bayesianAvg } from "@/lib/ratings";
 // TYPES
 // ─────────────────────────────────────────────────────────────
 type PortfolioItem = { id: string; url: string; type: string; caption: string };
-type Review = { id: string; overall: number; comment?: string; created_at: string; reviewer?: { full_name: string; avatar_url?: string | null } };
+type Review = { id: string; overall: number; comment?: string; created_at: string; reviewer?: { full_name: string; avatar_url?: string | null } | { full_name: string; avatar_url?: string | null }[] };
 type Listing = {
   id: string; title: string; description: string;
   credit_price: number; format: string; duration: number;
@@ -131,7 +131,7 @@ function ReviewsSection({ teacherId, avgRating, totalRatings }: { teacherId: str
     supabase.from("ratings")
       .select(`id, overall, comment, created_at, reviewer:profiles!ratings_reviewer_id_fkey(full_name, avatar_url)`)
       .eq("rated_id", teacherId).order("created_at", { ascending: false }).limit(10)
-      .then(({ data }) => { setReviews((data || []) as Review[]); setLoading(false); });
+      .then(({ data }) => { setReviews((data || []) as unknown as Review[]); setLoading(false); });
   }, [teacherId]);
 
   const visible = expanded ? reviews : reviews.slice(0, 3);
@@ -169,14 +169,17 @@ function ReviewsSection({ teacherId, avgRating, totalRatings }: { teacherId: str
         <div style={{ textAlign:"center", padding:24, color:"#bbb", fontSize:13 }}>Loading reviews…</div>
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          {visible.map(r => (
+          {visible.map(r => {
+            // Supabase may return reviewer as array or object
+            const rev = Array.isArray(r.reviewer) ? r.reviewer[0] : r.reviewer;
+            return (
             <div key={r.id} style={{ padding:"14px 16px", background:"#fafaf8", borderRadius:14, border:"1.5px solid #f0ece4" }}>
               <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
                 <div style={{ width:32, height:32, borderRadius:"50%", background:"#2d6a4f", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#fff", overflow:"hidden", flexShrink:0 }}>
-                  {r.reviewer?.avatar_url ? <img src={r.reviewer.avatar_url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : getInitials(r.reviewer?.full_name||"?")}
+                  {rev?.avatar_url ? <img src={rev.avatar_url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : getInitials(rev?.full_name||"?")}
                 </div>
                 <div>
-                  <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a" }}>{r.reviewer?.full_name || "Anonymous"}</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a" }}>{rev?.full_name || "Anonymous"}</div>
                   <Stars rating={r.overall} size={11} />
                 </div>
                 <span style={{ marginLeft:"auto", fontSize:11, color:"#ccc" }}>
@@ -185,7 +188,8 @@ function ReviewsSection({ teacherId, avgRating, totalRatings }: { teacherId: str
               </div>
               {r.comment && <p style={{ fontSize:13, color:"#555", lineHeight:1.65, fontStyle:"italic" }}>"{r.comment}"</p>}
             </div>
-          ))}
+            );
+          })}
           {reviews.length > 3 && (
             <button onClick={() => setExpanded(e => !e)}
               style={{ padding:"9px", borderRadius:12, background:"#f5f0e8", color:"#2d6a4f", fontSize:12, fontWeight:700, border:"1.5px solid #e8e2d9", cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
