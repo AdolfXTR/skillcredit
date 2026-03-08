@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
-// ── Weekly champion type ─────────────────────────────────────────────────────
 type WeeklyChamp = {
   full_name: string; username: string; avatar_url: string | null;
   champion_title: string | null; champion_streak: number; xp: number;
@@ -45,33 +44,23 @@ function getInitials(name: string) {
   return name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0,2) || "??";
 }
 
-// ── Weekly Champion Banner ───────────────────────────────────────────────────
 function WeeklyChampionBanner({ champ }: { champ: WeeklyChamp }) {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
-
   return (
     <div style={{ position:"relative", background:"linear-gradient(90deg,#1a3d2e 0%,#2d6a4f 40%,#1a4a35 100%)", overflow:"hidden" }}>
-      {/* Animated gold shimmer line at top */}
       <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:"linear-gradient(90deg,transparent,#ffd700,#e8a800,#ffd700,transparent)", backgroundSize:"200% 100%", animation:"shimmer 2s linear infinite" }} />
-
-      <div style={{ maxWidth:1200, margin:"0 auto", padding:"12px 32px", display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
-        {/* Crown pulse */}
+      <div style={{ maxWidth:1200, margin:"0 auto", padding:"12px 32px", display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" as const }}>
         <div style={{ animation:"crownBounce 1.5s ease infinite", fontSize:24, flexShrink:0 }}>👑</div>
-
-        {/* Avatar */}
         <div style={{ position:"relative", flexShrink:0 }}>
           <div style={{ width:38, height:38, borderRadius:10, overflow:"hidden", background:"#2d6a4f", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", animation:"goldRing 2s ease infinite" }}>
             {champ.avatar_url
               ? <img src={champ.avatar_url} alt={champ.full_name} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-              : getInitials(champ.full_name)
-            }
+              : getInitials(champ.full_name)}
           </div>
         </div>
-
-        {/* Text */}
         <div style={{ flex:1, minWidth:200 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" as const }}>
             <span style={{ fontSize:13, fontWeight:900, color:"#fff", fontFamily:"'Fraunces',serif" }}>
               🏆 This Week's Champion: {champ.full_name}
             </span>
@@ -85,68 +74,24 @@ function WeeklyChampionBanner({ champ }: { champ: WeeklyChamp }) {
             @{champ.username} · {champ.xp.toLocaleString()} XP · Earned 1.25× XP multiplier + 20 bonus credits
           </div>
         </div>
-
-        {/* CTA */}
-        <a href="/leaderboard" style={{ fontSize:12, fontWeight:800, color:"#ffd700", background:"rgba(255,215,0,0.12)", padding:"7px 16px", borderRadius:20, border:"1px solid rgba(255,215,0,0.3)", textDecoration:"none", whiteSpace:"nowrap", flexShrink:0, transition:"all .2s" }}
+        <a href="/leaderboard" style={{ fontSize:12, fontWeight:800, color:"#ffd700", background:"rgba(255,215,0,0.12)", padding:"7px 16px", borderRadius:20, border:"1px solid rgba(255,215,0,0.3)", textDecoration:"none", whiteSpace:"nowrap" as const, flexShrink:0, transition:"all .2s" }}
           onMouseOver={e => { e.currentTarget.style.background="rgba(255,215,0,0.25)"; }}
           onMouseOut={e  => { e.currentTarget.style.background="rgba(255,215,0,0.12)"; }}>
           View Leaderboard →
         </a>
-
-        {/* Dismiss */}
         <button onClick={() => setDismissed(true)} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.35)", fontSize:16, cursor:"pointer", flexShrink:0, lineHeight:1, padding:"0 4px" }}>✕</button>
       </div>
     </div>
   );
 }
 
-const SignupPromptModal = ({ onClose }: { onClose: () => void }) => (
-  <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, backdropFilter:"blur(8px)", padding:16 }}>
-    <div style={{ background:"#fffdf7", borderRadius:28, padding:"44px 40px", maxWidth:440, width:"100%", textAlign:"center", boxShadow:"0 32px 80px rgba(0,0,0,0.25)", border:"1.5px solid #e8e2d9" }}>
-      <div style={{ width:72, height:72, borderRadius:"50%", background:"#e8f4e8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 20px" }}>🌱</div>
-      <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:26, fontWeight:900, color:"#1a1a1a", marginBottom:10 }}>Join SkillCredit</h2>
-      <p style={{ color:"#666", fontSize:14, lineHeight:1.7, marginBottom:28 }}>
-        Sign up free and get <strong style={{ color:"#2d6a4f" }}>20 credits</strong> instantly — enough to book your first session today.
-      </p>
-      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-        <a href="/signup" style={{ background:"#2d6a4f", color:"#fff", padding:"14px 24px", borderRadius:14, fontWeight:800, fontSize:15, textDecoration:"none", display:"block" }}>Create free account 🎁</a>
-        <a href="/login"  style={{ background:"#f5f0e8", color:"#444", padding:"14px 24px", borderRadius:14, fontWeight:600, fontSize:14, textDecoration:"none", display:"block" }}>I already have an account</a>
-        <button onClick={onClose} style={{ background:"none", border:"none", color:"#bbb", fontSize:13, cursor:"pointer", marginTop:4 }}>Continue browsing</button>
-      </div>
-    </div>
-  </div>
-);
-
-const MiniCard = ({ card, onClick }: { card: typeof mockCards[0]; onClick: () => void }) => (
-  <div onClick={onClick}
-    style={{ background:card.color, borderRadius:16, padding:"16px 18px", marginBottom:12, breakInside:"avoid", border:"1px solid rgba(0,0,0,0.06)", cursor:"pointer", transition:"transform 0.2s,box-shadow 0.2s" }}
-    onMouseEnter={e => { e.currentTarget.style.transform="translateY(-3px)"; e.currentTarget.style.boxShadow="0 8px 24px rgba(0,0,0,0.1)"; }}
-    onMouseLeave={e => { e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="none"; }}>
-    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
-      <span style={{ fontSize:14 }}>{card.tag}</span>
-      <span style={{ fontSize:10, fontWeight:800, color:card.accent, textTransform:"uppercase", letterSpacing:"0.06em" }}>
-        {card.type==="listing"?"Skill":card.type==="bounty"?"Bounty":card.type==="achievement"?"Achievement":"Forum"}
-      </span>
-    </div>
-    <p style={{ fontFamily:"'Fraunces',serif", fontSize:13, fontWeight:800, color:"#111", lineHeight:1.35, marginBottom:6 }}>{card.title}</p>
-    {card.type==="listing"     && "teacher" in card && "credits" in card && <p style={{ fontSize:11, color:"#777" }}>by {(card as any).teacher} · <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong> · ⭐{(card as any).rating}</p>}
-    {card.type==="bounty"      && "credits" in card && <p style={{ fontSize:11, color:"#777" }}>🏆 <strong style={{ color:card.accent }}>{(card as any).credits} cr</strong> reward · ⏱ {(card as any).deadline}</p>}
-    {card.type==="community"   && "upvotes" in card && <p style={{ fontSize:11, color:"#777" }}>▲ {(card as any).upvotes} · 💬 {(card as any).answers} answers</p>}
-    {card.type==="achievement" && "sub" in card     && <p style={{ fontSize:11, color:"#777" }}>{(card as any).sub}</p>}
-  </div>
-);
-
 export default function LandingPage() {
-  const [showModal, setShowModal]     = useState(false);
-  const [guestMode, setGuestMode]     = useState(false);
   const [scrolled, setScrolled]       = useState(false);
   const [weeklyChamp, setWeeklyChamp] = useState<WeeklyChamp | null>(null);
 
-  // ── Fetch this week's #1 champion ─────────────────────────────────────────
   useEffect(() => {
     const fetchChamp = async () => {
       try {
-        // Get the most recent week's rank-1 winner
         const { data } = await supabase
           .from("weekly_champions")
           .select("user_id, week_start")
@@ -154,29 +99,21 @@ export default function LandingPage() {
           .order("week_start", { ascending: false })
           .limit(1)
           .single();
-
         if (!data) return;
-
-        // Check it's recent (within last 7 days)
         const weekStart = new Date(data.week_start);
         const daysSince = (Date.now() - weekStart.getTime()) / (1000*60*60*24);
-        if (daysSince > 14) return; // too old, don't show
-
+        if (daysSince > 14) return;
         const { data: prof } = await supabase
           .from("profiles")
           .select("full_name,username,avatar_url,champion_title,champion_streak,xp")
           .eq("id", data.user_id)
           .single();
-
         if (prof) setWeeklyChamp(prof as WeeklyChamp);
-      } catch {
-        // Graceful fallback — no banner if table doesn't exist yet
-      }
+      } catch { /* graceful fallback */ }
     };
     fetchChamp();
   }, []);
 
-  // Scroll reveal
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => entries.forEach(e => {
@@ -194,51 +131,6 @@ export default function LandingPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  if (guestMode) return (
-    <div style={{ minHeight:"100vh", background:"#faf8f4", fontFamily:"'DM Sans',sans-serif" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,700;0,800;0,900;1,700&family=DM+Sans:wght@400;500;600;700&display=swap');
-        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-        @keyframes crownBounce{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-4px) rotate(5deg)}}
-        @keyframes goldRing{0%,100%{box-shadow:0 0 0 2px #e8a800,0 0 10px rgba(232,168,0,.5)}50%{box-shadow:0 0 0 2px #ffd700,0 0 18px rgba(255,215,0,.8)}}
-        @media(max-width:600px){.guest-cards{columns:1!important}}
-        @media(min-width:601px)and(max-width:900px){.guest-cards{columns:2!important}}
-      `}</style>
-      {showModal && <SignupPromptModal onClose={() => setShowModal(false)} />}
-
-      {/* Champion banner in guest mode too */}
-      {weeklyChamp && <WeeklyChampionBanner champ={weeklyChamp} />}
-
-      <nav style={{ position:"sticky", top:0, zIndex:100, background:"rgba(250,248,244,0.95)", backdropFilter:"blur(12px)", borderBottom:"1.5px solid #e8e2d9", padding:"0 24px", height:58, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#2d6a4f" }}>SkillCredit</span>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          <span style={{ fontSize:11, color:"#888", background:"#f5f0e8", padding:"4px 10px", borderRadius:20, fontWeight:600 }}>👀 Guest</span>
-          <a href="/login"  style={{ padding:"7px 14px", borderRadius:10, border:"1.5px solid #2d6a4f", color:"#2d6a4f", fontWeight:700, fontSize:13, textDecoration:"none" }}>Log in</a>
-          <a href="/signup" style={{ padding:"7px 14px", borderRadius:10, background:"#2d6a4f", color:"#fff", fontWeight:700, fontSize:13, textDecoration:"none" }}>Sign up</a>
-        </div>
-      </nav>
-      <div style={{ background:"linear-gradient(90deg,#2d6a4f,#1a4a35)", color:"#fff", textAlign:"center", padding:"10px 16px", fontSize:13, fontWeight:600 }}>
-        🎁 Sign up and get <strong>20 free credits</strong>!
-        <a href="/signup" style={{ color:"#b7e4c7", marginLeft:8, textDecoration:"underline", fontWeight:800 }}>Create account →</a>
-      </div>
-      <div style={{ maxWidth:1160, margin:"0 auto", padding:"32px 16px" }}>
-        <div style={{ marginBottom:24 }}>
-          <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:22, fontWeight:900, color:"#1a1a1a" }}>What's happening on SkillCredit ✨</h2>
-          <p style={{ fontSize:13, color:"#999", marginTop:4 }}>Browse listings, bounties, and community posts — sign up to participate</p>
-        </div>
-        <div className="guest-cards" style={{ columns:"260px 4", gap:16 }}>
-          {mockCards.map((card, i) => <MiniCard key={i} card={card} onClick={() => setShowModal(true)} />)}
-        </div>
-      </div>
-      <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#fff", borderTop:"1.5px solid #e8e2d9", padding:"12px 20px", display:"flex", justifyContent:"center", alignItems:"center", gap:12, flexWrap:"wrap", boxShadow:"0 -4px 24px rgba(0,0,0,.07)" }}>
-        <p style={{ fontSize:13, color:"#444", margin:0, fontWeight:500 }}>Join Filipinos teaching and learning on SkillCredit</p>
-        <a href="/signup" style={{ background:"#2d6a4f", color:"#fff", padding:"10px 22px", borderRadius:12, fontWeight:800, fontSize:13, textDecoration:"none" }}>Get started free →</a>
-      </div>
-      <div style={{ height:70 }} />
-    </div>
-  );
-
   return (
     <div style={{ minHeight:"100vh", background:"#faf8f4", fontFamily:"'DM Sans',sans-serif", overflowX:"hidden" }}>
       <style>{`
@@ -250,7 +142,7 @@ export default function LandingPage() {
         @keyframes pulse       {0%,100%{opacity:1}50%{opacity:0.4}}
         @keyframes shimmer     {0%{background-position:-200% 0}100%{background-position:200% 0}}
         @keyframes crownBounce {0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-5px) rotate(5deg)}}
-        @keyframes goldRing    {0%,100%{box-shadow:0 0 0 2.5px #e8a800,0 0 12px rgba(232,168,0,.6),0 0 24px rgba(232,168,0,.3)}50%{box-shadow:0 0 0 2.5px #ffd700,0 0 22px rgba(255,215,0,.9),0 0 44px rgba(255,215,0,.4)}}
+        @keyframes goldRing    {0%,100%{box-shadow:0 0 0 2.5px #e8a800,0 0 12px rgba(232,168,0,.6)}50%{box-shadow:0 0 0 2.5px #ffd700,0 0 22px rgba(255,215,0,.9)}}
         @keyframes champSlide  {from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
 
         .reveal{opacity:0;transform:translateY(36px);transition:opacity .7s ease,transform .7s ease}
@@ -265,8 +157,6 @@ export default function LandingPage() {
 
         .cta-btn{transition:transform .2s,box-shadow .2s}
         .cta-btn:hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(45,106,79,0.4)!important}
-        .ghost-btn{transition:all .2s}
-        .ghost-btn:hover{background:#e8e2d8!important}
         .feature-card{transition:transform .2s,box-shadow .2s}
         .feature-card:hover{transform:translateY(-5px);box-shadow:0 14px 40px rgba(0,0,0,0.1)!important}
         .nav-link{transition:color .15s,background .15s}
@@ -289,7 +179,6 @@ export default function LandingPage() {
           .community-grid{grid-template-columns:1fr;gap:32px}
           .problem-grid{grid-template-columns:1fr;gap:16px}
           .nav-links{display:none}
-          .browse-btn{display:none}
           .preview-col{display:none}
           .section-pad{padding:60px 20px!important}
           .footer-inner{flex-direction:column;text-align:center}
@@ -298,7 +187,7 @@ export default function LandingPage() {
           .features-grid{grid-template-columns:1fr}
           .hero-h1-text{font-size:40px!important}
           .hero-btns-wrap{flex-direction:column}
-          .hero-btns-wrap a,.hero-btns-wrap button{width:100%;text-align:center;justify-content:center}
+          .hero-btns-wrap a{width:100%;text-align:center;justify-content:center}
         }
         @media(min-width:769px)and(max-width:1024px){
           .hero-grid{gap:32px}
@@ -306,7 +195,6 @@ export default function LandingPage() {
         }
       `}</style>
 
-      {/* ── WEEKLY CHAMPION BANNER — shows only when there's a real winner ── */}
       {weeklyChamp && <WeeklyChampionBanner champ={weeklyChamp} />}
 
       {/* ── NAVBAR ── */}
@@ -322,10 +210,6 @@ export default function LandingPage() {
           ))}
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          <button onClick={() => setGuestMode(true)} className="ghost-btn browse-btn"
-            style={{ padding:"8px 16px", borderRadius:10, background:"#f0ece4", color:"#555", fontWeight:600, fontSize:13, border:"none", cursor:"pointer" }}>
-            Browse first
-          </button>
           <a href="/login"  style={{ padding:"8px 16px", borderRadius:10, border:"1.5px solid #ccc", color:"#444", fontWeight:600, fontSize:13 }}>Log in</a>
           <a href="/signup" className="cta-btn" style={{ padding:"8px 18px", borderRadius:10, background:"#2d6a4f", color:"#fff", fontWeight:800, fontSize:13, boxShadow:"0 4px 14px rgba(45,106,79,0.28)" }}>Sign up free</a>
         </div>
@@ -349,33 +233,31 @@ export default function LandingPage() {
                 Learn any skill by spending credits — or <strong style={{ color:"#2d6a4f" }}>earn credits by teaching what you know</strong>. No cash needed. Ever.
               </p>
               <div className="hero-btns">
-                <div className="hero-btns-wrap" style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:12 }}>
+                <div className="hero-btns-wrap" style={{ display:"flex", gap:12, flexWrap:"wrap" as const, marginBottom:12 }}>
                   <a href="/signup" className="cta-btn" style={{ background:"#2d6a4f", color:"#fff", padding:"16px 32px", borderRadius:14, fontWeight:800, fontSize:16, boxShadow:"0 6px 24px rgba(45,106,79,0.3)", display:"inline-flex", alignItems:"center", gap:8 }}>
                     🎁 Get 20 free credits — join now
                   </a>
-                  <button onClick={() => setGuestMode(true)} className="ghost-btn" style={{ background:"#f0ece4", color:"#444", padding:"16px 26px", borderRadius:14, fontWeight:700, fontSize:16, border:"none", cursor:"pointer" }}>
-                    👀 Browse first
-                  </button>
+                  <a href="/login" style={{ background:"#f0ece4", color:"#444", padding:"16px 26px", borderRadius:14, fontWeight:700, fontSize:16, display:"inline-flex", alignItems:"center", gap:8 }}>
+                    Log in →
+                  </a>
                 </div>
                 <p style={{ fontSize:12, color:"#aaa", marginBottom:28 }}>No credit card required · Free forever to start</p>
               </div>
 
-              {/* ── CHAMPION SPOTLIGHT in hero (if winner exists) ── */}
               {weeklyChamp ? (
                 <div style={{ display:"flex", alignItems:"center", gap:14, background:"linear-gradient(135deg,#1a3d2e,#2d6a4f)", border:"1.5px solid rgba(255,215,0,0.3)", borderRadius:18, padding:"14px 18px", maxWidth:420, animation:"champSlide .5s ease", boxShadow:"0 8px 28px rgba(45,106,79,0.3)" }}>
                   <span style={{ fontSize:22, animation:"crownBounce 1.5s ease infinite", flexShrink:0 }}>👑</span>
                   <div style={{ width:40, height:40, borderRadius:11, overflow:"hidden", background:"#2d6a4f", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", animation:"goldRing 2s ease infinite", flexShrink:0 }}>
                     {weeklyChamp.avatar_url
                       ? <img src={weeklyChamp.avatar_url} alt={weeklyChamp.full_name} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-                      : getInitials(weeklyChamp.full_name)
-                    }
+                      : getInitials(weeklyChamp.full_name)}
                   </div>
                   <div style={{ flex:1 }}>
-                    <div style={{ fontSize:10, fontWeight:800, color:"rgba(255,215,0,0.7)", textTransform:"uppercase", letterSpacing:1.5, marginBottom:2 }}>This Week's Champion</div>
+                    <div style={{ fontSize:10, fontWeight:800, color:"rgba(255,215,0,0.7)", textTransform:"uppercase" as const, letterSpacing:1.5, marginBottom:2 }}>This Week's Champion</div>
                     <div style={{ fontSize:14, fontWeight:900, color:"#fff", fontFamily:"'Fraunces',serif" }}>{weeklyChamp.full_name}</div>
                     <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)" }}>{weeklyChamp.champion_title}{weeklyChamp.champion_streak > 1 ? ` · ${weeklyChamp.champion_streak} week streak 🔥` : ""}</div>
                   </div>
-                  <a href="/leaderboard" style={{ fontSize:11, fontWeight:800, color:"#ffd700", textDecoration:"none", whiteSpace:"nowrap" }}>View →</a>
+                  <a href="/leaderboard" style={{ fontSize:11, fontWeight:800, color:"#ffd700", textDecoration:"none", whiteSpace:"nowrap" as const }}>View →</a>
                 </div>
               ) : (
                 <div className="hero-proof" style={{ display:"flex", alignItems:"center", gap:12, background:"#fff", border:"1.5px solid #e8e2d9", borderRadius:16, padding:"14px 18px", boxShadow:"0 2px 12px rgba(0,0,0,.04)", maxWidth:420 }}>
@@ -406,12 +288,11 @@ export default function LandingPage() {
                 </div>
                 <div style={{ padding:14, maxHeight:440, overflowY:"hidden", maskImage:"linear-gradient(to bottom, black 60%, transparent 100%)" }}>
                   <div style={{ columns:2, gap:10 }}>
-                    {/* If we have a real champ, inject their achievement card first */}
                     {weeklyChamp && (
                       <div style={{ background:"linear-gradient(135deg,#1a3d2e,#2d6a4f)", borderRadius:13, padding:13, marginBottom:10, breakInside:"avoid", border:"1.5px solid rgba(255,215,0,0.3)", animation:"fadeUp .3s ease both" }}>
                         <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:5 }}>
                           <span style={{ fontSize:11 }}>👑</span>
-                          <span style={{ fontSize:9, fontWeight:800, color:"#ffd700", textTransform:"uppercase", letterSpacing:"0.06em" }}>Champion</span>
+                          <span style={{ fontSize:9, fontWeight:800, color:"#ffd700", textTransform:"uppercase" as const, letterSpacing:"0.06em" }}>Champion</span>
                         </div>
                         <p style={{ fontFamily:"'Fraunces',serif", fontSize:11, fontWeight:800, color:"#fff", lineHeight:1.3, marginBottom:4 }}>🏆 {weeklyChamp.full_name} is this week's Champion!</p>
                         <p style={{ fontSize:10, color:"rgba(255,255,255,0.55)" }}>{weeklyChamp.xp.toLocaleString()} XP · {weeklyChamp.champion_title}</p>
@@ -423,7 +304,7 @@ export default function LandingPage() {
                         onMouseLeave={e => { e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="none"; }}>
                         <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:5 }}>
                           <span style={{ fontSize:11 }}>{card.tag}</span>
-                          <span style={{ fontSize:9, fontWeight:800, color:card.accent, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                          <span style={{ fontSize:9, fontWeight:800, color:card.accent, textTransform:"uppercase" as const, letterSpacing:"0.06em" }}>
                             {card.type==="listing"?"Skill":card.type==="bounty"?"Bounty":card.type==="achievement"?"Win":"Forum"}
                           </span>
                         </div>
@@ -444,8 +325,8 @@ export default function LandingPage() {
 
       {/* ── WHY THIS EXISTS ── */}
       <section className="section-pad reveal" style={{ background:"#111", padding:"80px 48px" }}>
-        <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" }}>
-          <span style={{ fontSize:12, fontWeight:800, color:"#52b788", letterSpacing:"0.12em", textTransform:"uppercase" }}>The Problem</span>
+        <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" as const }}>
+          <span style={{ fontSize:12, fontWeight:800, color:"#52b788", letterSpacing:"0.12em", textTransform:"uppercase" as const }}>The Problem</span>
           <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:40, fontWeight:900, color:"#fff", marginTop:10, marginBottom:16, letterSpacing:"-0.02em", lineHeight:1.15 }}>
             Learning is expensive.<br /><em style={{ color:"#52b788", fontStyle:"italic" }}>But everyone knows something valuable.</em>
           </h2>
@@ -470,11 +351,11 @@ export default function LandingPage() {
 
       {/* ── WHAT CAN YOU LEARN ── */}
       <section className="section-pad reveal" style={{ background:"#faf8f4", padding:"72px 48px" }}>
-        <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" }}>
-          <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" }}>What can you learn?</span>
+        <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" as const }}>
+          <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" as const }}>What can you learn?</span>
           <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:36, fontWeight:900, color:"#111", marginTop:10, marginBottom:8, letterSpacing:"-0.02em" }}>Anything the community knows</h2>
           <p style={{ fontSize:15, color:"#666", marginBottom:36 }}>If someone knows it, you can learn it — with credits, not cash.</p>
-          <div style={{ display:"flex", gap:10, flexWrap:"wrap", justifyContent:"center" }}>
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap" as const, justifyContent:"center" }}>
             {learnTopics.map((t,i) => (
               <div key={i} className="topic-pill" style={{ display:"flex", alignItems:"center", gap:8, background:"#fff", border:"1.5px solid #e8e2d9", borderRadius:999, padding:"10px 20px", fontSize:14, fontWeight:700, color:"#333", boxShadow:"0 2px 8px rgba(0,0,0,.04)", cursor:"default" }}>
                 <span style={{ fontSize:18 }}>{t.emoji}</span> {t.label}
@@ -488,8 +369,8 @@ export default function LandingPage() {
       {/* ── HOW IT WORKS ── */}
       <section id="how-it-works" className="section-pad reveal" style={{ background:"#fff", padding:"80px 48px" }}>
         <div style={{ maxWidth:1000, margin:"0 auto" }}>
-          <div style={{ textAlign:"center", marginBottom:52 }}>
-            <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" }}>How it works</span>
+          <div style={{ textAlign:"center" as const, marginBottom:52 }}>
+            <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" as const }}>How it works</span>
             <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:40, fontWeight:900, color:"#111", marginTop:10, letterSpacing:"-0.02em" }}>Simple. Fair. Powerful.</h2>
           </div>
           <div className="steps-grid">
@@ -513,8 +394,8 @@ export default function LandingPage() {
       {/* ── FEATURES ── */}
       <section id="features" className="section-pad reveal" style={{ padding:"80px 48px", background:"#faf8f4" }}>
         <div style={{ maxWidth:1100, margin:"0 auto" }}>
-          <div style={{ textAlign:"center", marginBottom:48 }}>
-            <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" }}>Features</span>
+          <div style={{ textAlign:"center" as const, marginBottom:48 }}>
+            <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" as const }}>Features</span>
             <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:40, fontWeight:900, color:"#111", marginTop:10, letterSpacing:"-0.02em" }}>Everything you need to learn and earn</h2>
           </div>
           <div className="features-grid">
@@ -534,12 +415,12 @@ export default function LandingPage() {
         <div style={{ maxWidth:1100, margin:"0 auto" }}>
           <div className="community-grid">
             <div>
-              <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" }}>Community</span>
+              <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", letterSpacing:"0.12em", textTransform:"uppercase" as const }}>Community</span>
               <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:38, fontWeight:900, color:"#111", margin:"12px 0 16px", lineHeight:1.15 }}>A living, breathing knowledge community</h2>
               <p style={{ fontSize:15, color:"#555", lineHeight:1.75, marginBottom:24 }}>
                 Ask questions in the forum, answer bounties, join skill groups, and watch your reputation grow. Every contribution earns you credits and XP.
               </p>
-              <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:28 }}>
+              <div style={{ display:"flex", flexDirection:"column" as const, gap:10, marginBottom:28 }}>
                 {[
                   { icon:"💬", text:"Forum Q&A — ask anything, earn by answering"     },
                   { icon:"🎯", text:"Bounty tasks — post problems with credit rewards" },
@@ -556,14 +437,14 @@ export default function LandingPage() {
                 Join the community →
               </a>
             </div>
-            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <div style={{ display:"flex", flexDirection:"column" as const, gap:10 }}>
               {mockCards.filter(c => c.type==="community"||c.type==="achievement"||c.type==="bounty").slice(0,5).map((card,i) => (
                 <div key={i} style={{ background:card.color, borderRadius:16, padding:"16px 18px", border:"1px solid rgba(0,0,0,.05)", transition:"transform .2s" }}
                   onMouseEnter={e => e.currentTarget.style.transform="translateX(4px)"}
                   onMouseLeave={e => e.currentTarget.style.transform="none"}>
                   <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
                     <span style={{ fontSize:14 }}>{card.tag}</span>
-                    <span style={{ fontSize:10, fontWeight:800, color:card.accent, textTransform:"uppercase" }}>
+                    <span style={{ fontSize:10, fontWeight:800, color:card.accent, textTransform:"uppercase" as const }}>
                       {card.type==="bounty"?"Bounty":card.type==="achievement"?"Achievement":"Forum"}
                     </span>
                   </div>
@@ -578,10 +459,10 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── LEADERBOARD TEASER — new section showing the rewards system ── */}
+      {/* ── LEADERBOARD TEASER ── */}
       <section className="section-pad reveal" style={{ background:"linear-gradient(135deg,#0d1f15 0%,#152b1e 50%,#0d1f15 100%)", padding:"80px 48px" }}>
-        <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" }}>
-          <span style={{ fontSize:12, fontWeight:800, color:"#52b788", letterSpacing:"0.12em", textTransform:"uppercase" }}>Leaderboard Rewards</span>
+        <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" as const }}>
+          <span style={{ fontSize:12, fontWeight:800, color:"#52b788", letterSpacing:"0.12em", textTransform:"uppercase" as const }}>Leaderboard Rewards</span>
           <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:38, fontWeight:900, color:"#fff", marginTop:10, marginBottom:12, lineHeight:1.15 }}>
             Grind hard. Earn rewards.<br /><em style={{ color:"#ffd700", fontStyle:"italic" }}>Wear your crown.</em>
           </h2>
@@ -594,15 +475,15 @@ export default function LandingPage() {
               { rank:"#2", icon:"🥈", label:"Runner-up",   color:"#c0c0c0", bg:"rgba(192,192,192,0.08)",border:"rgba(192,192,192,0.2)",  perks:["1.15× XP for 7 days","+ 10 credits","Silver avatar border","🔥 Hot Teacher tag"] },
               { rank:"#3", icon:"🥉", label:"Third Place", color:"#cd7f32", bg:"rgba(205,127,50,0.08)", border:"rgba(205,127,50,0.2)",   perks:["1.10× XP for 7 days","+ 5 credits","Bronze avatar border","🔥 Hot Teacher tag"] },
             ].map(r => (
-              <div key={r.rank} style={{ background:r.bg, borderRadius:18, padding:"24px 18px", border:`1.5px solid ${r.border}`, textAlign:"left" }}>
+              <div key={r.rank} style={{ background:r.bg, borderRadius:18, padding:"24px 18px", border:`1.5px solid ${r.border}`, textAlign:"left" as const }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
                   <span style={{ fontSize:28 }}>{r.icon}</span>
                   <div>
                     <div style={{ fontSize:18, fontWeight:900, color:r.color, fontFamily:"'Fraunces',serif" }}>{r.rank}</div>
-                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>{r.label}</div>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", fontWeight:700, textTransform:"uppercase" as const, letterSpacing:1 }}>{r.label}</div>
                   </div>
                 </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                <div style={{ display:"flex", flexDirection:"column" as const, gap:6 }}>
                   {r.perks.map(p => (
                     <div key={p} style={{ display:"flex", alignItems:"center", gap:7, fontSize:11, color:"rgba(255,255,255,0.7)", fontWeight:600 }}>
                       <span style={{ color:r.color, fontSize:10 }}>✓</span> {p}
@@ -619,7 +500,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── FINAL CTA ── */}
-      <section className="section-pad reveal" style={{ background:"linear-gradient(135deg,#1a3d2e 0%,#2d6a4f 50%,#1a4a35 100%)", padding:"96px 48px", textAlign:"center", position:"relative", overflow:"hidden" }}>
+      <section className="section-pad reveal" style={{ background:"linear-gradient(135deg,#1a3d2e 0%,#2d6a4f 50%,#1a4a35 100%)", padding:"96px 48px", textAlign:"center" as const, position:"relative", overflow:"hidden" }}>
         <div style={{ position:"absolute", top:-60, left:"10%", width:300, height:300, borderRadius:"50%", background:"rgba(255,255,255,0.04)" }} />
         <div style={{ position:"absolute", bottom:-80, right:"15%", width:400, height:400, borderRadius:"50%", background:"rgba(255,255,255,0.03)" }} />
         <div style={{ position:"relative" }}>
@@ -632,13 +513,10 @@ export default function LandingPage() {
           <p style={{ fontSize:17, color:"rgba(255,255,255,0.65)", maxWidth:500, margin:"0 auto 40px" }}>
             Join the first Filipinos building the SkillCredit community. It's free, it's fair, and it starts today.
           </p>
-          <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap", marginBottom:16 }}>
+          <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap" as const, marginBottom:16 }}>
             <a href="/signup" className="cta-btn" style={{ background:"#fff", color:"#2d6a4f", padding:"18px 40px", borderRadius:14, fontWeight:900, fontSize:17, display:"inline-flex", alignItems:"center", gap:8 }}>
               🎁 Create free account — get 20 credits
             </a>
-            <button onClick={() => setGuestMode(true)} className="ghost-btn" style={{ background:"rgba(255,255,255,0.1)", color:"#fff", padding:"18px 32px", borderRadius:14, fontWeight:700, fontSize:16, border:"1.5px solid rgba(255,255,255,0.2)", cursor:"pointer" }}>
-              Browse as guest →
-            </button>
           </div>
           <p style={{ color:"rgba(255,255,255,0.35)", fontSize:13 }}>No credit card required · 20 free credits on signup · Cancel anytime</p>
         </div>
@@ -651,7 +529,7 @@ export default function LandingPage() {
             <span style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:900, color:"#2d6a4f" }}>Skill</span>
             <span style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:900, color:"#fff" }}>Credit</span>
           </div>
-          <div style={{ textAlign:"center" }}>
+          <div style={{ textAlign:"center" as const }}>
             <p style={{ fontSize:12, color:"#444", marginBottom:6 }}>Built with ❤️ for Filipino learners and teachers</p>
             <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"linear-gradient(135deg,#1a3d2e,#2d6a4f)", border:"1px solid rgba(45,106,79,0.4)", borderRadius:999, padding:"6px 16px" }}>
               <span style={{ fontSize:12 }}>👨‍💻</span>
@@ -667,7 +545,7 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
-        <div style={{ borderTop:"1px solid #222", marginTop:24, paddingTop:20, textAlign:"center" }}>
+        <div style={{ borderTop:"1px solid #222", marginTop:24, paddingTop:20, textAlign:"center" as const }}>
           <p style={{ fontSize:11, color:"#333" }}>© 2025 SkillCredit · All rights reserved · Thesis Project</p>
         </div>
       </footer>
