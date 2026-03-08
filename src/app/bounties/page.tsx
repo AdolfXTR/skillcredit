@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Bounty = {
@@ -7,7 +7,7 @@ type Bounty = {
   credit_reward: number; first_place_pct: number; second_place_pct: number;
   third_place_pct: number; status: string; deadline: string; created_at: string;
   poster_id: string;
-  profiles: { full_name: string; username: string; level: string; avatar_url?: string | null };
+  profiles: { full_name: string; username: string; level: string; avatar_url?: string | null; xp_multiplier?: number; champion_title?: string | null };
   bounty_answers: { id: string }[];
 };
 
@@ -36,19 +36,35 @@ function getUrgency(deadline: string) {
 function getInitials(name: string) {
   return name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?";
 }
+function getRank(xp_multiplier?: number): 0|1|2|3 {
+  if (!xp_multiplier || xp_multiplier < 1.1) return 0;
+  if (xp_multiplier >= 1.25) return 1;
+  if (xp_multiplier >= 1.15) return 2;
+  return 3;
+}
 
-function Avatar({ name, level, avatarUrl, size = 28 }: { name: string; level?: string; avatarUrl?: string | null; size?: number }) {
-  const bg = LEVEL_COLORS[level || "Seedling"] || "#2d6a4f";
+function PremiumAvatar({ name, level, avatarUrl, xp_multiplier, size = 28 }:
+  { name: string; level?: string; avatarUrl?: string | null; xp_multiplier?: number; size?: number }) {
+  const bg   = LEVEL_COLORS[level || "Seedling"] || "#2d6a4f";
+  const rank = getRank(xp_multiplier);
+  const ringStyle: React.CSSProperties = rank === 1
+    ? { outline: "2.5px solid #ffd700", boxShadow: "0 0 0 1px #ffd700, 0 0 10px 2px rgba(255,215,0,0.6)", animation: "goldPulse 2s ease infinite" }
+    : rank === 2
+    ? { outline: "2.5px solid #c0c0c0", boxShadow: "0 0 0 1px #c0c0c0, 0 0 8px 2px rgba(192,192,192,0.5)", animation: "silverPulse 2s ease infinite" }
+    : rank === 3
+    ? { outline: "2.5px solid #cd7f32", boxShadow: "0 0 0 1px #cd7f32, 0 0 8px 2px rgba(205,127,50,0.5)", animation: "bronzePulse 2s ease infinite" }
+    : {};
+  const badge = rank===1?"👑":rank===2?"🥈":rank===3?"🥉":null;
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
-      background: avatarUrl ? "transparent" : bg,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.35, fontWeight: 800, color: "#fff",
-      boxShadow: `0 0 0 2px white, 0 0 0 3px ${bg}44` }}>
-      {avatarUrl
-        ? <img src={avatarUrl} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        : getInitials(name)
-      }
+    <div style={{ position:"relative", flexShrink:0, width:size, height:size, borderRadius:"50%", ...ringStyle }}>
+      <div style={{ width:size, height:size, borderRadius:"50%", overflow:"hidden", background:bg,
+        display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*.3, fontWeight:800, color:"#fff" }}>
+        {avatarUrl
+          ? <img src={avatarUrl} alt={name} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+          : getInitials(name)
+        }
+      </div>
+      {badge && <span style={{ position:"absolute", bottom:-3, right:-5, fontSize:size*0.38, lineHeight:1, filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.5))", zIndex:2 }}>{badge}</span>}
     </div>
   );
 }
@@ -58,7 +74,6 @@ function ImageUploader({ onUploaded, label = "📷 Add Photo" }: { onUploaded: (
   const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
-
   async function handleFile(file: File) {
     if (!file.type.startsWith("image/")) return;
     if (file.size > 5 * 1024 * 1024) { alert("Max 5MB"); return; }
@@ -75,20 +90,19 @@ function ImageUploader({ onUploaded, label = "📷 Add Photo" }: { onUploaded: (
     setUploading(false); setDone(true);
   }
   function clear() { setPreview(null); setDone(false); onUploaded(null); if (inputRef.current) inputRef.current.value = ""; }
-
   return (
     <div>
       {preview ? (
-        <div style={{ position: "relative", display: "inline-block" }}>
-          <img src={preview} alt="preview" style={{ maxWidth: "100%", maxHeight: 160, borderRadius: 10, border: "1.5px solid #e8e2d9", display: "block" }} />
-          {uploading && <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,.85)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ width: 18, height: 18, border: "2px solid #2d6a4f", borderTopColor: "transparent", borderRadius: "50%", animation: "spin .7s linear infinite" }} /></div>}
-          {done && <div style={{ position: "absolute", bottom: 6, right: 6, background: "#2d6a4f", color: "#fff", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 20 }}>✓</div>}
-          <button onClick={clear} style={{ position: "absolute", top: 5, right: 5, width: 22, height: 22, borderRadius: "50%", background: "#1a1a1a", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        <div style={{ position:"relative", display:"inline-block" }}>
+          <img src={preview} alt="preview" style={{ maxWidth:"100%", maxHeight:160, borderRadius:10, border:"1.5px solid #e8e2d9", display:"block" }} />
+          {uploading && <div style={{ position:"absolute",inset:0,background:"rgba(255,255,255,.85)",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ width:18,height:18,border:"2px solid #2d6a4f",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .7s linear infinite" }} /></div>}
+          {done && <div style={{ position:"absolute",bottom:6,right:6,background:"#2d6a4f",color:"#fff",fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:20 }}>✓</div>}
+          <button onClick={clear} style={{ position:"absolute",top:5,right:5,width:22,height:22,borderRadius:"50%",background:"#1a1a1a",color:"#fff",border:"none",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center" }}>✕</button>
         </div>
       ) : (
-        <button onClick={() => inputRef.current?.click()} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10, background: "#f0fdf4", border: "1.5px dashed #86efac", color: "#2d6a4f", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{label}</button>
+        <button onClick={() => inputRef.current?.click()} style={{ display:"inline-flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,background:"#f0fdf4",border:"1.5px dashed #86efac",color:"#2d6a4f",fontSize:13,fontWeight:600,cursor:"pointer" }}>{label}</button>
       )}
-      <input ref={inputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+      <input ref={inputRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
     </div>
   );
 }
@@ -98,7 +112,7 @@ export default function BountiesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("newest");
-  const [user, setUser] = useState<{ id: string; credits: number; full_name: string; level: string; avatar_url?: string | null } | null>(null);
+  const [user, setUser] = useState<{ id: string; credits: number; full_name: string; level: string; avatar_url?: string | null; xp_multiplier?: number } | null>(null);
   const [showPostModal, setShowPostModal] = useState(false);
   const [newBounty, setNewBounty] = useState({ title: "", description: "", deadline_hours: 24 });
   const [rewardInput, setRewardInput] = useState("10");
@@ -112,7 +126,7 @@ export default function BountiesPage() {
   async function init() {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (authUser) {
-      const { data: prof } = await supabase.from("profiles").select("id,full_name,credits,level,avatar_url").eq("id", authUser.id).single();
+      const { data: prof } = await supabase.from("profiles").select("id,full_name,credits,level,avatar_url,xp_multiplier").eq("id", authUser.id).single();
       if (prof) setUser(prof);
     }
     await fetchBounties();
@@ -121,7 +135,7 @@ export default function BountiesPage() {
   async function fetchBounties() {
     setLoading(true);
     const { data } = await supabase.from("bounties")
-      .select(`*, profiles(full_name,username,level,avatar_url), bounty_answers(id)`)
+      .select(`*, profiles(full_name,username,level,avatar_url,xp_multiplier,champion_title), bounty_answers(id)`)
       .eq("status", "open").order("created_at", { ascending: false });
     setBounties((data as Bounty[]) || []);
     setLoading(false);
@@ -129,7 +143,7 @@ export default function BountiesPage() {
 
   useEffect(() => {
     const channel = supabase.channel("bounty_answers_live")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "bounty_answers" }, () => { fetchBounties(); })
+      .on("postgres_changes", { event:"INSERT", schema:"public", table:"bounty_answers" }, () => { fetchBounties(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -157,7 +171,7 @@ export default function BountiesPage() {
     }
     setUser(u => u ? { ...u, credits: u.credits - reward } : u);
     setShowPostModal(false);
-    setNewBounty({ title: "", description: "", deadline_hours: 24 });
+    setNewBounty({ title:"", description:"", deadline_hours:24 });
     setRewardInput("10"); setBountyImageUrl(null);
     if (created) window.location.href = `/bounties/${created.id}`;
   }
@@ -170,18 +184,21 @@ export default function BountiesPage() {
     .sort((a, b) => {
       if (sortBy === "reward_high")  return b.credit_reward - a.credit_reward;
       if (sortBy === "urgent")       return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
-      if (sortBy === "most_answers") return (b.bounty_answers?.length || 0) - (a.bounty_answers?.length || 0);
+      if (sortBy === "most_answers") return (b.bounty_answers?.length||0) - (a.bounty_answers?.length||0);
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8f7f4", fontFamily: "'DM Sans',sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"#f8f7f4", fontFamily:"'DM Sans',sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0} a{text-decoration:none;}
-        @keyframes spin   {to{transform:rotate(360deg)}}
-        @keyframes fadeUp {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-        @keyframes fadeIn {from{opacity:0}to{opacity:1}}
+        @keyframes spin        {to{transform:rotate(360deg)}}
+        @keyframes fadeUp      {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+        @keyframes fadeIn      {from{opacity:0}to{opacity:1}}
+        @keyframes goldPulse   {0%,100%{box-shadow:0 0 0 1px #ffd700,0 0 10px 2px rgba(255,215,0,.6)}50%{box-shadow:0 0 0 1px #ffd700,0 0 16px 3px rgba(255,215,0,1)}}
+        @keyframes silverPulse {0%,100%{box-shadow:0 0 0 1px #c0c0c0,0 0 8px 2px rgba(192,192,192,.5)}50%{box-shadow:0 0 0 1px #ddd,0 0 12px 2px rgba(220,220,220,.9)}}
+        @keyframes bronzePulse {0%,100%{box-shadow:0 0 0 1px #cd7f32,0 0 8px 2px rgba(205,127,50,.5)}50%{box-shadow:0 0 0 1px #cd7f32,0 0 12px 2px rgba(205,127,50,.8)}}
         .bcard{background:#fff;border-radius:20px;border:1.5px solid #e8e2d9;transition:box-shadow .2s,transform .2s;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.03);}
         .bcard:hover{box-shadow:0 10px 36px rgba(45,106,79,.1);transform:translateY(-2px);}
         .btn{transition:all .15s;cursor:pointer;border:none;}
@@ -219,7 +236,7 @@ export default function BountiesPage() {
           </button>
           {user && (
             <a href="/profile" style={{ display:"flex",alignItems:"center",gap:8,padding:"5px 12px 5px 6px",borderRadius:999,background:"#f0fdf4",border:"1.5px solid #86efac" }}>
-              <Avatar name={user.full_name} level={user.level} avatarUrl={user.avatar_url} size={28} />
+              <PremiumAvatar name={user.full_name} level={user.level} avatarUrl={user.avatar_url} xp_multiplier={user.xp_multiplier} size={28} />
               <span style={{ fontSize:12,fontWeight:800,color:"#2d6a4f" }}>{user.credits} cr</span>
             </a>
           )}
@@ -272,6 +289,7 @@ export default function BountiesPage() {
               const tl  = getTimeLeft(bounty.deadline);
               const ac  = bounty.bounty_answers?.length || 0;
               const isExpired = new Date(bounty.deadline).getTime() < Date.now();
+              const rank = getRank(bounty.profiles?.xp_multiplier);
               return (
                 <div key={bounty.id} className="bcard"
                   onClick={() => window.location.href = user ? `/bounties/${bounty.id}` : "/login"}
@@ -287,7 +305,7 @@ export default function BountiesPage() {
                       </div>
                       <h3 style={{ fontFamily:"'Fraunces',serif",fontSize:18,fontWeight:800,color:"#1a1a1a",lineHeight:1.35,marginBottom:8 }}>{bounty.title}</h3>
                       <p style={{ fontSize:13,color:"#666",lineHeight:1.6,marginBottom:12 }}>
-                        {bounty.description.length > 140 ? bounty.description.slice(0,140)+"…" : bounty.description}
+                        {bounty.description.length>140?bounty.description.slice(0,140)+"…":bounty.description}
                       </p>
                       {bounty.image_url && (
                         <img src={bounty.image_url} alt="" className="img-zoom"
@@ -295,9 +313,18 @@ export default function BountiesPage() {
                           style={{ maxHeight:90,borderRadius:8,border:"1px solid #e8e2d9",marginBottom:12,display:"block" }} />
                       )}
                       <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-                        <Avatar name={bounty.profiles?.full_name||"?"} level={bounty.profiles?.level} avatarUrl={bounty.profiles?.avatar_url} size={26} />
+                        <PremiumAvatar name={bounty.profiles?.full_name||"?"} level={bounty.profiles?.level} avatarUrl={bounty.profiles?.avatar_url} xp_multiplier={bounty.profiles?.xp_multiplier} size={26} />
                         <span style={{ fontSize:12,color:"#aaa" }}>
-                          <strong style={{ color:"#1a1a1a",fontWeight:700 }}>{bounty.profiles?.full_name}</strong> · @{bounty.profiles?.username}
+                          <strong style={{ color:"#1a1a1a",fontWeight:700 }}>{bounty.profiles?.full_name}</strong>
+                          {bounty.profiles?.champion_title && rank > 0 && (
+                            <span style={{ marginLeft:6,fontSize:10,fontWeight:800,
+                              color:rank===1?"#b8860b":rank===2?"#888":"#a0522d",
+                              background:rank===1?"rgba(255,215,0,0.15)":rank===2?"rgba(192,192,192,0.15)":"rgba(205,127,50,0.15)",
+                              padding:"1px 7px",borderRadius:999 }}>
+                              {rank===1?"👑":rank===2?"🥈":"🥉"} {bounty.profiles.champion_title}
+                            </span>
+                          )}
+                          {" · "}@{bounty.profiles?.username}
                         </span>
                       </div>
                     </div>
@@ -320,7 +347,7 @@ export default function BountiesPage() {
                       ) : (
                         <button onClick={e => { e.stopPropagation(); window.location.href = user?`/bounties/${bounty.id}`:"/login"; }} className="btn"
                           style={{ width:"100%",padding:"9px 20px",borderRadius:999,background:"linear-gradient(135deg,#2d6a4f,#1a4a36)",color:"#fff",fontSize:13,fontWeight:700,boxShadow:"0 4px 12px rgba(45,106,79,.25)" }}>
-                          {user ? "Answer →" : "Sign in →"}
+                          {user?"Answer →":"Sign in →"}
                         </button>
                       )}
                     </div>
@@ -333,7 +360,7 @@ export default function BountiesPage() {
                 <div style={{ fontSize:44,marginBottom:14 }}>🎯</div>
                 <div style={{ fontFamily:"'Fraunces',serif",fontSize:22,fontWeight:800,color:"#1a1a1a",marginBottom:6 }}>No bounties found</div>
                 <p style={{ color:"#aaa",fontSize:14,marginBottom:20 }}>Be the first to post a task!</p>
-                <button onClick={() => user ? setShowPostModal(true) : (window.location.href="/login")} className="btn"
+                <button onClick={() => user?setShowPostModal(true):(window.location.href="/login")} className="btn"
                   style={{ padding:"11px 28px",borderRadius:999,background:"linear-gradient(135deg,#2d6a4f,#1a4a36)",color:"#fff",fontSize:14,fontWeight:700 }}>
                   Post a Bounty →
                 </button>
@@ -354,48 +381,33 @@ export default function BountiesPage() {
               </div>
               <button onClick={() => setShowPostModal(false)} style={{ width:34,height:34,borderRadius:"50%",background:"#f5f0e8",border:"none",fontSize:16,cursor:"pointer",color:"#666",fontWeight:700 }}>✕</button>
             </div>
-            {[
-              { key:"title",       label:"Task Title *",  placeholder:"e.g. Help me debug my Python code", type:"input",    rows:undefined },
-              { key:"description", label:"Description *", placeholder:"Describe your task in detail…",     type:"textarea", rows:4 },
-            ].map(f => (
+            {[{key:"title",label:"Task Title *",placeholder:"e.g. Help me debug my Python code",type:"input",rows:undefined},{key:"description",label:"Description *",placeholder:"Describe your task in detail…",type:"textarea",rows:4}].map(f => (
               <div key={f.key} style={{ marginBottom:16 }}>
                 <label style={{ fontSize:12,fontWeight:800,color:"#888",letterSpacing:".06em",textTransform:"uppercase" as const,display:"block",marginBottom:8 }}>{f.label}</label>
-                {f.type === "input"
-                  ? <input value={(newBounty as any)[f.key]} onChange={e => setNewBounty(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder}
-                      style={{ width:"100%",padding:"11px 14px",borderRadius:12,border:"1.5px solid #e8e2d9",fontSize:14,fontFamily:"'DM Sans',sans-serif" }} />
-                  : <textarea value={(newBounty as any)[f.key]} onChange={e => setNewBounty(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} rows={f.rows}
-                      style={{ width:"100%",padding:"11px 14px",borderRadius:12,border:"1.5px solid #e8e2d9",fontSize:14,fontFamily:"'DM Sans',sans-serif",resize:"vertical",lineHeight:1.6 }} />
+                {f.type==="input"
+                  ?<input value={(newBounty as any)[f.key]} onChange={e=>setNewBounty(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder} style={{ width:"100%",padding:"11px 14px",borderRadius:12,border:"1.5px solid #e8e2d9",fontSize:14,fontFamily:"'DM Sans',sans-serif" }} />
+                  :<textarea value={(newBounty as any)[f.key]} onChange={e=>setNewBounty(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder} rows={f.rows} style={{ width:"100%",padding:"11px 14px",borderRadius:12,border:"1.5px solid #e8e2d9",fontSize:14,fontFamily:"'DM Sans',sans-serif",resize:"vertical",lineHeight:1.6 }} />
                 }
               </div>
             ))}
             <div style={{ marginBottom:16 }}>
-              <label style={{ fontSize:12,fontWeight:800,color:"#888",letterSpacing:".06em",textTransform:"uppercase" as const,display:"block",marginBottom:8 }}>
-                Attach Photo <span style={{ fontWeight:500,color:"#aaa",textTransform:"none" as const,fontSize:12,letterSpacing:0 }}>(optional)</span>
-              </label>
+              <label style={{ fontSize:12,fontWeight:800,color:"#888",letterSpacing:".06em",textTransform:"uppercase" as const,display:"block",marginBottom:8 }}>Attach Photo <span style={{ fontWeight:500,color:"#aaa",textTransform:"none" as const,fontSize:12,letterSpacing:0 }}>(optional)</span></label>
               <ImageUploader onUploaded={url => setBountyImageUrl(url)} label="📷 Add photo to your bounty" />
             </div>
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16 }}>
               <div>
                 <label style={{ fontSize:12,fontWeight:800,color:"#888",letterSpacing:".06em",textTransform:"uppercase" as const,display:"block",marginBottom:8 }}>Credit Reward</label>
-                <input type="number" min={5} max={user?.credits||9999} value={rewardInput}
-                  onChange={e => { setRewardInput(e.target.value); setPostError(""); }}
+                <input type="number" min={5} max={user?.credits||9999} value={rewardInput} onChange={e=>{setRewardInput(e.target.value);setPostError("");}}
                   style={{ width:"100%",padding:"11px 14px",borderRadius:12,border:`1.5px solid ${rewardValid?"#e8e2d9":"#fca5a5"}`,fontSize:14,fontFamily:"'DM Sans',sans-serif" }} />
                 <div style={{ fontSize:11,marginTop:5,fontWeight:600,color:rewardValid?"#aaa":"#dc2626" }}>
-                  {!rewardInput ? "Enter an amount"
-                   : rewardNum < 5 ? "⚠️ Minimum is 5 credits"
-                   : rewardNum > (user?.credits||0) ? `⚠️ You only have ${user?.credits||0} credits`
-                   : `✓ ${(user?.credits||0) - rewardNum} credits remaining`}
+                  {!rewardInput?"Enter an amount":rewardNum<5?"⚠️ Minimum is 5 credits":rewardNum>(user?.credits||0)?`⚠️ You only have ${user?.credits||0} credits`:`✓ ${(user?.credits||0)-rewardNum} credits remaining`}
                 </div>
               </div>
               <div>
                 <label style={{ fontSize:12,fontWeight:800,color:"#888",letterSpacing:".06em",textTransform:"uppercase" as const,display:"block",marginBottom:8 }}>Deadline</label>
-                <select value={newBounty.deadline_hours} onChange={e => setNewBounty(p => ({ ...p, deadline_hours: parseInt(e.target.value) }))}
+                <select value={newBounty.deadline_hours} onChange={e=>setNewBounty(p=>({...p,deadline_hours:parseInt(e.target.value)}))}
                   style={{ width:"100%",padding:"11px 14px",borderRadius:12,border:"1.5px solid #e8e2d9",fontSize:14,fontFamily:"'DM Sans',sans-serif",background:"#fff",cursor:"pointer" }}>
-                  <option value={6}>6 hours</option>
-                  <option value={12}>12 hours</option>
-                  <option value={24}>24 hours</option>
-                  <option value={48}>48 hours</option>
-                  <option value={72}>3 days</option>
+                  <option value={6}>6 hours</option><option value={12}>12 hours</option><option value={24}>24 hours</option><option value={48}>48 hours</option><option value={72}>3 days</option>
                 </select>
               </div>
             </div>
@@ -405,24 +417,17 @@ export default function BountiesPage() {
                 {[{e:"🥇 1st",p:60},{e:"🥈 2nd",p:30},{e:"🥉 3rd",p:10}].map(({e,p}) => (
                   <div key={e} style={{ flex:1,background:"#fff",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #bbf7d0" }}>
                     <div style={{ fontSize:12,color:"#52b788",marginBottom:3 }}>{e}</div>
-                    <div style={{ fontFamily:"'Fraunces',serif",fontSize:18,fontWeight:800,color:"#2d6a4f" }}>
-                      {rewardValid ? Math.floor(rewardNum * p / 100) : "—"} cr
-                    </div>
+                    <div style={{ fontFamily:"'Fraunces',serif",fontSize:18,fontWeight:800,color:"#2d6a4f" }}>{rewardValid?Math.floor(rewardNum*p/100):"—"} cr</div>
                   </div>
                 ))}
               </div>
             </div>
             {postError && <p style={{ color:"#dc2626",fontSize:13,marginBottom:12,fontWeight:600 }}>⚠️ {postError}</p>}
             <div style={{ display:"flex",gap:10 }}>
-              <button onClick={() => setShowPostModal(false)} className="btn"
-                style={{ flex:1,padding:"12px",borderRadius:12,background:"#f5f0e8",color:"#666",fontWeight:700,fontSize:14,border:"none" }}>Cancel</button>
+              <button onClick={()=>setShowPostModal(false)} className="btn" style={{ flex:1,padding:"12px",borderRadius:12,background:"#f5f0e8",color:"#666",fontWeight:700,fontSize:14,border:"none" }}>Cancel</button>
               <button onClick={handlePostBounty} disabled={posting||!rewardValid||!newBounty.title.trim()||!newBounty.description.trim()} className="btn"
-                style={{ flex:2,padding:"12px",borderRadius:12,
-                  background:posting||!rewardValid?"#d1fae5":"linear-gradient(135deg,#2d6a4f,#1a4a36)",
-                  color:posting||!rewardValid?"#52b788":"#fff",
-                  fontWeight:800,fontSize:14,border:"none",
-                  boxShadow:rewardValid?"0 4px 16px rgba(45,106,79,.25)":"none" }}>
-                {posting ? "Posting…" : `Post Bounty — ${rewardValid ? rewardNum : "?"} cr 🎯`}
+                style={{ flex:2,padding:"12px",borderRadius:12,background:posting||!rewardValid?"#d1fae5":"linear-gradient(135deg,#2d6a4f,#1a4a36)",color:posting||!rewardValid?"#52b788":"#fff",fontWeight:800,fontSize:14,border:"none",boxShadow:rewardValid?"0 4px 16px rgba(45,106,79,.25)":"none" }}>
+                {posting?`Posting…`:`Post Bounty — ${rewardValid?rewardNum:"?"} cr 🎯`}
               </button>
             </div>
           </div>
