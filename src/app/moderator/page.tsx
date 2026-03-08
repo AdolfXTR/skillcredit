@@ -321,7 +321,7 @@ export default function ModeratorDashboard() {
         action: "removed",
         reason,
         author_id: item.author_id,
-      }).catch(() => {});
+      })
 
       await supabase.from("notifications").insert({
         user_id: item.author_id,
@@ -329,7 +329,7 @@ export default function ModeratorDashboard() {
         title: `⚠️ Your ${CONTENT_TYPE_CONFIG[item.type]?.label} was removed`,
         body: `A moderator removed your ${item.type}. Reason: ${reason}`,
         link: "/dashboard",
-      }).catch(() => {});
+      })
 
       showToast(`${CONTENT_TYPE_CONFIG[item.type]?.label} removed. User notified.`);
       setContentItems(prev => prev.filter(c => c.id !== item.id));
@@ -412,7 +412,7 @@ export default function ModeratorDashboard() {
     setActionLoading("listing-" + listing.id);
     await supabase.from("listings").update({ status: "removed" }).eq("id", listing.id);
     if (listing.teacher?.id) {
-      await supabase.from("notifications").insert({ user_id: listing.teacher.id, type: "moderation", title: "⚠️ Your listing was removed", body: `"${listing.title}" was removed for violating community guidelines.`, link: "/listings" }).catch(() => {});
+      await supabase.from("notifications").insert({ user_id: listing.teacher.id, type: "moderation", title: "⚠️ Your listing was removed", body: `"${listing.title}" was removed for violating community guidelines.`, link: "/listings" })
     }
     showToast(`"${listing.title}" removed.`);
     await loadListings(); setActionLoading(null);
@@ -435,8 +435,8 @@ export default function ModeratorDashboard() {
   async function handleWarnUser() {
     if (!warnModal || !warnMsg) return;
     setActionLoading("warn");
-    await supabase.from("notifications").insert({ user_id: warnModal.id, type: "warning", title: "⚠️ Moderator Warning", body: warnMsg, link: "/dashboard" }).catch(() => {});
-    await supabase.from("moderation_logs").insert({ mod_id: modProfile?.id, target_id: warnModal.id, target_type: "user", action: "warned", reason: warnMsg, author_id: warnModal.id }).catch(() => {});
+    await supabase.from("notifications").insert({ user_id: warnModal.id, type: "warning", title: "⚠️ Moderator Warning", body: warnMsg, link: "/dashboard" })
+    await supabase.from("moderation_logs").insert({ mod_id: modProfile?.id, target_id: warnModal.id, target_type: "user", action: "warned", reason: warnMsg, author_id: warnModal.id })
     showToast(`Warning sent to ${warnModal.full_name}.`);
     setWarnModal(null); setWarnMsg(""); setActionLoading(null);
   }
