@@ -96,7 +96,7 @@ function Avatar({ user, size = 32 }: { user: { full_name: string; level: string;
   return (
     <div style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden", background: user.avatar_url ? "transparent" : (LEVEL_COLORS[user.level] || "#2d6a4f"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.33, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
       {user.avatar_url
-        ? <img src={user.avatar_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+        ? <img src={user.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
         : getInitials(user.full_name)}
     </div>
   );
@@ -150,12 +150,10 @@ export default function ModeratorDashboard() {
     setLoading(false);
   }
 
-  // ── LOAD ALL CONTENT ──────────────────────────────────────────────────────
   async function loadAllContent() {
     setContentLoading(true);
     const items: ContentItem[] = [];
 
-    // helper: fetch profiles for a list of ids
     async function fetchAuthors(ids: string[]) {
       if (!ids.length) return [] as any[];
       const { data } = await supabase.from("profiles")
@@ -164,7 +162,6 @@ export default function ModeratorDashboard() {
       return data || [];
     }
 
-    // Posts — fetch without FK join, then hydrate authors separately
     const { data: posts, error: postsErr } = await supabase.from("forum_posts")
       .select("id, title, body, author_id, created_at, status, image_url")
       .order("created_at", { ascending: false }).limit(60);
@@ -180,7 +177,6 @@ export default function ModeratorDashboard() {
       image_url: p.image_url,
     }));
 
-    // Comments — fetch without FK join
     const { data: answers, error: commentsErr } = await supabase.from("forum_answers")
       .select("id, content, author_id, post_id, created_at")
       .order("created_at", { ascending: false }).limit(60);
@@ -194,7 +190,6 @@ export default function ModeratorDashboard() {
       });
     });
 
-    // Bounties
     const { data: bounties, error: bountiesErr } = await supabase.from("bounties")
       .select("id, title, description, poster_id, created_at, status, image_url")
       .order("created_at", { ascending: false }).limit(40);
@@ -207,7 +202,6 @@ export default function ModeratorDashboard() {
       image_url: b.image_url,
     }));
 
-    // Listings
     const { data: allListings, error: listingsErr } = await supabase.from("listings")
       .select("id, title, description, teacher_id, created_at, is_active, thumbnail_url, credit_price, format")
       .order("created_at", { ascending: false }).limit(40);
@@ -221,7 +215,6 @@ export default function ModeratorDashboard() {
       image_url: l.thumbnail_url,
     }));
 
-    // Profile bios
     const { data: profileBios } = await supabase.from("profiles")
       .select("id, bio, full_name, username, level, avatar_url, created_at")
       .not("bio", "is", null).neq("bio", "").order("created_at", { ascending: false }).limit(30);
@@ -231,7 +224,6 @@ export default function ModeratorDashboard() {
       created_at: p.created_at,
     }));
 
-    // Usernames (all — so mods can flag impersonation or offensive names)
     const { data: usernames } = await supabase.from("profiles")
       .select("id, username, full_name, level, avatar_url, created_at")
       .not("username", "is", null).order("created_at", { ascending: false }).limit(40);
@@ -241,7 +233,6 @@ export default function ModeratorDashboard() {
       created_at: p.created_at,
     }));
 
-    // Session notes / cancellation reasons
     const { data: sessionNotes } = await supabase.from("sessions")
       .select("id, notes, teacher_id, created_at, status")
       .not("notes", "is", null).neq("notes", "").order("created_at", { ascending: false }).limit(30);
@@ -257,20 +248,17 @@ export default function ModeratorDashboard() {
     setContentLoading(false);
   }
 
-  // ── LOAD DETAIL ───────────────────────────────────────────────────────────
   async function loadDetail(item: ContentItem) {
     setSelectedContent(item);
     setDetailComments([]);
     setDetailProfile(null);
     setDetailLoading(true);
 
-    // Load author full profile
     const { data: prof } = await supabase.from("profiles")
       .select("id, full_name, username, level, avatar_url, bio, xp, credits, created_at, is_verified, is_banned")
       .eq("id", item.author_id).single();
     setDetailProfile(prof || null);
 
-    // Load comments if it's a post
     if (item.type === "post") {
       const { data: comments } = await supabase.from("forum_answers")
         .select("id, content, created_at, author_id")
@@ -279,12 +267,11 @@ export default function ModeratorDashboard() {
         const uids = [...new Set(comments.map((c: any) => c.author_id))];
         const { data: users } = await supabase.from("profiles")
           .select("id, full_name, username, avatar_url, level").in("id", uids as string[]);
-        const hydrated = comments.map((c: any) => ({
+        setDetailComments(comments.map((c: any) => ({
           ...c,
           user_id: c.author_id,
           user: (users || []).find((u: any) => u.id === c.author_id),
-        }));
-        setDetailComments(hydrated);
+        })));
       } else {
         setDetailComments([]);
       }
@@ -293,7 +280,6 @@ export default function ModeratorDashboard() {
     setDetailLoading(false);
   }
 
-  // ── REMOVE CONTENT ────────────────────────────────────────────────────────
   async function handleRemoveContent() {
     if (!removeModal) return;
     setActionLoading("remove");
@@ -321,7 +307,6 @@ export default function ModeratorDashboard() {
           await supabase.from("profiles").update({ avatar_url: null }).eq("id", item.author_id);
           break;
         case "username":
-          // Flag for admin to reassign — can't just delete a username
           await supabase.from("profiles").update({ username_flagged: true }).eq("id", item.author_id);
           break;
         case "session_note":
@@ -329,7 +314,6 @@ export default function ModeratorDashboard() {
           break;
       }
 
-      // Log the action
       await supabase.from("moderation_logs").insert({
         mod_id: modProfile?.id,
         target_id: item.id,
@@ -339,7 +323,6 @@ export default function ModeratorDashboard() {
         author_id: item.author_id,
       }).catch(() => {});
 
-      // Notify user
       await supabase.from("notifications").insert({
         user_id: item.author_id,
         type: "moderation",
@@ -350,7 +333,7 @@ export default function ModeratorDashboard() {
 
       showToast(`${CONTENT_TYPE_CONFIG[item.type]?.label} removed. User notified.`);
       setContentItems(prev => prev.filter(c => c.id !== item.id));
-    } catch {
+    } catch (_) {
       showToast("Failed to remove content.", "error");
     }
 
@@ -360,34 +343,33 @@ export default function ModeratorDashboard() {
     setActionLoading(null);
   }
 
-  // ── EXISTING FUNCTIONS ────────────────────────────────────────────────────
   async function loadDisputes() {
     const { data } = await supabase.from("sessions")
       .select(`*, listing:listings(title, format), teacher:profiles!sessions_teacher_id_fkey(id, full_name, username, level, avatar_url), learner:profiles!sessions_learner_id_fkey(id, full_name, username, level, avatar_url)`)
       .eq("status", "disputed").order("created_at", { ascending: false });
-    setDisputes(data || []);
+    setDisputes((data as unknown as DisputeSession[]) || []);
   }
 
   async function loadListings() {
     const { data } = await supabase.from("listings")
-      .select(`*, teacher:profiles!listings_teacher_id_fkey(full_name, username, level, avatar_url)`)
+      .select(`*, teacher:profiles!listings_teacher_id_fkey(id, full_name, username, level, avatar_url)`)
       .or("is_flagged.eq.true,status.eq.pending_review")
       .order("created_at", { ascending: false }).limit(50);
-    setListings(data || []);
+    setListings((data as unknown as FlaggedListing[]) || []);
   }
 
   async function loadRatings() {
     const { data } = await supabase.from("ratings")
       .select(`*, rater:profiles!ratings_rater_id_fkey(full_name, username), rated:profiles!ratings_rated_id_fkey(full_name, username)`)
       .eq("is_flagged", true).order("created_at", { ascending: false }).limit(50);
-    setRatings(data || []);
+    setRatings((data as unknown as Rating[]) || []);
   }
 
   async function loadReports() {
     const { data } = await supabase.from("reports")
       .select(`*, reporter:profiles!reports_reporter_id_fkey(full_name, username), reported:profiles!reports_reported_id_fkey(full_name, username)`)
       .eq("status", "open").order("created_at", { ascending: false }).limit(50);
-    setReports((data as any) || []);
+    setReports((data as unknown as Report[]) || []);
   }
 
   async function handleResolveDispute() {
@@ -502,7 +484,6 @@ export default function ModeratorDashboard() {
         @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes spin{to{transform:rotate(360deg)}}
-        .cc:hover{border-color:#30363d !important}
         input:focus,textarea:focus{outline:none}
       `}</style>
 
@@ -538,7 +519,6 @@ export default function ModeratorDashboard() {
         {/* ── CONTENT MODERATION TAB ── */}
         {tab === "content" && (
           <div style={{ animation: "fadeUp .3s ease" }}>
-            {/* Top bar */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div>
                 <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 900, marginBottom: 2 }}>🛡️ Content Moderation</h1>
@@ -550,7 +530,6 @@ export default function ModeratorDashboard() {
               </button>
             </div>
 
-            {/* Filter pills */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
               {CONTENT_FILTERS.map(type => {
                 const cfg = type === "all" ? { label: "All", color: "#e6edf3", bg: "#21262d", icon: "🛡️" } : CONTENT_TYPE_CONFIG[type];
@@ -564,7 +543,6 @@ export default function ModeratorDashboard() {
               })}
             </div>
 
-            {/* Search */}
             <input value={contentSearch} onChange={e => setContentSearch(e.target.value)}
               placeholder="🔍  Search content, username, or author..."
               style={{ width: "100%", padding: "9px 14px", borderRadius: 10, border: "1px solid #30363d", background: "#161b22", color: "#e6edf3", fontSize: 13, fontFamily: "'DM Sans', sans-serif", marginBottom: 14 }} />
@@ -575,10 +553,7 @@ export default function ModeratorDashboard() {
                 Loading content…
               </div>
             ) : (
-              /* SPLIT PANE */
               <div style={{ display: "grid", gridTemplateColumns: selectedContent ? "340px 1fr" : "1fr", gap: 12, alignItems: "start" }}>
-
-                {/* LEFT: item list */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: "calc(100vh - 280px)", overflowY: "auto", paddingRight: 4 }}>
                   {filteredContent.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "48px 20px", background: "#161b22", borderRadius: 12, border: "1px solid #30363d", color: "#8b949e" }}>
@@ -621,11 +596,8 @@ export default function ModeratorDashboard() {
                   })}
                 </div>
 
-                {/* RIGHT: detail panel */}
                 {selectedContent && (
                   <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 14, overflow: "hidden", maxHeight: "calc(100vh - 280px)", display: "flex", flexDirection: "column" }}>
-
-                    {/* Detail header */}
                     <div style={{ padding: "16px 20px", borderBottom: "1px solid #21262d", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         {(() => { const cfg = CONTENT_TYPE_CONFIG[selectedContent.type]; return (
@@ -641,8 +613,6 @@ export default function ModeratorDashboard() {
                     </div>
 
                     <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
-
-                      {/* Author card */}
                       {selectedContent.author && (
                         <div style={{ background: "#21262d", borderRadius: 12, padding: "14px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
                           <Avatar user={selectedContent.author} size={42} />
@@ -662,7 +632,6 @@ export default function ModeratorDashboard() {
                         </div>
                       )}
 
-                      {/* Full content */}
                       <div style={{ marginBottom: 20 }}>
                         {selectedContent.extra && (
                           <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 8, fontWeight: 600 }}>
@@ -674,18 +643,17 @@ export default function ModeratorDashboard() {
                         </div>
                         {selectedContent.image_url && (
                           <div style={{ marginTop: 12 }}>
-                            <img src={selectedContent.image_url} style={{ maxWidth: "100%", borderRadius: 10, border: "2px solid #30363d" }} />
+                            <img src={selectedContent.image_url} alt="" style={{ maxWidth: "100%", borderRadius: 10, border: "2px solid #30363d" }} />
                           </div>
                         )}
                         {selectedContent.type === "bio" && detailProfile?.avatar_url && (
                           <div style={{ marginTop: 12 }}>
                             <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 6, fontWeight: 700 }}>PROFILE PHOTO</div>
-                            <img src={detailProfile.avatar_url} style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover", border: "2px solid #30363d" }} />
+                            <img src={detailProfile.avatar_url} alt="" style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover", border: "2px solid #30363d" }} />
                           </div>
                         )}
                       </div>
 
-                      {/* Comments thread (for posts) */}
                       {selectedContent.type === "post" && (
                         <div style={{ marginBottom: 20 }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: "#8b949e", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.8 }}>
@@ -715,7 +683,6 @@ export default function ModeratorDashboard() {
                         </div>
                       )}
 
-                      {/* Action buttons */}
                       <div style={{ borderTop: "1px solid #21262d", paddingTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <button onClick={() => setWarnModal({ id: selectedContent.author_id, full_name: selectedContent.author?.full_name })}
                           style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid #451a03", background: "transparent", color: "#f59e0b", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
@@ -890,12 +857,10 @@ export default function ModeratorDashboard() {
               </div>
               <button onClick={() => setRemoveModal(null)} style={{ background: "none", border: "none", color: "#8b949e", fontSize: 20, cursor: "pointer", marginLeft: 12 }}>✕</button>
             </div>
-
             <div style={{ background: "#21262d", borderRadius: 10, padding: "10px 14px", marginBottom: 18, fontSize: 12, color: "#8b949e", lineHeight: 1.6 }}>
               <div style={{ fontWeight: 700, color: "#e6edf3", marginBottom: 4 }}>Content preview</div>
               {removeModal.content?.slice(0, 160)}{(removeModal.content?.length || 0) > 160 ? "…" : ""}
             </div>
-
             <div style={{ marginBottom: 16 }}>
               <label style={{ fontSize: 11, fontWeight: 700, color: "#8b949e", display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>Removal Reason *</label>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -907,13 +872,11 @@ export default function ModeratorDashboard() {
                 ))}
               </div>
             </div>
-
             <div style={{ marginBottom: 20 }}>
               <label style={{ fontSize: 11, fontWeight: 700, color: "#8b949e", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Additional Note (optional)</label>
               <textarea value={removeNote} onChange={e => setRemoveNote(e.target.value)} placeholder="Provide additional context for the user..."
                 style={{ width: "100%", minHeight: 72, padding: "9px 12px", borderRadius: 9, border: "1px solid #30363d", background: "#0d1117", color: "#e6edf3", fontSize: 13, fontFamily: "'DM Sans', sans-serif", resize: "vertical" }} />
             </div>
-
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setRemoveModal(null)} style={{ flex: 1, padding: "11px", borderRadius: 10, border: "1px solid #30363d", background: "transparent", color: "#8b949e", fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
               <button onClick={handleRemoveContent} disabled={!!actionLoading}
