@@ -630,10 +630,10 @@ export default function SessionsPage() {
                   </div>
                 </div>
 
-                {session.status==="confirmed" && meetingLink && (
+                {(session.status==="confirmed" || session.status==="upcoming") && meetingLink && (
                   <div className="px-5 pb-4"><MeetingLinkButton url={meetingLink} /></div>
                 )}
-                {session.status==="confirmed" && !meetingLink && isTeacher && (
+                {(session.status==="confirmed" || session.status==="upcoming") && !meetingLink && isTeacher && (
                   <div className="px-5 pb-4">
                     <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
                       <span className="text-lg">💡</span>
@@ -645,6 +645,21 @@ export default function SessionsPage() {
                         className="px-3 py-1.5 bg-amber-500 text-white rounded-xl text-xs font-black no-underline hover:bg-amber-600 transition-colors whitespace-nowrap">
                         Edit Listing →
                       </a>
+                    </div>
+                  </div>
+                )}
+                {(session.status==="confirmed" || session.status==="upcoming") && !meetingLink && !isTeacher && (
+                  <div className="px-5 pb-4">
+                    <div className="flex items-center gap-3 px-4 py-3 bg-stone-50 border border-stone-200 rounded-2xl">
+                      <span className="text-lg">⏳</span>
+                      <div className="flex-1">
+                        <p className="text-xs font-black text-stone-600">Meeting link pending</p>
+                        <p className="text-xs text-stone-400 font-medium">The teacher hasn't added a meeting link yet. Message them to confirm where you'll connect.</p>
+                      </div>
+                      <button onClick={() => openMessageWith(otherId)}
+                        className="px-3 py-1.5 bg-stone-700 text-white rounded-xl text-xs font-black border-0 cursor-pointer whitespace-nowrap hover:bg-stone-800 transition-colors">
+                        Message →
+                      </button>
                     </div>
                   </div>
                 )}

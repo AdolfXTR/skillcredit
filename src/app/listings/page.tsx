@@ -96,9 +96,11 @@ function PremiumAvatar({ name, xp, xp_multiplier, avatar_url, size = 32 }:
 }
 
 // ─────────────────────────────────────────────────────────────
-// LISTING CARD — improved
+// LISTING CARD
 // ─────────────────────────────────────────────────────────────
-function ListingCard({ listing, loggedIn, idx }: { listing: Listing; loggedIn: boolean; idx: number }) {
+function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
+  listing: Listing; loggedIn: boolean; idx: number; isOwn: boolean; isCompleted: boolean;
+}) {
   const fmt        = FORMAT_CONFIG[listing.format] || FORMAT_CONFIG.mixed;
   const cat        = CATEGORY_CONFIG[listing.skills?.category] || CATEGORY_CONFIG.Other;
   const rating     = listing.avg_rating || 0;
@@ -115,18 +117,23 @@ function ListingCard({ listing, loggedIn, idx }: { listing: Listing; loggedIn: b
   return (
     <div style={{
       background: "#fff", borderRadius: 20,
-      border: `1.5px solid ${isFeatured ? "rgba(255,215,0,.5)" : "#e8e2d9"}`,
+      border: `1.5px solid ${isOwn ? "rgba(45,106,79,.35)" : isFeatured ? "rgba(255,215,0,.5)" : "#e8e2d9"}`,
       overflow: "hidden",
-      boxShadow: isFeatured ? "0 4px 24px rgba(255,215,0,.15)" : "0 2px 12px rgba(0,0,0,.04)",
-      animationDelay: `${idx * .04}s`,
+      boxShadow: isOwn ? "0 4px 20px rgba(45,106,79,.08)" : isFeatured ? "0 4px 24px rgba(255,215,0,.15)" : "0 2px 12px rgba(0,0,0,.04)",
       position: "relative",
       transition: "transform .2s ease, box-shadow .2s ease",
-      animation: "fadeUp .35s ease both",
+      animationName: "fadeUp",
+      animationDuration: ".35s",
+      animationTimingFunction: "ease",
+      animationFillMode: "both",
+      animationDelay: `${idx * .04}s`,
     }}
     className="listing-card">
 
       {/* Featured gold stripe */}
-      {isFeatured && <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:"linear-gradient(90deg,#e8a800,#ffd700,#e8a800)", zIndex:2 }} />}
+      {isFeatured && !isOwn && <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:"linear-gradient(90deg,#e8a800,#ffd700,#e8a800)", zIndex:2 }} />}
+      {/* Own listing green stripe */}
+      {isOwn && <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:"linear-gradient(90deg,#1a4a36,#2d6a4f,#1a4a36)", zIndex:2 }} />}
 
       {/* HERO IMAGE / THUMB */}
       <div style={{ position:"relative", height:150, overflow:"hidden", cursor:"pointer" }} onClick={() => window.location.href = href}>
@@ -146,16 +153,28 @@ function ListingCard({ listing, loggedIn, idx }: { listing: Listing; loggedIn: b
             ★ {rating.toFixed(1)}{ratingCount > 0 && <span style={{ opacity:.65 }}>({ratingCount})</span>}
           </div>
         )}
+        {/* Your Listing badge */}
+        {isOwn && (
+          <div style={{ position:"absolute", bottom:10, left:10, background:"rgba(45,106,79,.92)", borderRadius:20, padding:"3px 10px", fontSize:9, fontWeight:800, color:"#fff" }}>
+            ✏️ Your Listing
+          </div>
+        )}
+        {/* Completed badge */}
+        {!isOwn && isCompleted && (
+          <div style={{ position:"absolute", bottom:10, left:10, background:"rgba(21,128,61,.92)", borderRadius:20, padding:"3px 10px", fontSize:9, fontWeight:800, color:"#fff" }}>
+            ✓ Completed
+          </div>
+        )}
         {/* Featured badge */}
-        {isFeatured && (
-          <div style={{ position:"absolute", bottom:10, left:10, background:"rgba(255,215,0,.92)", borderRadius:20, padding:"3px 9px", fontSize:9, fontWeight:800, color:"#78350f" }}>
+        {isFeatured && !isOwn && (
+          <div style={{ position:"absolute", bottom:10, right:10, background:"rgba(255,215,0,.92)", borderRadius:20, padding:"3px 9px", fontSize:9, fontWeight:800, color:"#78350f" }}>
             ⭐ Featured
           </div>
         )}
       </div>
 
       <div style={{ padding:"16px 18px 18px" }}>
-        {/* Tags — max 2, clean — fix #2 */}
+        {/* Tags */}
         <div style={{ display:"flex", gap:5, marginBottom:9, flexWrap:"wrap", alignItems:"center" }}>
           <span style={{ background:cat.bg, color:cat.color, fontSize:10, fontWeight:700, padding:"2px 9px", borderRadius:20 }}>
             {cat.icon} {listing.skills?.name}
@@ -175,7 +194,7 @@ function ListingCard({ listing, loggedIn, idx }: { listing: Listing; loggedIn: b
           {listing.title}
         </h3>
 
-        {/* Price + duration BELOW title — fix #3 */}
+        {/* Price + duration */}
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
           <span style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:900, color:"#2d6a4f" }}>{listing.credit_price} cr</span>
           <span style={{ fontSize:11, color:"#aaa", fontWeight:600 }}>≈ ₱{listing.credit_price * 10}</span>
@@ -183,7 +202,7 @@ function ListingCard({ listing, loggedIn, idx }: { listing: Listing; loggedIn: b
           <span style={{ fontSize:11, color:"#aaa", fontWeight:600 }}>⏱ {listing.duration}m</span>
         </div>
 
-        {/* Social proof — fix #7 */}
+        {/* Social proof */}
         {(rating > 0 || students > 0) && (
           <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
             {rating > 0 && (
@@ -199,35 +218,53 @@ function ListingCard({ listing, loggedIn, idx }: { listing: Listing; loggedIn: b
           </div>
         )}
 
-        {/* Teacher row — fix #5 */}
+        {/* Teacher row */}
         <div style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 11px", background:"#fafaf8", borderRadius:11, marginBottom:13 }}>
           <PremiumAvatar name={listing.profiles?.full_name||"?"} xp={listing.profiles?.xp||0} xp_multiplier={listing.profiles?.xp_multiplier} avatar_url={listing.profiles?.avatar_url} size={30} />
           <div style={{ flex:1, minWidth:0 }}>
             <p style={{ fontSize:12, fontWeight:700, color:"#222", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{listing.profiles?.full_name}</p>
             <p style={{ fontSize:10, color:"#aaa" }}>{getLevelFromXP(listing.profiles?.xp||0)} · @{listing.profiles?.username}</p>
           </div>
-          {/* Champion inline */}
           {rank === 1 && listing.profiles?.champion_title && (
             <span style={{ fontSize:9, fontWeight:800, background:"#fef3c7", color:"#92400e", padding:"2px 7px", borderRadius:20, border:"1px solid #fbbf24", flexShrink:0 }}>👑</span>
           )}
         </div>
 
-        {/* Dual CTA — fix #1 */}
-        <div style={{ display:"flex", gap:7 }}>
-          <a href={href}
-            style={{ flex:1, padding:"9px 0", borderRadius:10, background:"#f5f0e8", color:"#2d6a4f", border:"1.5px solid #e8e2d9", fontSize:12, fontWeight:800, textAlign:"center", textDecoration:"none", display:"block", transition:"all .15s" }}
-            onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = "#e8e2d9"; }}
-            onMouseOut={e  => { (e.currentTarget as HTMLElement).style.background = "#f5f0e8"; }}>
-            View Details
-          </a>
-          <a href={loggedIn ? `/listings/${listing.id}?book=1` : "/login"}
-            style={{ flex:1.4, padding:"9px 0", borderRadius:10, background: isFeatured ? "#1a4a36" : "#2d6a4f", color:"#fff", border:"none", fontSize:12, fontWeight:800, textAlign:"center", textDecoration:"none", display:"block", transition:"background .15s", cursor:"pointer" }}
-            className="book-btn"
-            onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = "#1a4a36"; }}
-            onMouseOut={e  => { (e.currentTarget as HTMLElement).style.background = isFeatured ? "#1a4a36" : "#2d6a4f"; }}>
-            Book Now →
-          </a>
-        </div>
+        {/* CTA */}
+        {isOwn ? (
+          // Own listing — show Edit + View, no Book Now
+          <div style={{ display:"flex", gap:7 }}>
+            <a href={href}
+              style={{ flex:1, padding:"9px 0", borderRadius:10, background:"#f5f0e8", color:"#2d6a4f", border:"1.5px solid #e8e2d9", fontSize:12, fontWeight:800, textAlign:"center", textDecoration:"none", display:"block" }}
+              onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = "#e8e2d9"; }}
+              onMouseOut={e  => { (e.currentTarget as HTMLElement).style.background = "#f5f0e8"; }}>
+              View Listing
+            </a>
+            <a href={`/listings/${listing.id}/edit`}
+              style={{ flex:1, padding:"9px 0", borderRadius:10, background:"#e8f4e8", color:"#1a4a36", border:"1.5px solid #c6e8d4", fontSize:12, fontWeight:800, textAlign:"center", textDecoration:"none", display:"block" }}
+              onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = "#d4f0de"; }}
+              onMouseOut={e  => { (e.currentTarget as HTMLElement).style.background = "#e8f4e8"; }}>
+              ✏️ Edit
+            </a>
+          </div>
+        ) : (
+          // Other's listing — normal dual CTA
+          <div style={{ display:"flex", gap:7 }}>
+            <a href={href}
+              style={{ flex:1, padding:"9px 0", borderRadius:10, background:"#f5f0e8", color:"#2d6a4f", border:"1.5px solid #e8e2d9", fontSize:12, fontWeight:800, textAlign:"center", textDecoration:"none", display:"block", transition:"all .15s" }}
+              onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = "#e8e2d9"; }}
+              onMouseOut={e  => { (e.currentTarget as HTMLElement).style.background = "#f5f0e8"; }}>
+              View Details
+            </a>
+            <a href={loggedIn ? `/listings/${listing.id}?book=1` : "/login"}
+              style={{ flex:1.4, padding:"9px 0", borderRadius:10, background: isCompleted ? "#f0fdf4" : isFeatured ? "#1a4a36" : "#2d6a4f", color: isCompleted ? "#15803d" : "#fff", border: isCompleted ? "1.5px solid #86efac" : "none", fontSize:12, fontWeight:800, textAlign:"center", textDecoration:"none", display:"block", transition:"background .15s", cursor:"pointer" }}
+              className="book-btn"
+              onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = isCompleted ? "#dcfce7" : "#1a4a36"; }}
+              onMouseOut={e  => { (e.currentTarget as HTMLElement).style.background = isCompleted ? "#f0fdf4" : isFeatured ? "#1a4a36" : "#2d6a4f"; }}>
+              {isCompleted ? "✓ Book Again" : "Book Now →"}
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -239,6 +276,7 @@ function ListingCard({ listing, loggedIn, idx }: { listing: Listing; loggedIn: b
 export default function ListingsPage() {
   const [listings, setListings]       = useState<Listing[]>([]);
   const [profile, setProfile]         = useState<Profile | null>(null);
+  const [completedListingIds, setCompletedListingIds] = useState<Set<string>>(new Set());
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
   const [category, setCategory]       = useState("All");
@@ -264,9 +302,21 @@ export default function ListingsPage() {
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser();
+    let userId: string | null = null;
     if (user) {
       const { data: prof } = await supabase.from("profiles").select("*,xp_multiplier,champion_title,avatar_url").eq("id", user.id).single();
       if (prof) setProfile(prof);
+      userId = user.id;
+
+      // Fetch completed sessions to track which listings the user has already done
+      const { data: completedSessions } = await supabase
+        .from("sessions")
+        .select("listing_id")
+        .eq("learner_id", user.id)
+        .eq("status", "completed");
+      if (completedSessions) {
+        setCompletedListingIds(new Set(completedSessions.map((s: any) => s.listing_id).filter(Boolean)));
+      }
     }
     const { data, error } = await supabase.from("listings")
       .select(`*, skills(name,category), profiles(full_name,username,level,xp,xp_multiplier,champion_title,avatar_url)`)
@@ -440,7 +490,6 @@ export default function ListingsPage() {
         .nav-a.active{background:#e8f4e8;color:#2d6a4f}
         input[type=range]{accent-color:#2d6a4f}
         input:focus,select:focus{outline:none;border-color:#2d6a4f!important;box-shadow:0 0 0 3px rgba(45,106,79,.1)}
-        /* Mobile modal overlay */
         .mobile-filter-overlay{display:none}
         @media(max-width:900px){
           .desktop-sidebar{display:none!important}
@@ -455,7 +504,7 @@ export default function ListingsPage() {
         }
       `}</style>
 
-      {/* Mobile filter modal — fix #8 */}
+      {/* Mobile filter modal */}
       <div className={`mobile-filter-overlay${showMobileFilters ? " open" : ""}`} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.55)", zIndex:200, alignItems:"flex-end" }}>
         <div style={{ background:"#faf8f4", borderRadius:"20px 20px 0 0", padding:"24px 20px", maxHeight:"90vh", overflowY:"auto", width:"100%" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
@@ -505,7 +554,6 @@ export default function ListingsPage() {
             <h1 style={{ fontFamily:"'Fraunces',serif", fontSize:28, fontWeight:900, color:"#1a1a1a", marginBottom:3 }}>Browse Skills</h1>
             <p style={{ fontSize:13, color:"#888" }}>Find the perfect teacher · {listings.length} listings available</p>
           </div>
-          {/* Desktop: show/hide filter button; Mobile: filter button */}
           {isMobile ? (
             <button onClick={() => setShowMobileFilters(true)}
               style={{ padding:"9px 18px", borderRadius:10, background:"#2d6a4f", color:"#fff", fontSize:13, fontWeight:700, border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
@@ -527,7 +575,7 @@ export default function ListingsPage() {
           {search && <button onClick={() => setSearch("")} style={{ position:"absolute", right:13, top:"50%", transform:"translateY(-50%)", background:"#e8e2d9", border:"none", borderRadius:"50%", width:22, height:22, cursor:"pointer", fontSize:11, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>}
         </div>
 
-        {/* Category pills — horizontally scrollable on mobile */}
+        {/* Category pills */}
         <div className="cat-scroll" style={{ display:"flex", gap:7, marginBottom:18, flexWrap:"wrap" }}>
           {categories.map(cat => {
             const cfg = CATEGORY_CONFIG[cat];
@@ -541,7 +589,7 @@ export default function ListingsPage() {
           })}
         </div>
 
-        {/* Active filter chips — fix #4 */}
+        {/* Active filter chips */}
         {activeFilters.length > 0 && (
           <div style={{ display:"flex", gap:7, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
             <span style={{ fontSize:11, color:"#aaa", fontWeight:700 }}>Active:</span>
@@ -601,7 +649,6 @@ export default function ListingsPage() {
               </div>
             )}
 
-            {/* EMPTY STATE — fix #10 */}
             {!loading && listings.length > 0 && filtered.length === 0 && (
               <div style={{ textAlign:"center", padding:"60px 20px", background:"#fff", borderRadius:20, border:"1.5px solid #e8e2d9" }}>
                 <div style={{ fontSize:48, marginBottom:14 }}>😕</div>
@@ -617,7 +664,14 @@ export default function ListingsPage() {
             {!loading && filtered.length > 0 && (
               <div className="listings-grid" style={{ display:"grid", gridTemplateColumns:showSidebar&&!isMobile?"repeat(2,1fr)":"repeat(3,1fr)", gap:16 }}>
                 {filtered.map((listing, i) => (
-                  <ListingCard key={listing.id} listing={listing} loggedIn={!!profile} idx={i} />
+                  <ListingCard
+                    key={listing.id}
+                    listing={listing}
+                    loggedIn={!!profile}
+                    idx={i}
+                    isOwn={profile?.id === listing.teacher_id}
+                    isCompleted={completedListingIds.has(listing.id)}
+                  />
                 ))}
               </div>
             )}

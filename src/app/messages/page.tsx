@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Profile = {
@@ -9,6 +9,8 @@ type Profile = {
   credits: number;
   level: string;
   avatar_url?: string | null;
+  xp_multiplier?: number;
+  champion_title?: string;
 };
 
 type Message = {
@@ -19,7 +21,11 @@ type Message = {
   image_url?: string;
   message_type: string;
   is_read: boolean;
+  is_deleted?: boolean;
   created_at: string;
+  reply_to_id?: string | null;
+  reply_to?: { content: string; sender_id: string } | null;
+  reactions?: Record<string, string[]>;
 };
 
 type Conversation = {
@@ -29,12 +35,11 @@ type Conversation = {
   unread_count: number;
 };
 
-type CallPayload = {
-  room: string;
-  started_at: string;
-  duration_minutes: number;
-  status: "active" | "ended";
-  ended_by?: string;
+type CreditTransferPayload = {
+  amount: number;
+  note: string;
+  from_id: string;
+  to_id: string;
 };
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -42,6 +47,13 @@ const LEVEL_COLORS: Record<string, string> = {
   Skilled: "#b45309", Expert: "#dc2626", Master: "#0891b2", Legend: "#d97706",
 };
 
+const CHAMPION_RING: Record<number, { border: string; glow: string; badge: string; label: string }> = {
+  1: { border: "linear-gradient(135deg,#FFD700,#FFA500,#FFD700)", glow: "0 0 12px rgba(255,215,0,.55)", badge: "👑", label: "Champion" },
+  2: { border: "linear-gradient(135deg,#C0C0C0,#A8A8A8,#C0C0C0)", glow: "0 0 10px rgba(192,192,192,.45)", badge: "🥈", label: "2nd Place" },
+  3: { border: "linear-gradient(135deg,#CD7F32,#A0522D,#CD7F32)", glow: "0 0 10px rgba(205,127,50,.45)", badge: "🥉", label: "3rd Place" },
+};
+
+const QUICK_REACTIONS = ["❤️","😂","🔥","👍","🎉","🤯"];
 const EMOJI_LIST = [
   "😀","😂","😍","🥰","😎","🤔","😅","🤩","😭","😤",
   "👍","👏","🔥","❤️","💯","🎉","✨","💪","🙏","👀",
@@ -78,123 +90,79 @@ function groupByDate(messages: Message[]) {
   });
   return groups;
 }
-function getRoomName(idA: string, idB: string) {
-  const slug = [idA, idB].sort().join("").replace(/-/g, "").slice(0, 20);
-  return `skillcredit-${slug}`;
+function getChampionRank(xp_multiplier?: number): number {
+  if (!xp_multiplier) return 0;
+  if (xp_multiplier >= 1.25) return 1;
+  if (xp_multiplier >= 1.15) return 2;
+  if (xp_multiplier >= 1.1) return 3;
+  return 0;
 }
 
-// ─── AVATAR COMPONENT ─────────────────────────────────────────────────────────
+// ─── AVATAR ───────────────────────────────────────────────────────────────────
 function Avatar({ profile, size = 38, online = false }: { profile: Profile; size?: number; online?: boolean }) {
   const color = LEVEL_COLORS[profile.level] || "#2d6a4f";
+  const rank = getChampionRank(profile.xp_multiplier);
+  const champ = rank > 0 ? CHAMPION_RING[rank] : null;
   return (
-    <div style={{ position: "relative", flexShrink: 0 }}>
-      <div style={{
-        width: size, height: size, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
-        background: profile.avatar_url ? "transparent" : color,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: size * 0.34, fontWeight: 700, color: "#fff",
-      }}>
+    <div style={{ position: "relative", flexShrink: 0, width: size, height: size }}>
+      {champ && (
+        <div style={{ position: "absolute", inset: -2, borderRadius: "50%", background: champ.border, padding: 2, zIndex: 0, boxShadow: champ.glow }}>
+          <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: "#fff" }} />
+        </div>
+      )}
+      <div style={{ position: "absolute", inset: champ ? 2 : 0, borderRadius: "50%", overflow: "hidden", background: profile.avatar_url ? "transparent" : color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.34, fontWeight: 700, color: "#fff", zIndex: 1 }}>
         {profile.avatar_url
-          ? <img src={profile.avatar_url} alt={profile.full_name} style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          ? <img src={profile.avatar_url} alt={profile.full_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
           : getInitials(profile.full_name)
         }
       </div>
-      {online && <div style={{ position: "absolute", bottom: 1, right: 1, width: 9, height: 9, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff" }} />}
-    </div>
-  );
-}
-
-// ─── SESSION TIMER ────────────────────────────────────────────────────────────
-function SessionTimer({ startedAt, durationMinutes, onExpire }: { startedAt: string; durationMinutes: number; onExpire: () => void }) {
-  const total = durationMinutes * 60;
-  const [remaining, setRemaining] = useState(total);
-  const [elapsed, setElapsed] = useState(0);
-  const calledExpire = useRef(false);
-
-  useEffect(() => {
-    const tick = () => {
-      const elap = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
-      const rem = Math.max(total - elap, 0);
-      setElapsed(elap); setRemaining(rem);
-      if (rem === 0 && !calledExpire.current) { calledExpire.current = true; onExpire(); }
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [startedAt, total]);
-
-  const pct = Math.min((elapsed / total) * 100, 100);
-  const mins = Math.floor(remaining / 60);
-  const secs = remaining % 60;
-  const isLow = remaining < 300;
-  const color = isLow ? "#dc2626" : "#2d6a4f";
-
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-      <div style={{ position: "relative", width: 40, height: 40, flexShrink: 0 }}>
-        <svg width="40" height="40" style={{ transform: "rotate(-90deg)" }}>
-          <circle cx="20" cy="20" r="16" fill="none" stroke="#f0ece4" strokeWidth="3" />
-          <circle cx="20" cy="20" r="16" fill="none" stroke={color} strokeWidth="3"
-            strokeDasharray={`${(pct / 100) * 100.5} 100.5`} strokeLinecap="round"
-            style={{ transition: "stroke-dasharray 0.5s ease" }} />
-        </svg>
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ fontSize: 9, fontWeight: 800, color, fontFamily: "'Fraunces', serif" }}>{mins}</span>
-        </div>
-      </div>
-      <div>
-        <div style={{ fontSize: 15, fontWeight: 900, color: isLow ? "#dc2626" : "#1a1a1a", fontFamily: "'Fraunces', serif", lineHeight: 1 }}>
-          {String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
-        </div>
-        <div style={{ fontSize: 9, color: isLow ? "#dc2626" : "#aaa", fontWeight: 600 }}>{isLow ? "⚠️ ending soon" : "remaining"}</div>
-      </div>
-    </div>
-  );
-}
-
-// ─── VIDEO CALL PANEL ─────────────────────────────────────────────────────────
-function VideoCallPanel({ payload, currentUserId, otherUser, onEnd }: { payload: CallPayload; currentUserId: string; otherUser: Profile; onEnd: () => void }) {
-  const [joined, setJoined] = useState(false);
-  const ended = payload.status === "ended";
-
-  if (ended) {
-    return (
-      <div style={{ background: "#faf8f4", borderRadius: 14, border: "1.5px solid #e8e2d9", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#f0ece4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📹</div>
-        <div>
-          <p style={{ fontSize: 13, fontWeight: 700, color: "#555" }}>Video session ended</p>
-          <p style={{ fontSize: 11, color: "#bbb" }}>
-            {payload.duration_minutes}min · {new Date(payload.started_at).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ borderRadius: 16, border: "2px solid #2d6a4f", overflow: "hidden", background: "#fff", boxShadow: "0 4px 24px rgba(45,106,79,0.12)" }}>
-      <div style={{ padding: "10px 16px", background: "linear-gradient(135deg,#1a4a36,#2d6a4f)", display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80", animation: "pulse 1.5s infinite" }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Live Session · {otherUser.full_name}</span>
-        </div>
-        <SessionTimer startedAt={payload.started_at} durationMinutes={payload.duration_minutes} onExpire={onEnd} />
-        <button onClick={onEnd} style={{ padding: "5px 13px", borderRadius: 8, background: "rgba(220,38,38,0.85)", color: "#fff", border: "none", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>End</button>
-      </div>
-      {!joined && (
-        <div style={{ padding: "28px 24px", textAlign: "center", background: "#f9fdfb" }}>
-          <div style={{ fontSize: 46, marginBottom: 10 }}>🎥</div>
-          <p style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 900, color: "#1a1a1a", marginBottom: 6 }}>Ready to join?</p>
-          <p style={{ fontSize: 13, color: "#888", lineHeight: 1.65, marginBottom: 20 }}>Your browser will ask for camera & mic permission.<br />The session timer has already started!</p>
-          <button onClick={() => setJoined(true)} style={{ padding: "11px 30px", borderRadius: 12, background: "#2d6a4f", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 3px 14px rgba(45,106,79,0.25)" }}>
-            📹 Join Video Call
-          </button>
-          <p style={{ fontSize: 11, color: "#bbb", marginTop: 12 }}>Powered by Jitsi Meet · end-to-end encrypted · free</p>
-        </div>
+      {champ && (
+        <div style={{ position: "absolute", top: -6, right: -6, fontSize: size * 0.38, lineHeight: 1, zIndex: 2, filter: "drop-shadow(0 1px 2px rgba(0,0,0,.25))" }}>{champ.badge}</div>
       )}
-      {joined && <iframe src={`https://meet.jit.si/${payload.room}`} allow="camera; microphone; fullscreen; display-capture; autoplay" style={{ width: "100%", height: 450, border: "none", display: "block" }} title="Video Session" />}
+      {online && !champ && (
+        <div style={{ position: "absolute", bottom: 1, right: 1, width: 9, height: 9, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff", zIndex: 2 }} />
+      )}
     </div>
+  );
+}
+
+// ─── CREDIT TRANSFER MESSAGE ──────────────────────────────────────────────────
+function CreditTransferBubble({ payload, isMe, senderName }: { payload: CreditTransferPayload; isMe: boolean; senderName: string }) {
+  return (
+    <div style={{ background: isMe ? "linear-gradient(135deg,#1a4a36,#2d6a4f)" : "linear-gradient(135deg,#fef9ec,#fef3c7)", borderRadius: 14, border: isMe ? "none" : "1.5px solid #fbbf24", padding: "14px 18px", maxWidth: 260, boxShadow: isMe ? "0 2px 12px rgba(45,106,79,0.25)" : "0 2px 12px rgba(251,191,36,0.15)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <div style={{ width: 32, height: 32, borderRadius: "50%", background: isMe ? "rgba(255,255,255,0.15)" : "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>💰</div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: isMe ? "rgba(255,255,255,0.7)" : "#92400e" }}>CREDIT TRANSFER</div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: isMe ? "#fff" : "#1a1a1a", fontFamily: "'Fraunces', serif", lineHeight: 1 }}>{payload.amount} cr</div>
+        </div>
+      </div>
+      {payload.note && <div style={{ fontSize: 12, color: isMe ? "rgba(255,255,255,0.8)" : "#666", lineHeight: 1.5, fontStyle: "italic" }}>"{payload.note}"</div>}
+      <div style={{ marginTop: 8, fontSize: 10, color: isMe ? "rgba(255,255,255,0.5)" : "#bbb" }}>
+        {isMe ? "You sent" : `${senderName} sent you`} {payload.amount} credits
+      </div>
+    </div>
+  );
+}
+
+// ─── FILE BUBBLE ──────────────────────────────────────────────────────────────
+function FileBubble({ content, isMe }: { content: string; isMe: boolean }) {
+  let fp: { url: string; name: string; size?: number } | null = null;
+  try { fp = JSON.parse(content); } catch { return null; }
+  if (!fp?.url) return null;
+  const ext = fp.name?.split(".").pop()?.toLowerCase() || "";
+  const icon = ["pdf"].includes(ext) ? "📄" : ["doc","docx"].includes(ext) ? "📝" : ["xls","xlsx"].includes(ext) ? "📊" : ["zip","rar","7z"].includes(ext) ? "🗜️" : ["mp4","mov","avi"].includes(ext) ? "🎬" : ["mp3","wav"].includes(ext) ? "🎵" : "📎";
+  const sizeStr = fp.size ? (fp.size > 1024*1024 ? (fp.size/1024/1024).toFixed(1)+"MB" : Math.round(fp.size/1024)+"KB") : "";
+  return (
+    <a href={fp.url} target="_blank" rel="noopener noreferrer"
+      style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: isMe ? "rgba(255,255,255,0.15)" : "#f5f0e8", borderRadius: 12, border: isMe ? "1px solid rgba(255,255,255,0.2)" : "1px solid #e8e2d9", textDecoration: "none", minWidth: 200, maxWidth: 280 }}>
+      <span style={{ fontSize: 24, flexShrink: 0 }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 13, fontWeight: 700, color: isMe ? "#fff" : "#1a1a1a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fp.name}</p>
+        {sizeStr && <p style={{ fontSize: 11, color: isMe ? "rgba(255,255,255,0.7)" : "#aaa" }}>{sizeStr} · click to download</p>}
+      </div>
+      <span style={{ fontSize: 16, flexShrink: 0, color: isMe ? "rgba(255,255,255,0.8)" : "#2d6a4f" }}>↓</span>
+    </a>
   );
 }
 
@@ -215,32 +183,94 @@ export default function MessagesPage() {
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [attachFile, setAttachFile] = useState<File | null>(null);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
-  const [startingCall, setStartingCall] = useState(false);
+
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
+  const [showCreditModal, setShowCreditModal] = useState(false);
+  const [creditAmount, setCreditAmount] = useState("");
+  const [creditNote, setCreditNote] = useState("");
+  const [sendingCredits, setSendingCredits] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ msgId: string; x: number; y: number } | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const searchTimeout = useRef<any>(null);
+  const typingTimeout = useRef<any>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
+  const presenceChannelRef = useRef<any>(null);
+
+  // ── FIX #1: refs that always have current values (fixes stale closure) ──────
+  const profileRef = useRef<Profile | null>(null);
+  const activeConvoRef = useRef<Profile | null>(null);
+
+  useEffect(() => { profileRef.current = profile; }, [profile]);
+  useEffect(() => { activeConvoRef.current = activeConvo; }, [activeConvo]);
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   useEffect(() => {
+    const handler = () => { setContextMenu(null); setShowReactionPicker(null); };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
+
+  // ── FIX #1 APPLIED: use refs inside the channel callback ──────────────────
+  useEffect(() => {
     if (!profile) return;
     const channel = supabase.channel(`messages-${profile.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${profile.id}` }, (payload) => {
         const msg = payload.new as Message;
-        if (activeConvo && msg.sender_id === activeConvo.id) { setMessages(prev => [...prev, msg]); markRead(activeConvo.id); }
-        loadConversations(profile.id);
+        const currentConvo = activeConvoRef.current;  // ← always current, never stale
+        const currentProfile = profileRef.current;
+        if (currentConvo && msg.sender_id === currentConvo.id) {
+          setMessages(prev => [...prev, msg]);
+          if (currentProfile) markRead(currentConvo.id, currentProfile.id);
+        }
+        if (currentProfile) loadConversations(currentProfile.id);
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
         const updated = payload.new as Message;
-        setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
+        setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (payload) => {
+        const deleted = payload.old as Message;
+        setMessages(prev => prev.map(m => m.id === deleted.id ? { ...m, is_deleted: true, content: "[deleted]" } : m));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+  }, [profile]); // ← only depends on profile now, NOT activeConvo
+
+  useEffect(() => {
+    if (!profile || !activeConvo) return;
+    const roomId = [profile.id, activeConvo.id].sort().join("-");
+    const ch = supabase.channel(`typing-${roomId}`, { config: { presence: { key: profile.id } } })
+      .on("presence", { event: "sync" }, () => {
+        const state = ch.presenceState() as Record<string, any[]>;
+        const typers = Object.entries(state)
+          .filter(([uid, data]) => uid !== profile.id && data[0]?.isTyping)
+          .map(([uid]) => uid);
+        setTypingUsers(typers);
+      })
+      .subscribe();
+    presenceChannelRef.current = ch;
+    return () => { supabase.removeChannel(ch); presenceChannelRef.current = null; };
   }, [profile, activeConvo]);
+
+  function broadcastTyping(isTyping: boolean) {
+    presenceChannelRef.current?.track({ isTyping });
+  }
+
+  function handleTyping(val: string) {
+    setNewMsg(val);
+    broadcastTyping(true);
+    clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => broadcastTyping(false), 2000);
+  }
 
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -255,7 +285,7 @@ export default function MessagesPage() {
       const { data: targetUser } = await supabase.from("profiles").select("*").eq("id", openWith).single();
       if (targetUser) {
         setTimeout(async () => {
-          setActiveConvo(targetUser); setShowNewChat(false); setShowEmoji(false);
+          setActiveConvo(targetUser); setShowNewChat(false);
           const { data: msgs } = await supabase.from("messages").select("*")
             .or(`and(sender_id.eq.${user.id},receiver_id.eq.${targetUser.id}),and(sender_id.eq.${targetUser.id},receiver_id.eq.${user.id})`)
             .order("created_at", { ascending: true });
@@ -269,6 +299,7 @@ export default function MessagesPage() {
     setLoading(false);
   }
 
+  // ── FIX #2: batch profile fetch instead of N+1 queries ────────────────────
   async function loadConversations(userId: string) {
     const { data: msgs } = await supabase.from("messages").select("*")
       .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
@@ -282,73 +313,93 @@ export default function MessagesPage() {
       convoMap.get(otherId)!.push(msg);
     });
 
+    const otherIds = Array.from(convoMap.keys());
+    if (otherIds.length === 0) { setConversations([]); return; }
+
+    // ← ONE query for all profiles instead of one per conversation
+    const { data: profiles } = await supabase.from("profiles").select("*").in("id", otherIds);
+    const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+
     const convos: Conversation[] = [];
     for (const [otherId, ms] of convoMap) {
-      const { data: op } = await supabase.from("profiles").select("*").eq("id", otherId).single();
+      const op = profileMap.get(otherId);
       if (!op) continue;
       const last = ms[0];
-      const unread = ms.filter(m => m.receiver_id === userId && !m.is_read).length;
-      const lastText = last.message_type === "image" ? "📷 Photo" : last.message_type === "session_call" ? "📹 Video session" : last.content;
+      const unread = ms.filter(m => m.receiver_id === userId && !m.is_read && !m.is_deleted).length;
+      const lastText = last.is_deleted ? "🚫 Message deleted"
+        : last.message_type === "image" ? "📷 Photo"
+        : last.message_type === "session_call" ? "📹 Video session"
+        : last.message_type === "credit_transfer" ? "💰 Credits sent"
+        : last.message_type === "file" ? "📎 File"
+        : last.content;
       convos.push({ other_user: op, last_message: lastText, last_time: last.created_at, unread_count: unread });
     }
     setConversations(convos);
   }
 
   async function openConversation(other: Profile) {
-    setActiveConvo(other); setShowNewChat(false); setShowEmoji(false);
+    setActiveConvo(other); setShowNewChat(false); setShowEmoji(false); setReplyingTo(null);
     if (!profile) return;
     const { data } = await supabase.from("messages").select("*")
       .or(`and(sender_id.eq.${profile.id},receiver_id.eq.${other.id}),and(sender_id.eq.${other.id},receiver_id.eq.${profile.id})`)
       .order("created_at", { ascending: true });
     setMessages(data || []);
-    await markRead(other.id);
+    await markRead(other.id, profile.id);
     await loadConversations(profile.id);
     setTimeout(() => textareaRef.current?.focus(), 100);
   }
 
-  async function markRead(senderId: string) {
-    if (!profile) return;
-    await supabase.from("messages").update({ is_read: true }).eq("sender_id", senderId).eq("receiver_id", profile.id).eq("is_read", false);
+  async function markRead(senderId: string, receiverId: string) {
+    await supabase.from("messages").update({ is_read: true }).eq("sender_id", senderId).eq("receiver_id", receiverId).eq("is_read", false);
   }
 
-  async function startVideoSession() {
-    if (!profile || !activeConvo || startingCall) return;
-    const alreadyActive = messages.some(m => {
-      if (m.message_type !== "session_call") return false;
-      try { return (JSON.parse(m.content) as CallPayload).status === "active"; } catch { return false; }
-    });
-    if (alreadyActive) { alert("There's already an active session in this conversation!"); return; }
-    setStartingCall(true);
-
-    const { data: sessionRow } = await supabase.from("sessions").select("listing:listing_id(duration)")
-      .or(`and(teacher_id.eq.${profile.id},learner_id.eq.${activeConvo.id}),and(teacher_id.eq.${activeConvo.id},learner_id.eq.${profile.id})`)
-      .eq("status", "upcoming").order("proposed_time", { ascending: true }).limit(1).maybeSingle();
-
-    const duration = (sessionRow?.listing as any)?.duration || 60;
-    const room = getRoomName(profile.id, activeConvo.id);
-    const payload: CallPayload = { room, started_at: new Date().toISOString(), duration_minutes: duration, status: "active" };
-
-    const { data: msg } = await supabase.from("messages").insert({ sender_id: profile.id, receiver_id: activeConvo.id, content: JSON.stringify(payload), message_type: "session_call", is_read: false }).select().single();
-    if (msg) setMessages(prev => [...prev, msg]);
-
-    try {
-      await supabase.from("notifications").insert({ user_id: activeConvo.id, type: "session_call", title: `${profile.full_name} started a video session`, body: "Join now in Messages!", link: "/messages" });
-    } catch (_) {}
-
-    await loadConversations(profile.id);
-    setStartingCall(false);
-  }
-
-  async function endVideoSession(msgId: string) {
+  async function toggleReaction(msgId: string, emoji: string) {
     if (!profile) return;
     const msg = messages.find(m => m.id === msgId);
     if (!msg) return;
-    try {
-      const p = JSON.parse(msg.content) as CallPayload;
-      p.status = "ended"; p.ended_by = profile.id;
-      await supabase.from("messages").update({ content: JSON.stringify(p) }).eq("id", msgId);
-      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: JSON.stringify(p) } : m));
-    } catch (_) {}
+    const reactions = { ...(msg.reactions || {}) };
+    const users = reactions[emoji] || [];
+    if (users.includes(profile.id)) {
+      reactions[emoji] = users.filter(id => id !== profile.id);
+      if (reactions[emoji].length === 0) delete reactions[emoji];
+    } else {
+      reactions[emoji] = [...users, profile.id];
+    }
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, reactions } : m));
+    await supabase.from("messages").update({ reactions }).eq("id", msgId);
+    setShowReactionPicker(null);
+  }
+
+  async function deleteMessage(msgId: string) {
+    if (!profile) return;
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, is_deleted: true, content: "[deleted]" } : m));
+    await supabase.from("messages").update({ is_deleted: true, content: "[deleted]", image_url: null }).eq("id", msgId).eq("sender_id", profile.id);
+    setContextMenu(null);
+  }
+
+  async function handleSendCredits() {
+    if (!profile || !activeConvo || !creditAmount) return;
+    const amount = parseInt(creditAmount);
+    if (isNaN(amount) || amount <= 0 || amount > profile.credits) return;
+    setSendingCredits(true);
+
+    await supabase.from("profiles").update({ credits: profile.credits - amount }).eq("id", profile.id);
+    await supabase.rpc("increment_credits", { user_id: activeConvo.id, amount });
+
+    const payload: CreditTransferPayload = { amount, note: creditNote, from_id: profile.id, to_id: activeConvo.id };
+    const { data: msg } = await supabase.from("messages").insert({
+      sender_id: profile.id, receiver_id: activeConvo.id,
+      content: JSON.stringify(payload), message_type: "credit_transfer", is_read: false,
+    }).select().single();
+    if (msg) setMessages(prev => [...prev, msg]);
+
+    setProfile(prev => prev ? { ...prev, credits: prev.credits - amount } : prev);
+    try { await supabase.from("notifications").insert({ user_id: activeConvo.id, type: "credit_transfer", title: `${profile.full_name} sent you ${amount} credits!`, body: creditNote || "Credits received!", link: "/messages" }); } catch (_) {}
+    try { await supabase.from("moderation_logs").insert({ mod_id: profile.id, target_id: activeConvo.id, target_type: "credit_transfer", action: "sent", reason: `${amount} credits`, author_id: profile.id }); } catch (_) {}
+
+    setCreditAmount(""); setCreditNote(""); setShowCreditModal(false);
+    setSendingCredits(false);
+    await loadConversations(profile.id);
   }
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -370,17 +421,73 @@ export default function MessagesPage() {
     return data.publicUrl;
   }
 
+  async function handleAttachSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { alert("File must be under 20MB"); return; }
+    setAttachFile(file);
+    e.target.value = "";
+  }
+
+  async function uploadAttachment(file: File): Promise<string | null> {
+    const path = `${profile!.id}/files/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    const { error } = await supabase.storage.from("message-files").upload(path, file);
+    if (error) {
+      const { error: e2 } = await supabase.storage.from("message-images").upload("files/" + path, file);
+      if (e2) return null;
+      const { data } = supabase.storage.from("message-images").getPublicUrl("files/" + path);
+      return data.publicUrl;
+    }
+    const { data } = supabase.storage.from("message-files").getPublicUrl(path);
+    return data.publicUrl;
+  }
+
   async function sendMessage() {
     if (!profile || !activeConvo) return;
-    if (!newMsg.trim() && !imageFile) return;
+    if (!newMsg.trim() && !imageFile && !attachFile) return;
     setSending(true); setShowEmoji(false);
+
+    // ── FIX #3: capture file info BEFORE clearing state ───────────────────
+    const currentAttachFile = attachFile;
+    const currentImageFile = imageFile;
+
     let imageUrl: string | null = null;
-    if (imageFile) { setUploading(true); imageUrl = await uploadImage(imageFile); setUploading(false); setImageFile(null); setImagePreview(null); }
-    const msgData = { sender_id: profile.id, receiver_id: activeConvo.id, content: newMsg.trim() || "", image_url: imageUrl, message_type: imageUrl ? "image" : "text", is_read: false };
+    let fileUrl: string | null = null;
+
+    if (currentImageFile) {
+      setUploading(true);
+      imageUrl = await uploadImage(currentImageFile);
+      setUploading(false);
+      setImageFile(null);
+      setImagePreview(null);
+    }
+    if (currentAttachFile) {
+      setUploading(true);
+      fileUrl = await uploadAttachment(currentAttachFile);
+      setUploading(false);
+      setAttachFile(null);
+    }
+
+    const msgType = imageUrl ? "image" : fileUrl ? "file" : "text";
+    const msgData: any = {
+      sender_id: profile.id, receiver_id: activeConvo.id,
+      // ── FIX #3: use captured variable for size, not cleared state ─────
+      content: fileUrl
+        ? JSON.stringify({ url: fileUrl, name: currentAttachFile!.name, size: currentAttachFile!.size })
+        : (newMsg.trim() || ""),
+      image_url: imageUrl, message_type: msgType, is_read: false,
+    };
+    if (replyingTo) { msgData.reply_to_id = replyingTo.id; }
+
     const { data: msg } = await supabase.from("messages").insert(msgData).select().single();
-    if (msg) setMessages(prev => [...prev, msg]);
-    setNewMsg("");
-    try { await supabase.from("notifications").insert({ user_id: activeConvo.id, type: "message", title: `New message from ${profile.full_name}`, body: imageUrl ? "📷 Sent a photo" : newMsg.trim().slice(0, 80), link: "/messages" }); } catch (_) {}
+    if (msg) {
+      const withReply = replyingTo ? { ...msg, reply_to: { content: replyingTo.content, sender_id: replyingTo.sender_id } } : msg;
+      setMessages(prev => [...prev, withReply]);
+    }
+    setNewMsg(""); setReplyingTo(null);
+    broadcastTyping(false);
+
+    try { await supabase.from("notifications").insert({ user_id: activeConvo.id, type: "message", title: `New message from ${profile.full_name}`, body: imageUrl ? "📷 Sent a photo" : fileUrl ? `📎 Sent a file: ${currentAttachFile!.name}` : newMsg.trim().slice(0, 80), link: "/messages" }); } catch (_) {}
     await loadConversations(profile.id);
     setSending(false);
   }
@@ -397,13 +504,8 @@ export default function MessagesPage() {
     }, 300);
   }
 
-  const activeCallMsg = messages.find(m => {
-    if (m.message_type !== "session_call") return false;
-    try { return (JSON.parse(m.content) as CallPayload).status === "active"; } catch { return false; }
-  });
-
   const totalUnread = conversations.reduce((s, c) => s + c.unread_count, 0);
-  const grouped = groupByDate(messages);
+  const grouped = groupByDate(messages.filter(m => !m.is_deleted || m.sender_id === profile?.id));
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: "#faf8f4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
@@ -426,6 +528,7 @@ export default function MessagesPage() {
         @keyframes slideUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes spin { to{transform:rotate(360deg)} }
+        @keyframes typingBounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-thumb { background: #e0dbd4; border-radius: 999px; }
         .convo-item { transition: background 0.12s; cursor: pointer; border-radius: 10px; }
@@ -445,7 +548,15 @@ export default function MessagesPage() {
         .nav-link { padding: 6px 12px; border-radius: 8px; color: #666; font-size: 13px; font-weight: 600; transition: all 0.12s; }
         .nav-link:hover { background: #f5f0e8; color: #333; }
         .nav-link.active { background: #e8f4e8; color: #2d6a4f; }
-        .call-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(45,106,79,0.28) !important; }
+        .reaction-pill { cursor: pointer; transition: transform 0.1s, background 0.1s; border-radius: 999px; padding: 2px 7px; display: inline-flex; align-items: center; gap: 3px; font-size: 12px; border: 1px solid #e8e2d9; background: #fff; }
+        .reaction-pill:hover { transform: scale(1.12); background: #f5f0e8; }
+        .reaction-pill.mine { background: #e8f4e8; border-color: #86efac; }
+        .msg-actions { opacity: 0; transition: opacity 0.12s; }
+        .msg-wrapper:hover .msg-actions { opacity: 1; }
+        .ctx-menu-item { padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.1s; border-radius: 6px; }
+        .ctx-menu-item:hover { background: #f5f0e8; }
+        .ctx-menu-item.danger { color: #dc2626; }
+        .ctx-menu-item.danger:hover { background: #fce8e8; }
       `}</style>
 
       {/* NAVBAR */}
@@ -495,37 +606,50 @@ export default function MessagesPage() {
                 <div style={{ fontSize: 13, fontWeight: 500 }}>No conversations yet</div>
                 <div style={{ fontSize: 11, marginTop: 3 }}>Click + to start chatting</div>
               </div>
-            ) : conversations.map(c => (
-              <div key={c.other_user.id}
-                className={`convo-item ${activeConvo?.id === c.other_user.id ? "active" : ""}`}
-                onClick={() => openConversation(c.other_user)}
-                style={{ padding: "10px 10px", display: "flex", gap: 10, alignItems: "center", marginBottom: 1 }}>
-                <div style={{ position: "relative", flexShrink: 0 }}>
-                  <Avatar profile={c.other_user} size={40} online />
-                  {c.unread_count > 0 && (
-                    <div style={{ position: "absolute", top: -2, right: -2, minWidth: 15, height: 15, borderRadius: 999, background: "#dc2626", fontSize: 8, fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
-                      {c.unread_count}
+            ) : conversations.map(c => {
+              const rank = getChampionRank(c.other_user.xp_multiplier);
+              return (
+                <div key={c.other_user.id}
+                  className={`convo-item ${activeConvo?.id === c.other_user.id ? "active" : ""}`}
+                  onClick={() => openConversation(c.other_user)}
+                  style={{ padding: "10px 10px", display: "flex", gap: 10, alignItems: "center", marginBottom: 1,
+                    background: rank === 1 ? "linear-gradient(90deg, rgba(255,215,0,0.08), transparent)" : rank === 2 ? "linear-gradient(90deg, rgba(192,192,192,0.08), transparent)" : rank === 3 ? "linear-gradient(90deg, rgba(205,127,50,0.08), transparent)" : undefined,
+                    borderLeft: rank === 1 ? "2px solid #FFD700" : rank === 2 ? "2px solid #C0C0C0" : rank === 3 ? "2px solid #CD7F32" : "2px solid transparent",
+                  }}>
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <Avatar profile={c.other_user} size={40} online />
+                    {c.unread_count > 0 && (
+                      <div style={{ position: "absolute", top: -2, right: -2, minWidth: 15, height: 15, borderRadius: 999, background: "#dc2626", fontSize: 8, fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+                        {c.unread_count}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 1, alignItems: "center" }}>
+                      <span style={{ fontSize: 13, fontWeight: c.unread_count > 0 ? 700 : 600, color: "#1a1a1a", display: "flex", alignItems: "center", gap: 4 }}>
+                        {c.other_user.full_name}
+                        {rank > 0 && <span style={{ fontSize: 10 }}>{CHAMPION_RING[rank].badge}</span>}
+                      </span>
+                      <span style={{ fontSize: 10, color: "#bbb", flexShrink: 0 }}>{timeAgo(c.last_time)}</span>
                     </div>
-                  )}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 1 }}>
-                    <span style={{ fontSize: 13, fontWeight: c.unread_count > 0 ? 700 : 600, color: "#1a1a1a" }}>{c.other_user.full_name}</span>
-                    <span style={{ fontSize: 10, color: "#bbb", flexShrink: 0 }}>{timeAgo(c.last_time)}</span>
+                    {rank > 0 && c.other_user.champion_title && (
+                      <div style={{ fontSize: 9, fontWeight: 700, color: rank === 1 ? "#92400e" : rank === 2 ? "#6b7280" : "#78350f", marginBottom: 1 }}>
+                        {CHAMPION_RING[rank].label} · {c.other_user.champion_title}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11, color: c.unread_count > 0 ? "#555" : "#aaa", fontWeight: c.unread_count > 0 ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {c.last_message}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 11, color: c.unread_count > 0 ? "#555" : "#aaa", fontWeight: c.unread_count > 0 ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {c.last_message}
-                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* MAIN PANEL */}
         <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", background: "#faf8f4" }}>
 
-          {/* NEW CHAT SEARCH */}
           {showNewChat && (
             <div style={{ display: "flex", flexDirection: "column", height: "100%", animation: "fadeIn 0.15s ease", background: "#fff" }}>
               <div style={{ padding: "18px 22px", borderBottom: "1.5px solid #f0ece4", flexShrink: 0 }}>
@@ -537,11 +661,10 @@ export default function MessagesPage() {
               <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
                 {searching && <div style={{ textAlign: "center", padding: 20, color: "#bbb", fontSize: 13 }}>Searching...</div>}
                 {!searching && searchUser.length >= 2 && searchResults.length === 0 && (
-                  <div style={{ textAlign: "center", padding: 20, color: "#bbb", fontSize: 13 }}>No users found for "{searchUser}"</div>
+                  <div style={{ textAlign: "center", padding: 20, color: "#bbb", fontSize: 13 }}>No users found</div>
                 )}
                 {searchResults.map(user => (
-                  <div key={user.id} className="convo-item" onClick={() => openConversation(user)}
-                    style={{ padding: "10px 12px", display: "flex", alignItems: "center", gap: 12, marginBottom: 3 }}>
+                  <div key={user.id} className="convo-item" onClick={() => openConversation(user)} style={{ padding: "10px 12px", display: "flex", alignItems: "center", gap: 12, marginBottom: 3 }}>
                     <Avatar profile={user} size={42} />
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{user.full_name}</div>
@@ -553,8 +676,7 @@ export default function MessagesPage() {
                   <>
                     <p style={{ fontSize: 11, color: "#bbb", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8, fontWeight: 600 }}>Recent</p>
                     {conversations.slice(0, 6).map(c => (
-                      <div key={c.other_user.id} className="convo-item" onClick={() => openConversation(c.other_user)}
-                        style={{ padding: "10px 12px", display: "flex", alignItems: "center", gap: 12, marginBottom: 3 }}>
+                      <div key={c.other_user.id} className="convo-item" onClick={() => openConversation(c.other_user)} style={{ padding: "10px 12px", display: "flex", alignItems: "center", gap: 12, marginBottom: 3 }}>
                         <Avatar profile={c.other_user} size={40} />
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>{c.other_user.full_name}</div>
@@ -568,7 +690,6 @@ export default function MessagesPage() {
             </div>
           )}
 
-          {/* EMPTY STATE */}
           {!showNewChat && !activeConvo && (
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
               <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#e8f4e8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>💬</div>
@@ -580,29 +701,22 @@ export default function MessagesPage() {
             </div>
           )}
 
-          {/* ACTIVE CHAT */}
           {activeConvo && !showNewChat && (
             <>
               {/* Chat header */}
               <div style={{ padding: "12px 20px", borderBottom: "1.5px solid #e8e2d9", display: "flex", alignItems: "center", gap: 12, flexShrink: 0, background: "#fff" }}>
                 <Avatar profile={activeConvo} size={38} online />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{activeConvo.full_name}</div>
-                  <div style={{ fontSize: 11, color: "#aaa" }}>@{activeConvo.username} · {activeConvo.level} · Online</div>
-                </div>
-                {activeCallMsg ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 13px", borderRadius: 20, background: "#e8f9f0", border: "1.5px solid #4ade80" }}>
-                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", animation: "pulse 1.5s infinite" }} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#166534" }}>Session live ↓</span>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a", display: "flex", alignItems: "center", gap: 6 }}>
+                    {activeConvo.full_name}
+                    {(() => { const rank = getChampionRank(activeConvo.xp_multiplier); return rank > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 8px", borderRadius: 99, background: rank === 1 ? "#fef9ec" : rank === 2 ? "#f3f4f6" : "#fef3ec", color: rank === 1 ? "#92400e" : rank === 2 ? "#374151" : "#78350f", border: `1px solid ${rank === 1 ? "#fbbf24" : rank === 2 ? "#d1d5db" : "#d97706"}` }}>{CHAMPION_RING[rank].badge} {CHAMPION_RING[rank].label}</span> : null; })()}
                   </div>
-                ) : (
-                  <button className="call-btn" onClick={startVideoSession} disabled={startingCall}
-                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 16px", borderRadius: 10, background: "#2d6a4f", color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: startingCall ? "not-allowed" : "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 2px 10px rgba(45,106,79,0.18)", opacity: startingCall ? 0.7 : 1, transition: "all 0.15s" }}>
-                    {startingCall ? "⏳ Starting…" : "📹 Start Session"}
-                  </button>
-                )}
+                  <div style={{ fontSize: 11, color: "#aaa" }}>@{activeConvo.username} · {activeConvo.level}</div>
+                </div>
+                <button onClick={() => setShowCreditModal(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, background: "#fef9ec", color: "#92400e", border: "1.5px solid #fbbf24", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+                  💰 Send Credits
+                </button>
                 <a href="/sessions" style={{ padding: "6px 14px", borderRadius: 8, background: "#e8f4e8", color: "#2d6a4f", fontSize: 12, fontWeight: 700, border: "1.5px solid #c6e8d4" }}>📅 Sessions</a>
-                <a href="/listings" style={{ padding: "6px 14px", borderRadius: 8, background: "#f5f0e8", color: "#555", fontSize: 12, fontWeight: 700, border: "1.5px solid #e8e2d9" }}>📚 Browse Skills</a>
               </div>
 
               {/* Messages */}
@@ -612,11 +726,6 @@ export default function MessagesPage() {
                     <Avatar profile={activeConvo} size={50} />
                     <div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 800, color: "#999", marginBottom: 4, marginTop: 12 }}>{activeConvo.full_name}</div>
                     <div style={{ fontSize: 12, color: "#bbb", marginBottom: 20 }}>Say hello 👋</div>
-                    <div style={{ background: "#f0fdf4", border: "1.5px dashed #4ade80", borderRadius: 14, padding: "16px 22px", maxWidth: 300, margin: "0 auto" }}>
-                      <div style={{ fontSize: 22, marginBottom: 6 }}>📹</div>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "#166534", marginBottom: 3 }}>Have a session booked?</p>
-                      <p style={{ fontSize: 11, color: "#888", lineHeight: 1.6 }}>Hit <strong>"Start Session"</strong> above to kick off a video call with a live countdown timer!</p>
-                    </div>
                   </div>
                 )}
 
@@ -632,47 +741,78 @@ export default function MessagesPage() {
                       const isMe = msg.sender_id === profile?.id;
                       const prevMsg = group.messages[i - 1];
                       const nextMsg = group.messages[i + 1];
-                      const sameSenderPrev = prevMsg?.sender_id === msg.sender_id;
                       const sameSenderNext = nextMsg?.sender_id === msg.sender_id;
                       const showAvatar = !isMe && !sameSenderNext;
+                      const sameSenderPrev = prevMsg?.sender_id === msg.sender_id;
+                      const reactionEntries = Object.entries(msg.reactions || {}).filter(([_, users]) => users.length > 0);
 
-                      if (msg.message_type === "session_call") {
-                        let payload: CallPayload | null = null;
-                        try { payload = JSON.parse(msg.content) as CallPayload; } catch { return null; }
+                      if (msg.message_type === "session_call") return null;
+
+                      if (msg.message_type === "credit_transfer") {
+                        let payload: CreditTransferPayload | null = null;
+                        try { payload = JSON.parse(msg.content) as CreditTransferPayload; } catch { return null; }
                         return (
-                          <div key={msg.id} style={{ margin: "14px 0" }}>
-                            <VideoCallPanel payload={payload} currentUserId={profile?.id || ""} otherUser={activeConvo} onEnd={() => endVideoSession(msg.id)} />
+                          <div key={msg.id} className="msg-in" style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", marginBottom: 10 }}>
+                            <CreditTransferBubble payload={payload} isMe={isMe} senderName={activeConvo.full_name} />
                           </div>
                         );
                       }
 
                       return (
-                        <div key={msg.id} className="msg-in"
-                          style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 7, alignItems: "flex-end", marginBottom: sameSenderNext ? 2 : 8 }}>
-                          {!isMe ? (
-                            showAvatar
-                              ? <Avatar profile={activeConvo} size={26} />
-                              : <div style={{ width: 26, flexShrink: 0 }} />
-                          ) : null}
+                        <div key={msg.id} className="msg-wrapper msg-in"
+                          style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 7, alignItems: "flex-end", marginBottom: reactionEntries.length > 0 ? 18 : (sameSenderNext ? 2 : 8), position: "relative" }}>
 
-                          <div style={{ maxWidth: "65%", display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
-                            {msg.message_type === "image" && msg.image_url && (
+                          {!isMe ? (showAvatar ? <Avatar profile={activeConvo} size={26} /> : <div style={{ width: 26, flexShrink: 0 }} />) : null}
+
+                          <div style={{ maxWidth: "65%", display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", position: "relative" }}>
+                            {msg.reply_to && (
+                              <div style={{ marginBottom: 4, padding: "5px 10px", borderRadius: 8, background: "#f0ece4", borderLeft: `2px solid ${isMe ? "#86efac" : "#2d6a4f"}`, fontSize: 11, color: "#888", maxWidth: "100%" }}>
+                                <div style={{ fontWeight: 700, color: "#555", marginBottom: 1, fontSize: 10 }}>
+                                  {msg.reply_to.sender_id === profile?.id ? "You" : activeConvo.full_name}
+                                </div>
+                                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {msg.reply_to.content?.slice(0, 60)}{(msg.reply_to.content?.length || 0) > 60 ? "…" : ""}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* ── FIX #3: file type renders FileBubble only, no text blob ── */}
+                            {msg.message_type === "file" && !msg.is_deleted && (
+                              <FileBubble content={msg.content} isMe={isMe} />
+                            )}
+
+                            {msg.message_type === "image" && msg.image_url && !msg.is_deleted && (
                               <img src={msg.image_url} alt="img" className="img-msg" onClick={() => setLightboxImg(msg.image_url!)}
                                 style={{ maxWidth: 240, maxHeight: 280, objectFit: "cover", display: "block", marginBottom: msg.content ? 3 : 0, border: "1.5px solid #e8e2d9" }} />
                             )}
-                            {msg.content && (
+
+                            {/* Only render text bubble for text messages and deleted messages — NOT for file type */}
+                            {msg.message_type !== "file" && (msg.content || msg.is_deleted) && (
                               <div style={{
                                 padding: "9px 13px",
                                 borderRadius: isMe ? (sameSenderPrev ? "16px 4px 4px 16px" : "16px 16px 4px 16px") : (sameSenderPrev ? "4px 16px 16px 4px" : "4px 16px 16px 16px"),
-                                background: isMe ? "#2d6a4f" : "#fff",
-                                color: isMe ? "#fff" : "#1a1a1a",
-                                fontSize: 14, lineHeight: 1.5, wordBreak: "break-word",
+                                background: msg.is_deleted ? "#f5f0e8" : isMe ? "#2d6a4f" : "#fff",
+                                color: msg.is_deleted ? "#bbb" : isMe ? "#fff" : "#1a1a1a",
+                                fontSize: msg.is_deleted ? 12 : 14, lineHeight: 1.5, wordBreak: "break-word",
                                 border: isMe ? "none" : "1.5px solid #e8e2d9",
                                 boxShadow: isMe ? "none" : "0 1px 3px rgba(0,0,0,0.04)",
+                                fontStyle: msg.is_deleted ? "italic" : "normal",
                               }}>
-                                {msg.content}
+                                {msg.is_deleted ? "🚫 Message deleted" : msg.content}
                               </div>
                             )}
+
+                            {reactionEntries.length > 0 && (
+                              <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 4, position: "absolute", bottom: -20, [isMe ? "right" : "left"]: 0 }}>
+                                {reactionEntries.map(([emoji, users]) => (
+                                  <button key={emoji} className={`reaction-pill ${users.includes(profile?.id || "") ? "mine" : ""}`} onClick={() => toggleReaction(msg.id, emoji)}>
+                                    <span style={{ fontSize: 13 }}>{emoji}</span>
+                                    <span style={{ fontSize: 10, color: "#888", fontWeight: 700 }}>{users.length}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
                             {(!sameSenderNext || nextMsg?.sender_id !== msg.sender_id) && (
                               <div style={{ fontSize: 10, color: "#bbb", marginTop: 3, display: "flex", alignItems: "center", gap: 3 }}>
                                 {formatTime(msg.created_at)}
@@ -680,18 +820,77 @@ export default function MessagesPage() {
                               </div>
                             )}
                           </div>
+
+                          {!msg.is_deleted && (
+                            <div className="msg-actions" style={{ display: "flex", alignItems: "center", gap: 3, alignSelf: "center", flexDirection: isMe ? "row" : "row-reverse" }}>
+                              <div style={{ position: "relative" }}>
+                                <button onClick={e => { e.stopPropagation(); setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id); }}
+                                  style={{ width: 26, height: 26, borderRadius: "50%", background: "#f5f0e8", border: "1px solid #e8e2d9", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  😊
+                                </button>
+                                {showReactionPicker === msg.id && (
+                                  <div onClick={e => e.stopPropagation()} style={{ position: "absolute", [isMe ? "right" : "left"]: 0, bottom: 30, background: "#fff", borderRadius: 10, border: "1.5px solid #e8e2d9", padding: "6px 8px", display: "flex", gap: 4, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, animation: "slideUp 0.1s ease" }}>
+                                    {QUICK_REACTIONS.map(emoji => (
+                                      <button key={emoji} onClick={() => toggleReaction(msg.id, emoji)}
+                                        style={{ width: 30, height: 30, borderRadius: 7, border: "none", background: "transparent", fontSize: 18, cursor: "pointer", transition: "transform 0.1s" }}
+                                        onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.3)")}
+                                        onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}>
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <button onClick={() => { setReplyingTo(msg); textareaRef.current?.focus(); }}
+                                style={{ width: 26, height: 26, borderRadius: "50%", background: "#f5f0e8", border: "1px solid #e8e2d9", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                ↩
+                              </button>
+                              {isMe && (
+                                <button onClick={e => { e.stopPropagation(); setContextMenu({ msgId: msg.id, x: e.clientX, y: e.clientY }); }}
+                                  style={{ width: 26, height: 26, borderRadius: "50%", background: "#f5f0e8", border: "1px solid #e8e2d9", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", color: "#888" }}>
+                                  ⋯
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                 ))}
+
+                {typingUsers.length > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", animation: "fadeIn 0.2s ease" }}>
+                    <Avatar profile={activeConvo} size={24} />
+                    <div style={{ background: "#fff", border: "1.5px solid #e8e2d9", borderRadius: "4px 14px 14px 14px", padding: "8px 14px", display: "flex", gap: 3, alignItems: "center" }}>
+                      {[0, 1, 2].map(i => (
+                        <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#bbb", animation: `typingBounce 1.2s ease ${i * 0.2}s infinite` }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div ref={bottomRef} />
               </div>
 
-              {/* Image preview bar */}
+              {replyingTo && (
+                <div style={{ padding: "8px 16px", background: "#f0fdf4", borderTop: "1.5px solid #c6e8d4", display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 3, height: 36, borderRadius: 3, background: "#2d6a4f", flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#2d6a4f", marginBottom: 1 }}>
+                      Replying to {replyingTo.sender_id === profile?.id ? "yourself" : activeConvo.full_name}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {replyingTo.content?.slice(0, 80)}
+                    </div>
+                  </div>
+                  <button onClick={() => setReplyingTo(null)} style={{ background: "none", border: "none", color: "#aaa", fontSize: 16, cursor: "pointer" }}>✕</button>
+                </div>
+              )}
+
               {imagePreview && (
                 <div style={{ padding: "10px 18px", background: "#e8f4e8", borderTop: "1.5px solid #c6e8d4", display: "flex", alignItems: "center", gap: 12 }}>
-                  <img src={imagePreview} style={{ height: 52, width: 52, objectFit: "cover", borderRadius: 7, border: "1.5px solid #c6e8d4" }} />
+                  <img src={imagePreview} alt="preview" style={{ height: 52, width: 52, objectFit: "cover", borderRadius: 7, border: "1.5px solid #c6e8d4" }} />
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 12, color: "#2d6a4f", fontWeight: 600 }}>Image ready to send</p>
                     <p style={{ fontSize: 11, color: "#888" }}>{imageFile?.name}</p>
@@ -699,8 +898,17 @@ export default function MessagesPage() {
                   <button onClick={() => { setImagePreview(null); setImageFile(null); }} style={{ background: "#fce8e8", border: "1.5px solid #fca5a5", borderRadius: 7, color: "#dc2626", fontSize: 12, fontWeight: 600, padding: "4px 10px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Remove</button>
                 </div>
               )}
+              {attachFile && (
+                <div style={{ padding: "10px 18px", background: "#f0f4ff", borderTop: "1.5px solid #c7d2fe", display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 28 }}>📎</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: "#3730a3", fontWeight: 700 }}>File ready to send</p>
+                    <p style={{ fontSize: 11, color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{attachFile.name} · {attachFile.size > 1024*1024 ? (attachFile.size/1024/1024).toFixed(1)+"MB" : Math.round(attachFile.size/1024)+"KB"}</p>
+                  </div>
+                  <button onClick={() => setAttachFile(null)} style={{ background: "#fce8e8", border: "1.5px solid #fca5a5", borderRadius: 7, color: "#dc2626", fontSize: 12, fontWeight: 600, padding: "4px 10px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Remove</button>
+                </div>
+              )}
 
-              {/* Emoji picker */}
               {showEmoji && (
                 <div style={{ padding: "10px 14px", background: "#fff", borderTop: "1.5px solid #e8e2d9", display: "flex", flexWrap: "wrap", gap: 2, animation: "slideUp 0.12s ease" }}>
                   {EMOJI_LIST.map(emoji => (
@@ -709,20 +917,21 @@ export default function MessagesPage() {
                 </div>
               )}
 
-              {/* Input */}
               <div style={{ padding: "10px 14px", borderTop: "1.5px solid #e8e2d9", background: "#fff", display: "flex", gap: 7, alignItems: "flex-end", flexShrink: 0 }}>
                 <button className="tool-btn" onClick={() => fileInputRef.current?.click()} title="Send photo">📷</button>
                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageSelect} />
+                <button className="tool-btn" onClick={() => attachInputRef.current?.click()} title="Attach file">📎</button>
+                <input ref={attachInputRef} type="file" accept="*/*" style={{ display: "none" }} onChange={handleAttachSelect} />
                 <button className="tool-btn" onClick={() => setShowEmoji(p => !p)} title="Emoji" style={{ background: showEmoji ? "#e8f4e8" : "#f5f0e8", borderColor: showEmoji ? "#c6e8d4" : "#e8e2d9" }}>😊</button>
                 <textarea ref={textareaRef} value={newMsg}
-                  onChange={e => { setNewMsg(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 110) + "px"; }}
+                  onChange={e => { handleTyping(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 110) + "px"; }}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                  placeholder="Type a message… (Enter to send, Shift+Enter for new line)"
+                  placeholder="Type a message… (Enter to send)"
                   rows={1}
                   style={{ flex: 1, padding: "9px 13px", borderRadius: 11, border: "1.5px solid #e8e2d9", background: "#faf8f4", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif", resize: "none", maxHeight: 110, lineHeight: 1.5, transition: "border-color 0.15s" }}
                   onFocus={e => e.target.style.borderColor = "#2d6a4f"} onBlur={e => e.target.style.borderColor = "#e8e2d9"} />
-                <button onClick={sendMessage} disabled={(!newMsg.trim() && !imageFile) || sending || uploading} className="send-btn"
-                  style={{ width: 38, height: 38, borderRadius: 10, background: (newMsg.trim() || imageFile) ? "#2d6a4f" : "#e8e2d9", color: (newMsg.trim() || imageFile) ? "#fff" : "#bbb", border: "none", fontSize: 16, cursor: (newMsg.trim() || imageFile) ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <button onClick={sendMessage} disabled={(!newMsg.trim() && !imageFile && !attachFile) || sending || uploading} className="send-btn"
+                  style={{ width: 38, height: 38, borderRadius: 10, background: (newMsg.trim() || imageFile || attachFile) ? "#2d6a4f" : "#e8e2d9", color: (newMsg.trim() || imageFile || attachFile) ? "#fff" : "#bbb", border: "none", fontSize: 16, cursor: (newMsg.trim() || imageFile || attachFile) ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   {uploading ? "⏳" : sending ? "…" : "↑"}
                 </button>
               </div>
@@ -731,11 +940,61 @@ export default function MessagesPage() {
         </div>
       </div>
 
-      {/* Lightbox */}
       {lightboxImg && (
         <div onClick={() => setLightboxImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, cursor: "zoom-out", animation: "fadeIn 0.15s ease" }}>
-          <img src={lightboxImg} style={{ maxWidth: "88vw", maxHeight: "88vh", objectFit: "contain", borderRadius: 10 }} onClick={e => e.stopPropagation()} />
+          <img src={lightboxImg} alt="full" style={{ maxWidth: "88vw", maxHeight: "88vh", objectFit: "contain", borderRadius: 10 }} onClick={e => e.stopPropagation()} />
           <button onClick={() => setLightboxImg(null)} style={{ position: "absolute", top: 18, right: 18, background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", width: 34, height: 34, borderRadius: "50%", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        </div>
+      )}
+
+      {contextMenu && (
+        <div onClick={e => e.stopPropagation()} style={{ position: "fixed", top: contextMenu.y, left: contextMenu.x, background: "#fff", borderRadius: 10, border: "1.5px solid #e8e2d9", boxShadow: "0 8px 28px rgba(0,0,0,0.12)", zIndex: 200, padding: 4, minWidth: 160, animation: "slideUp 0.1s ease" }}>
+          <div className="ctx-menu-item" onClick={() => { const msg = messages.find(m => m.id === contextMenu.msgId); if (msg) { setReplyingTo(msg); textareaRef.current?.focus(); } setContextMenu(null); }}>↩ Reply</div>
+          <div className="ctx-menu-item danger" onClick={() => deleteMessage(contextMenu.msgId)}>🗑️ Delete for everyone</div>
+        </div>
+      )}
+
+      {showCreditModal && activeConvo && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20, animation: "fadeIn 0.15s ease" }}>
+          <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 400, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a", marginBottom: 2 }}>💰 Send Credits</div>
+                <div style={{ fontSize: 12, color: "#aaa" }}>To {activeConvo.full_name} · Your balance: <strong style={{ color: "#2d6a4f" }}>{profile?.credits} cr</strong></div>
+              </div>
+              <button onClick={() => setShowCreditModal(false)} style={{ background: "none", border: "none", color: "#aaa", fontSize: 20, cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "#888", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Amount</label>
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                {[5, 10, 20, 50].map(amt => (
+                  <button key={amt} onClick={() => setCreditAmount(String(amt))}
+                    style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${creditAmount === String(amt) ? "#2d6a4f" : "#e8e2d9"}`, background: creditAmount === String(amt) ? "#e8f4e8" : "#faf8f4", color: creditAmount === String(amt) ? "#2d6a4f" : "#555", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+                    {amt}
+                  </button>
+                ))}
+              </div>
+              <input value={creditAmount} onChange={e => setCreditAmount(e.target.value.replace(/\D/g, ""))} placeholder="Or enter custom amount..."
+                style={{ width: "100%", padding: "10px 13px", borderRadius: 10, border: "1.5px solid #e8e2d9", background: "#faf8f4", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }} />
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "#888", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Note (optional)</label>
+              <input value={creditNote} onChange={e => setCreditNote(e.target.value)} placeholder="e.g. Thanks for the session!"
+                style={{ width: "100%", padding: "10px 13px", borderRadius: 10, border: "1.5px solid #e8e2d9", background: "#faf8f4", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }} />
+            </div>
+            {creditAmount && parseInt(creditAmount) > (profile?.credits || 0) && (
+              <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: "#fce8e8", border: "1px solid #fca5a5", fontSize: 12, color: "#dc2626", fontWeight: 600 }}>
+                ⚠️ Insufficient credits. You have {profile?.credits} cr.
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setShowCreditModal(false)} style={{ flex: 1, padding: "11px", borderRadius: 10, border: "1.5px solid #e8e2d9", background: "transparent", color: "#888", fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
+              <button onClick={handleSendCredits} disabled={sendingCredits || !creditAmount || parseInt(creditAmount) <= 0 || parseInt(creditAmount) > (profile?.credits || 0)}
+                style={{ flex: 2, padding: "11px", borderRadius: 10, border: "none", background: creditAmount && parseInt(creditAmount) > 0 && parseInt(creditAmount) <= (profile?.credits || 0) ? "#2d6a4f" : "#e8e2d9", color: creditAmount && parseInt(creditAmount) > 0 ? "#fff" : "#bbb", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+                {sendingCredits ? "Sending…" : `💰 Send ${creditAmount || "0"} Credits`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
