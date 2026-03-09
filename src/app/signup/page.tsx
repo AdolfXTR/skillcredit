@@ -1,18 +1,11 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const otpRefs = [
-    useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null),
-  ];
   const [form, setForm] = useState({
     email: "", password: "", confirmPassword: "", username: "", full_name: "",
   });
@@ -29,7 +22,7 @@ export default function SignupPage() {
 
   const progress = (current: number) => (
     <div style={{ display: "flex", gap: 6, marginBottom: 28 }}>
-      {[1, 2, 3].map(s => (
+      {[1, 2].map(s => (
         <div key={s} style={{ height: 4, flex: 1, borderRadius: 999, background: s <= current ? "#2d6a4f" : "#e8e0d0", transition: "background 0.3s" }} />
       ))}
     </div>
@@ -50,7 +43,7 @@ export default function SignupPage() {
     setStep(2);
   }
 
-  // ── Step 2 → send OTP ──
+  // ── Step 2 → create account directly ──
   async function handleStep2() {
     setError("");
     if (form.password.length < 8) { setError("Password must be at least 8 characters."); return; }
@@ -61,67 +54,19 @@ export default function SignupPage() {
       password: form.password,
       options: {
         data: { username: form.username, full_name: form.full_name },
+        emailRedirectTo: undefined,
       },
     });
     if (signUpError) { setError(signUpError.message); setLoading(false); return; }
     if (data.user) {
-      setStep(3);
-      startResendCooldown();
-    }
-    setLoading(false);
-  }
-
-  // ── Step 3 — verify OTP ──
-  async function handleVerifyOtp() {
-    const code = otp.join("");
-    if (code.length < 6) { setError("Please enter the full 6-digit code."); return; }
-    setLoading(true);
-    setError("");
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      email: form.email, token: code, type: "signup",
-    });
-    if (verifyError) { setError("Invalid or expired code. Please try again."); setLoading(false); return; }
-    // Signup bonus
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
+      // Signup bonus
       await supabase.from("credit_transactions").insert({
-        user_id: user.id, amount: 20, type: "signup_bonus",
+        user_id: data.user.id, amount: 20, type: "signup_bonus",
         description: "Welcome to SkillCredit! 🎁 20 free credits to get started.",
       });
+      setStep(3);
     }
-    setStep(4);
     setLoading(false);
-  }
-
-  async function handleResendOtp() {
-    if (resendCooldown > 0) return;
-    const { error } = await supabase.auth.resend({ type: "signup", email: form.email });
-    if (error) { setError("Failed to resend. Please wait a moment."); return; }
-    startResendCooldown();
-  }
-
-  function startResendCooldown() {
-    setResendCooldown(60);
-    const interval = setInterval(() => {
-      setResendCooldown(prev => { if (prev <= 1) { clearInterval(interval); return 0; } return prev - 1; });
-    }, 1000);
-  }
-
-  function handleOtpInput(index: number, value: string) {
-    const digit = value.replace(/\D/g, "").slice(-1);
-    const newOtp = [...otp];
-    newOtp[index] = digit;
-    setOtp(newOtp);
-    if (digit && index < 5) otpRefs[index + 1].current?.focus();
-  }
-
-  function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
-    if (e.key === "Backspace" && !otp[index] && index > 0) otpRefs[index - 1].current?.focus();
-  }
-
-  function handleOtpPaste(e: React.ClipboardEvent) {
-    const paste = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    if (paste.length === 6) { setOtp(paste.split("")); otpRefs[5].current?.focus(); }
   }
 
   return (
@@ -130,9 +75,6 @@ export default function SignupPage() {
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
         *,*::before,*::after { box-sizing: border-box }
         input:focus { border-color: #2d6a4f !important }
-        .otp-box { width:48px; height:56px; border-radius:12px; border:1.5px solid #e8e0d0; font-size:22px; font-weight:800; text-align:center; background:#fafaf8; font-family:'DM Sans',sans-serif; transition:border-color .15s,box-shadow .15s; outline:none }
-        .otp-box:focus { border-color:#2d6a4f !important; box-shadow:0 0 0 3px rgba(45,106,79,0.12) }
-        .otp-box.filled { border-color:#2d6a4f; background:#f0faf4 }
         .btn { width:100%; padding:14px; background:#2d6a4f; color:white; border:none; border-radius:12px; font-size:15px; font-weight:700; cursor:pointer; font-family:'DM Sans',sans-serif; transition:background .2s }
         .btn:hover { background:#235c42 }
         .btn:disabled { background:#a8c5b5; cursor:not-allowed }
@@ -241,62 +183,17 @@ export default function SignupPage() {
 
               {error && <p style={{ color:"#dc2626", fontSize:13, marginTop:12, textAlign:"center" }}>{error}</p>}
               <button className="btn" style={{ marginTop:24 }} onClick={handleStep2} disabled={loading}>
-                {loading ? "Sending verification code…" : "Create account — get 20 credits 🎁"}
+                {loading ? "Creating account…" : "Create account — get 20 credits 🎁"}
               </button>
             </div>
           )}
 
-          {/* ── STEP 3 — OTP ── */}
+          {/* ── STEP 3 — Success ── */}
           {step === 3 && (
-            <div className="fade">
-              <div style={{ width:52, height:52, borderRadius:14, background:"#e8f4e8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, marginBottom:16 }}>📧</div>
-              <h1 style={{ fontFamily:"'Fraunces',Georgia,serif", fontSize:26, fontWeight:800, color:"#1a1a1a", marginBottom:8 }}>Check your email</h1>
-              <p style={{ fontSize:14, color:"#888", lineHeight:1.6, marginBottom:28 }}>
-                We sent a 6-digit code to <strong style={{ color:"#1a1a1a" }}>{form.email}</strong>
-              </p>
-              {progress(3)}
-
-              {/* OTP boxes */}
-              <div style={{ display:"flex", gap:10, justifyContent:"center", marginBottom:24 }} onPaste={handleOtpPaste}>
-                {otp.map((digit, i) => (
-                  <input
-                    key={i} ref={otpRefs[i]}
-                    className={`otp-box${digit ? " filled" : ""}`}
-                    type="text" inputMode="numeric" maxLength={1} value={digit}
-                    onChange={e => handleOtpInput(i, e.target.value)}
-                    onKeyDown={e => handleOtpKeyDown(i, e)}
-                  />
-                ))}
-              </div>
-
-              {error && <p style={{ color:"#dc2626", fontSize:13, marginBottom:12, textAlign:"center" }}>{error}</p>}
-
-              <button className="btn" onClick={handleVerifyOtp} disabled={loading || otp.join("").length < 6}>
-                {loading ? "Verifying…" : "Verify & finish →"}
-              </button>
-
-              <div style={{ textAlign:"center", marginTop:18 }}>
-                <p style={{ fontSize:13, color:"#888" }}>
-                  Didn't get it?{" "}
-                  {resendCooldown > 0
-                    ? <span style={{ color:"#bbb" }}>Resend in {resendCooldown}s</span>
-                    : <button onClick={handleResendOtp} style={{ background:"none", border:"none", color:"#2d6a4f", fontWeight:700, cursor:"pointer", fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>Resend code</button>
-                  }
-                </p>
-                <button onClick={() => { setStep(1); setOtp(["","","","","",""]); setError(""); }}
-                  style={{ background:"none", border:"none", color:"#bbb", fontSize:12, cursor:"pointer", marginTop:4, fontFamily:"'DM Sans',sans-serif" }}>
-                  Wrong email? Start over
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ── STEP 4 — Success ── */}
-          {step === 4 && (
             <div className="fade" style={{ textAlign:"center", padding:"20px 0" }}>
               <div style={{ fontSize:64, marginBottom:20 }}>🌱</div>
               <h1 style={{ fontFamily:"'Fraunces',Georgia,serif", fontSize:28, fontWeight:800, color:"#1a1a1a", marginBottom:12 }}>Welcome to SkillCredit!</h1>
-              <p style={{ fontSize:15, color:"#555", lineHeight:1.6, marginBottom:8 }}>Your account is verified and ready.</p>
+              <p style={{ fontSize:15, color:"#555", lineHeight:1.6, marginBottom:8 }}>Your account is ready.</p>
               <div style={{ background:"#e8f4e8", borderRadius:12, padding:"16px 20px", marginBottom:28, display:"inline-block" }}>
                 <p style={{ fontSize:14, color:"#2d6a4f", fontWeight:600, margin:0 }}>🎁 20 credits have been added to your wallet!</p>
               </div>
@@ -307,7 +204,7 @@ export default function SignupPage() {
           )}
         </div>
 
-        {step !== 4 && (
+        {step !== 3 && (
           <p style={{ textAlign:"center", marginTop:20, fontSize:14, color:"#888" }}>
             Already have an account?{" "}
             <a href="/login" style={{ color:"#2d6a4f", fontWeight:600, textDecoration:"none" }}>Log in</a>
