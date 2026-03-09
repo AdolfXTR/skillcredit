@@ -652,37 +652,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── STATS ROW ── */}
-        <div className="stats-row" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 14, animation: "fadeUp .4s .07s ease both" }}>
-          {[
-            { icon: "💰", label: "Credits",      value: profile.credits, sub: "in wallet",    color: "#2d6a4f", bg: "#f0fdf4", href: "/wallet"      },
-            { icon: "⚡", label: "XP Earned",    value: profile.xp,      sub: levelInfo.name, color: "#7c3aed", bg: "#f5f3ff", href: "/leaderboard" },
-            { icon: "📅", label: "Sessions",     value: sessions,         sub: "completed",    color: "#0891b2", bg: "#e0f2fe", href: "/sessions"    },
-            { icon: "🏆", label: "Bounties Won", value: bountiesWon,      sub: "solved",       color: "#b45309", bg: "#fffbeb", href: "/bounties"    },
-          ].map(s => (
-            <a key={s.label} href={s.href} className="card stat-card" style={{ padding: "18px 20px", display: "block" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <div style={{ width: 30, height: 30, borderRadius: 9, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>{s.icon}</div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em" }}>{s.label}</span>
-              </div>
-              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 30, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.value}</div>
-              <div style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginTop: 4 }}>{s.sub}</div>
-            </a>
-          ))}
-          <a href="/ratings" className="card stat-card" style={{ padding: "18px 20px", display: "block" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: "#fffbeb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>⭐</div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em" }}>Rating</span>
-            </div>
-            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 30, fontWeight: 900, color: avgRating !== null ? "#f59e0b" : "#d1cec8", lineHeight: 1 }}>{ratingDisplay}</div>
-            <div style={{ marginTop: 4, marginBottom: 2 }}><StarRating value={avgRating} /></div>
-            <div style={{ fontSize: 10, color: "#bbb", fontWeight: 600 }}>{ratingSubLabel}</div>
-            {ratingPercentile && <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 800, marginTop: 3 }}>{ratingPercentile} of teachers</div>}
-          </a>
-        </div>
-
         {/* ── TODAY'S GOAL STRIP ── */}
-        <div style={{ marginBottom: 14, animation: "fadeUp .4s .1s ease both" }}>
+        <div style={{ marginBottom: 14, animation: "fadeUp .4s .07s ease both" }}>
           <div style={{ background: todaySession ? "linear-gradient(135deg,#f0fdf4,#dcfce7)" : "linear-gradient(135deg,#fff7ed,#fef3c7)", border: `1.5px solid ${todaySession ? "#86efac" : "#fed7aa"}`, borderRadius: 16, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
             <div style={{ width: 44, height: 44, borderRadius: 13, background: todaySession ? "#2d6a4f22" : "#fb923c22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>
               {todaySession ? "✅" : "🎯"}
@@ -710,6 +681,35 @@ export default function Dashboard() {
               {dayStreak > 0 && <div style={{ fontSize: 9, color: "#aaa", marginTop: 1 }}>Keep it up!</div>}
             </div>
           </div>
+        </div>
+
+        {/* ── STATS ROW ── */}
+        <div className="stats-row" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 14, animation: "fadeUp .4s .1s ease both" }}>
+          {[
+            { icon: "💰", label: "Credits",      value: profile.credits, sub: "in wallet",    color: "#2d6a4f", bg: "#f0fdf4", href: "/wallet"      },
+            { icon: "⚡", label: "XP Earned",    value: profile.xp,      sub: levelInfo.name, color: "#7c3aed", bg: "#f5f3ff", href: "/leaderboard" },
+            { icon: "📅", label: "Sessions",     value: sessions,         sub: "completed",    color: "#0891b2", bg: "#e0f2fe", href: "/sessions"    },
+            { icon: "🏆", label: "Bounties Won", value: bountiesWon,      sub: "solved",       color: "#b45309", bg: "#fffbeb", href: "/bounties"    },
+          ].map(s => (
+            <a key={s.label} href={s.href} className="card stat-card" style={{ padding: "18px 20px", display: "block" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 9, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>{s.icon}</div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em" }}>{s.label}</span>
+              </div>
+              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 30, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.value}</div>
+              <div style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginTop: 4 }}>{s.sub}</div>
+            </a>
+          ))}
+          <a href="/ratings" className="card stat-card" style={{ padding: "18px 20px", display: "block" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 9, background: "#fffbeb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>⭐</div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em" }}>Rating</span>
+            </div>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 30, fontWeight: 900, color: avgRating !== null ? "#f59e0b" : "#d1cec8", lineHeight: 1 }}>{ratingDisplay}</div>
+            <div style={{ marginTop: 4, marginBottom: 2 }}><StarRating value={avgRating} /></div>
+            <div style={{ fontSize: 10, color: "#bbb", fontWeight: 600 }}>{ratingSubLabel}</div>
+            {ratingPercentile && <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 800, marginTop: 3 }}>{ratingPercentile} of teachers</div>}
+          </a>
         </div>
 
         {/* ── MAIN GRID ── */}
