@@ -12,6 +12,8 @@ type Bounty = {
     full_name: string; username: string; level: string;
     avatar_url?: string | null; xp_multiplier?: number;
     champion_title?: string | null; champion_streak?: number;
+    teaching_title?: string | null; teaching_title_ends_at?: string | null;
+    rating_title?: string | null; rating_title_ends_at?: string | null;
   };
 };
 type Answer = {
@@ -22,6 +24,8 @@ type Answer = {
     full_name: string; username: string; level: string;
     avatar_url?: string | null; xp_multiplier?: number;
     champion_title?: string | null;
+    teaching_title?: string | null; teaching_title_ends_at?: string | null;
+    rating_title?: string | null; rating_title_ends_at?: string | null;
   };
 };
 type CurrentUser = { id: string; full_name: string; username: string; credits: number; level: string; avatar_url?: string | null; xp_multiplier?: number; };
@@ -57,6 +61,40 @@ function getRank(xp_multiplier?: number): 0|1|2|3 {
   if (xp_multiplier >= 1.15) return 2;
   return 3;
 }
+function isActiveTitle(endsAt?: string | null) {
+  if (!endsAt) return false;
+  return new Date(endsAt) > new Date();
+}
+
+// ── Perk badges row (champion + teaching + rating) ──
+function PerkBadges({ profile }: { profile: { xp_multiplier?: number; champion_title?: string | null; teaching_title?: string | null; teaching_title_ends_at?: string | null; rating_title?: string | null; rating_title_ends_at?: string | null } }) {
+  const rank = getRank(profile.xp_multiplier);
+  const hasTeaching = profile.teaching_title && isActiveTitle(profile.teaching_title_ends_at);
+  const hasRating = profile.rating_title && isActiveTitle(profile.rating_title_ends_at);
+  if (!rank && !hasTeaching && !hasRating) return null;
+  return (
+    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+      {rank > 0 && profile.champion_title && (
+        <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 999,
+          background: rank===1?"rgba(255,215,0,0.15)":rank===2?"rgba(192,192,192,0.15)":"rgba(205,127,50,0.15)",
+          color: rank===1?"#b8860b":rank===2?"#888":"#a0522d",
+          border: `1px solid ${rank===1?"rgba(255,215,0,0.4)":rank===2?"rgba(192,192,192,0.4)":"rgba(205,127,50,0.4)"}` }}>
+          {rank===1?"👑":rank===2?"🥈":"🥉"} {profile.champion_title}
+        </span>
+      )}
+      {hasTeaching && (
+        <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 999, background: "#eef6f2", color: "#2d6a4f", border: "1px solid #c6e8d4" }}>
+          🎓 {profile.teaching_title}
+        </span>
+      )}
+      {hasRating && (
+        <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 999, background: "#fefce8", color: "#92400e", border: "1px solid #fde68a" }}>
+          ⭐ {profile.rating_title}
+        </span>
+      )}
+    </div>
+  );
+}
 
 // ── Premium avatar with gold/silver/bronze rings + champion badge ──
 function PremiumAvatar({ name, level, avatarUrl, xp_multiplier, size = 38 }:
@@ -84,7 +122,7 @@ function PremiumAvatar({ name, level, avatarUrl, xp_multiplier, size = 38 }:
   );
 }
 
-// ── XP Multiplier badge (shown next to username) ──
+// ── XP Multiplier badge ──
 function XPBadge({ xp_multiplier }: { xp_multiplier?: number }) {
   const rank = getRank(xp_multiplier);
   if (!rank) return null;
@@ -193,7 +231,7 @@ export default function BountyDetailPage() {
     if (!id) { setLoading(false); return; }
 
     const { data: b } = await supabase.from("bounties")
-      .select("*,profiles(full_name,username,level,avatar_url,xp_multiplier,champion_title,champion_streak)")
+      .select("*,profiles(full_name,username,level,avatar_url,xp_multiplier,champion_title,champion_streak,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at)")
       .eq("id", id).single();
     if (b) setBounty(b as Bounty);
 
@@ -207,7 +245,7 @@ export default function BountyDetailPage() {
 
   async function loadAnswers() {
     const { data } = await supabase.from("bounty_answers")
-      .select("*,profiles(full_name,username,level,avatar_url,xp_multiplier,champion_title)")
+      .select("*,profiles(full_name,username,level,avatar_url,xp_multiplier,champion_title,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at)")
       .eq("bounty_id", id).order("created_at", { ascending: true });
     setAnswers((data as Answer[]) || []);
   }
@@ -307,7 +345,6 @@ export default function BountyDetailPage() {
   const placementsAssigned = answers.filter(a => a.placement !== null).length;
   const posterRank         = getRank(bounty.profiles?.xp_multiplier);
 
-  // Placement card styles
   const placementConfig: Record<number, { bg: string; border: string; badge: string; color: string; glow: string }> = {
     1: { bg:"linear-gradient(135deg,#fffbeb,#fef3c7)", border:"#fde68a", badge:"🥇", color:"#b45309", glow:"rgba(255,215,0,0.2)" },
     2: { bg:"linear-gradient(135deg,#f8f8f8,#f0f0f0)", border:"#d1d5db", badge:"🥈", color:"#6b7280", glow:"rgba(192,192,192,0.2)" },
@@ -336,7 +373,6 @@ export default function BountyDetailPage() {
         textarea:focus,input:focus{outline:none;border-color:#2d6a4f!important;box-shadow:0 0 0 3px rgba(45,106,79,.1);}
       `}</style>
 
-      {/* LIGHTBOX */}
       {lightbox && (
         <div onClick={() => setLightbox(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out",padding:24,animation:"fadeIn .2s ease" }}>
           <img src={lightbox} alt="full" style={{ maxWidth:"88vw",maxHeight:"88vh",borderRadius:16 }} />
@@ -356,7 +392,7 @@ export default function BountyDetailPage() {
           <span style={{ fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:900,color:"#1a1a1a" }}>Credit</span>
         </a>
         <div style={{ display:"flex",gap:2 }}>
-          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
+          {[["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
             <a key={l} href={h} className={`nav-link${h==="/bounties"?" active":""}`}>{l}</a>
           ))}
         </div>
@@ -373,7 +409,6 @@ export default function BountyDetailPage() {
 
       <div style={{ maxWidth:800,margin:"0 auto",padding:"32px 20px" }}>
 
-        {/* CLOSED BANNER */}
         {isClosed && (
           <div style={{ background:"#f5f5f4",borderRadius:14,padding:"14px 20px",marginBottom:16,display:"flex",alignItems:"center",gap:12,border:"1.5px solid #e7e5e4",animation:"fadeUp .3s ease" }}>
             <span style={{ fontSize:22 }}>🔒</span>
@@ -406,27 +441,17 @@ export default function BountyDetailPage() {
             </div>
           )}
 
-          {/* POSTER INFO — with premium avatar */}
+          {/* POSTER INFO */}
           <div style={{ display:"flex",alignItems:"center",gap:12,paddingTop:16,borderTop:"1px solid #f0ece4" }}>
             <PremiumAvatar name={bounty.profiles?.full_name||"?"} level={bounty.profiles?.level}
               avatarUrl={bounty.profiles?.avatar_url} xp_multiplier={bounty.profiles?.xp_multiplier} size={40} />
-            <div>
-              <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:2 }}>
+            <div style={{ flex:1 }}>
+              <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4 }}>
                 <span style={{ fontSize:14,fontWeight:700,color:"#1a1a1a" }}>{bounty.profiles?.full_name}</span>
-                {bounty.profiles?.champion_title && posterRank > 0 && (
-                  <span style={{
-                    fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:999,
-                    background:posterRank===1?"rgba(255,215,0,0.15)":posterRank===2?"rgba(192,192,192,0.15)":"rgba(205,127,50,0.15)",
-                    color:posterRank===1?"#b8860b":posterRank===2?"#888":"#a0522d",
-                    border:`1px solid ${posterRank===1?"rgba(255,215,0,0.4)":posterRank===2?"rgba(192,192,192,0.4)":"rgba(205,127,50,0.4)"}`,
-                  }}>
-                    {posterRank===1?"👑":posterRank===2?"🥈":"🥉"} {bounty.profiles.champion_title}
-                    {(bounty.profiles.champion_streak||0)>1?` ×${bounty.profiles.champion_streak} 🔥`:""}
-                  </span>
-                )}
                 <XPBadge xp_multiplier={bounty.profiles?.xp_multiplier} />
               </div>
-              <div style={{ fontSize:11,color:"#aaa" }}>@{bounty.profiles?.username} · {new Date(bounty.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+              <div style={{ fontSize:11,color:"#aaa",marginBottom:5 }}>@{bounty.profiles?.username} · {new Date(bounty.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+              <PerkBadges profile={bounty.profiles} />
             </div>
           </div>
         </div>
@@ -455,7 +480,6 @@ export default function BountyDetailPage() {
           </div>
         </div>
 
-        {/* JUDGING PANEL (poster only) */}
         {isPoster && (
           <div style={{ background:"#fff",borderRadius:18,border:"1.5px solid #e8e2d9",padding:"22px 26px",marginBottom:16,animation:"fadeUp .3s .1s ease both" }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:answers.length>0?14:0 }}>
@@ -470,7 +494,6 @@ export default function BountyDetailPage() {
           </div>
         )}
 
-        {/* NOT LOGGED IN */}
         {!currentUser && (
           <div style={{ background:"#fff",borderRadius:18,border:"1.5px solid #e8e2d9",padding:"40px 24px",textAlign:"center",marginBottom:16 }}>
             <div style={{ fontSize:44,marginBottom:14 }}>🔒</div>
@@ -480,7 +503,6 @@ export default function BountyDetailPage() {
           </div>
         )}
 
-        {/* ANSWER FORM */}
         {currentUser && !isPoster && !hasAnswered && isOpen && (
           <div style={{ background:"#fff",borderRadius:18,border:"1.5px solid #e8e2d9",padding:"26px 28px",marginBottom:16,animation:"fadeUp .3s .1s ease both",boxShadow:"0 4px 20px rgba(0,0,0,.04)" }}>
             <div style={{ fontSize:16,fontWeight:800,color:"#1a1a1a",marginBottom:6 }}>Submit Your Answer 💡</div>
@@ -519,7 +541,6 @@ export default function BountyDetailPage() {
           </div>
         )}
 
-        {/* EXPIRED + NOT ANSWERED */}
         {currentUser && !isPoster && !hasAnswered && isExpired && (
           <div style={{ background:"#f5f5f4",borderRadius:16,padding:"22px",textAlign:"center",border:"1.5px solid #e7e5e4",marginBottom:16 }}>
             <p style={{ fontSize:14,color:"#666",fontWeight:700 }}>⏰ This bounty expired before you answered.</p>
@@ -555,7 +576,6 @@ export default function BountyDetailPage() {
                       boxShadow: pc ? `0 4px 20px ${pc.glow}` : "0 2px 8px rgba(0,0,0,.03)",
                       animation:`fadeUp .3s ${idx*.05}s ease both`,
                     }}>
-                      {/* Placement ribbon */}
                       {pc && (
                         <div style={{ position:"absolute",top:0,right:0,background:placement===1?"linear-gradient(135deg,#f59e0b,#d97706)":placement===2?"linear-gradient(135deg,#9ca3af,#6b7280)":"linear-gradient(135deg,#cd7f32,#a0522d)",color:"#fff",fontSize:12,fontWeight:800,padding:"5px 16px",borderBottomLeftRadius:12 }}>
                           {pc.badge} {placement===1?"1st":placement===2?"2nd":"3rd"} Place · +{answer.credits_earned} cr
@@ -569,19 +589,14 @@ export default function BountyDetailPage() {
                         <PremiumAvatar name={answer.profiles?.full_name||"?"} level={answer.profiles?.level}
                           avatarUrl={answer.profiles?.avatar_url} xp_multiplier={answer.profiles?.xp_multiplier} size={40} />
                         <div style={{ flex:1 }}>
-                          <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                          <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap" }}>
                             <span style={{ fontSize:14,fontWeight:700,color:"#1a1a1a" }}>{answer.profiles?.full_name}</span>
-                            {answer.profiles?.champion_title && ansRank > 0 && (
-                              <span style={{
-                                fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:999,
-                                background:ansRank===1?"rgba(255,215,0,0.15)":ansRank===2?"rgba(192,192,192,0.15)":"rgba(205,127,50,0.15)",
-                                color:ansRank===1?"#b8860b":ansRank===2?"#888":"#a0522d",
-                              }}>
-                                {ansRank===1?"👑":ansRank===2?"🥈":"🥉"} {answer.profiles.champion_title}
-                              </span>
-                            )}
                             <XPBadge xp_multiplier={answer.profiles?.xp_multiplier} />
                             <span style={{ fontSize:11,color:"#aaa",marginLeft:"auto" }}>#{idx+1} · {new Date(answer.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+                          </div>
+                          {/* Perk badges for answerer */}
+                          <div style={{ marginBottom:10 }}>
+                            <PerkBadges profile={answer.profiles} />
                           </div>
                           <p style={{ fontSize:14,color:"#555",lineHeight:1.75,whiteSpace:"pre-wrap",marginBottom:answer.image_url?14:0 }}>{answer.content}</p>
                           {answer.image_url && (
@@ -592,7 +607,6 @@ export default function BountyDetailPage() {
                             </div>
                           )}
 
-                          {/* Award buttons */}
                           {isPoster && !answer.placement && !isClosed && (
                             <div style={{ display:"flex",gap:8,alignItems:"center",paddingTop:12,borderTop:"1px solid #f0ece4",flexWrap:"wrap" }}>
                               <span style={{ fontSize:12,color:"#aaa",fontWeight:600 }}>Award:</span>

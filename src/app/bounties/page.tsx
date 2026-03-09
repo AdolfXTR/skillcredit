@@ -7,7 +7,12 @@ type Bounty = {
   credit_reward: number; first_place_pct: number; second_place_pct: number;
   third_place_pct: number; status: string; deadline: string; created_at: string;
   poster_id: string;
-  profiles: { full_name: string; username: string; level: string; avatar_url?: string | null; xp_multiplier?: number; champion_title?: string | null };
+  profiles: {
+    full_name: string; username: string; level: string; avatar_url?: string | null;
+    xp_multiplier?: number; champion_title?: string | null;
+    teaching_title?: string | null; teaching_title_ends_at?: string | null;
+    rating_title?: string | null; rating_title_ends_at?: string | null;
+  };
   bounty_answers: { id: string }[];
 };
 
@@ -42,6 +47,10 @@ function getRank(xp_multiplier?: number): 0|1|2|3 {
   if (xp_multiplier >= 1.15) return 2;
   return 3;
 }
+function isActiveTitle(endsAt?: string | null) {
+  if (!endsAt) return false;
+  return new Date(endsAt) > new Date();
+}
 
 function PremiumAvatar({ name, level, avatarUrl, xp_multiplier, size = 28 }:
   { name: string; level?: string; avatarUrl?: string | null; xp_multiplier?: number; size?: number }) {
@@ -66,6 +75,41 @@ function PremiumAvatar({ name, level, avatarUrl, xp_multiplier, size = 28 }:
       </div>
       {badge && <span style={{ position:"absolute", bottom:-3, right:-5, fontSize:size*0.38, lineHeight:1, filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.5))", zIndex:2 }}>{badge}</span>}
     </div>
+  );
+}
+
+// ── Perk badges (champion + teaching + rating) ──
+function PerkBadges({ profile }: {
+  profile: {
+    xp_multiplier?: number; champion_title?: string | null;
+    teaching_title?: string | null; teaching_title_ends_at?: string | null;
+    rating_title?: string | null; rating_title_ends_at?: string | null;
+  }
+}) {
+  const rank = getRank(profile.xp_multiplier);
+  const hasTeaching = profile.teaching_title && isActiveTitle(profile.teaching_title_ends_at);
+  const hasRating = profile.rating_title && isActiveTitle(profile.rating_title_ends_at);
+  if (!rank && !hasTeaching && !hasRating) return null;
+  return (
+    <span style={{ display:"inline-flex", gap:4, flexWrap:"wrap", alignItems:"center" }}>
+      {rank > 0 && profile.champion_title && (
+        <span style={{ fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999,
+          background:rank===1?"rgba(255,215,0,0.15)":rank===2?"rgba(192,192,192,0.15)":"rgba(205,127,50,0.15)",
+          color:rank===1?"#b8860b":rank===2?"#888":"#a0522d" }}>
+          {rank===1?"👑":rank===2?"🥈":"🥉"} {profile.champion_title}
+        </span>
+      )}
+      {hasTeaching && (
+        <span style={{ fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999, background:"#eef6f2", color:"#2d6a4f", border:"1px solid #c6e8d4" }}>
+          🎓 {profile.teaching_title}
+        </span>
+      )}
+      {hasRating && (
+        <span style={{ fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999, background:"#fefce8", color:"#92400e", border:"1px solid #fde68a" }}>
+          ⭐ {profile.rating_title}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -135,7 +179,7 @@ export default function BountiesPage() {
   async function fetchBounties() {
     setLoading(true);
     const { data } = await supabase.from("bounties")
-      .select(`*, profiles(full_name,username,level,avatar_url,xp_multiplier,champion_title), bounty_answers(id)`)
+      .select(`*, profiles(full_name,username,level,avatar_url,xp_multiplier,champion_title,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at), bounty_answers(id)`)
       .eq("status", "open").order("created_at", { ascending: false });
     setBounties((data as Bounty[]) || []);
     setLoading(false);
@@ -153,7 +197,7 @@ export default function BountiesPage() {
     const reward = parseInt(rewardInput);
     if (!newBounty.title.trim())       { setPostError("Please enter a title.");               return; }
     if (!newBounty.description.trim()) { setPostError("Please enter a description.");          return; }
-    if (isNaN(reward) || reward < 5)   { setPostError("Minimum reward is 5 credits.");        return; }
+    if (isNaN(reward) || reward < 10)   { setPostError("Minimum reward is 10 credits.");        return; }
     if (reward > user.credits)         { setPostError(`You only have ${user.credits} credits.`); return; }
     setPosting(true); setPostError("");
     const { error: deductErr } = await supabase.rpc("deduct_credits", { user_id: user.id, amount: reward });
@@ -177,7 +221,7 @@ export default function BountiesPage() {
   }
 
   const rewardNum = parseInt(rewardInput) || 0;
-  const rewardValid = rewardNum >= 5 && rewardNum <= (user?.credits || 0);
+  const rewardValid = rewardNum >= 10 && rewardNum <= (user?.credits || 0);
 
   const filtered = bounties
     .filter(b => b.title.toLowerCase().includes(search.toLowerCase()) || b.description.toLowerCase().includes(search.toLowerCase()))
@@ -225,7 +269,7 @@ export default function BountiesPage() {
           <span style={{ fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:900,color:"#1a1a1a" }}>Credit</span>
         </a>
         <div style={{ display:"flex",gap:2 }}>
-          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
+          {[["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
             <a key={l} href={h} className={`nav-a${h==="/bounties"?" active":""}`}>{l}</a>
           ))}
         </div>
@@ -289,7 +333,6 @@ export default function BountiesPage() {
               const tl  = getTimeLeft(bounty.deadline);
               const ac  = bounty.bounty_answers?.length || 0;
               const isExpired = new Date(bounty.deadline).getTime() < Date.now();
-              const rank = getRank(bounty.profiles?.xp_multiplier);
               return (
                 <div key={bounty.id} className="bcard"
                   onClick={() => window.location.href = user ? `/bounties/${bounty.id}` : "/login"}
@@ -312,20 +355,14 @@ export default function BountiesPage() {
                           onClick={e => { e.stopPropagation(); setLightbox(bounty.image_url!); }}
                           style={{ maxHeight:90,borderRadius:8,border:"1px solid #e8e2d9",marginBottom:12,display:"block" }} />
                       )}
-                      <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                      {/* POSTER INFO with all perks */}
+                      <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
                         <PremiumAvatar name={bounty.profiles?.full_name||"?"} level={bounty.profiles?.level} avatarUrl={bounty.profiles?.avatar_url} xp_multiplier={bounty.profiles?.xp_multiplier} size={26} />
                         <span style={{ fontSize:12,color:"#aaa" }}>
                           <strong style={{ color:"#1a1a1a",fontWeight:700 }}>{bounty.profiles?.full_name}</strong>
-                          {bounty.profiles?.champion_title && rank > 0 && (
-                            <span style={{ marginLeft:6,fontSize:10,fontWeight:800,
-                              color:rank===1?"#b8860b":rank===2?"#888":"#a0522d",
-                              background:rank===1?"rgba(255,215,0,0.15)":rank===2?"rgba(192,192,192,0.15)":"rgba(205,127,50,0.15)",
-                              padding:"1px 7px",borderRadius:999 }}>
-                              {rank===1?"👑":rank===2?"🥈":"🥉"} {bounty.profiles.champion_title}
-                            </span>
-                          )}
                           {" · "}@{bounty.profiles?.username}
                         </span>
+                        <PerkBadges profile={bounty.profiles} />
                       </div>
                     </div>
                     <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:10,flexShrink:0 }}>
@@ -397,10 +434,10 @@ export default function BountiesPage() {
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16 }}>
               <div>
                 <label style={{ fontSize:12,fontWeight:800,color:"#888",letterSpacing:".06em",textTransform:"uppercase" as const,display:"block",marginBottom:8 }}>Credit Reward</label>
-                <input type="number" min={5} max={user?.credits||9999} value={rewardInput} onChange={e=>{setRewardInput(e.target.value);setPostError("");}}
+                <input type="number" min={10} max={user?.credits||9999} value={rewardInput} onChange={e=>{setRewardInput(e.target.value);setPostError("");}}
                   style={{ width:"100%",padding:"11px 14px",borderRadius:12,border:`1.5px solid ${rewardValid?"#e8e2d9":"#fca5a5"}`,fontSize:14,fontFamily:"'DM Sans',sans-serif" }} />
                 <div style={{ fontSize:11,marginTop:5,fontWeight:600,color:rewardValid?"#aaa":"#dc2626" }}>
-                  {!rewardInput?"Enter an amount":rewardNum<5?"⚠️ Minimum is 5 credits":rewardNum>(user?.credits||0)?`⚠️ You only have ${user?.credits||0} credits`:`✓ ${(user?.credits||0)-rewardNum} credits remaining`}
+                  {!rewardInput?"Enter an amount":rewardNum<10?"⚠️ Minimum is 10 credits":rewardNum>(user?.credits||0)?`⚠️ You only have ${user?.credits||0} credits`:`✓ ${(user?.credits||0)-rewardNum} credits remaining`}
                 </div>
               </div>
               <div>
