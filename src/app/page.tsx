@@ -461,31 +461,40 @@ export default function LandingPage() {
 
       {/* ── LEADERBOARD TEASER ── */}
       <section className="section-pad reveal" style={{ background:"linear-gradient(135deg,#0d1f15 0%,#152b1e 50%,#0d1f15 100%)", padding:"80px 48px" }}>
-        <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" as const }}>
+        <div style={{ maxWidth:960, margin:"0 auto", textAlign:"center" as const }}>
           <span style={{ fontSize:12, fontWeight:800, color:"#52b788", letterSpacing:"0.12em", textTransform:"uppercase" as const }}>Leaderboard Rewards</span>
           <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:38, fontWeight:900, color:"#fff", marginTop:10, marginBottom:12, lineHeight:1.15 }}>
             Grind hard. Earn rewards.<br /><em style={{ color:"#ffd700", fontStyle:"italic" }}>Wear your crown.</em>
           </h2>
-          <p style={{ fontSize:15, color:"rgba(255,255,255,0.5)", marginBottom:40, maxWidth:520, margin:"0 auto 40px" }}>
-            Top 3 each week unlock real perks — not just bragging rights.
+          <p style={{ fontSize:15, color:"rgba(255,255,255,0.5)", marginBottom:40, maxWidth:520, margin:"0 auto 32px" }}>
+            Three leaderboards. Three ways to win. Top 3 each week unlock real perks — not just bragging rights.
           </p>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, maxWidth:700, margin:"0 auto 36px" }}>
+
+          {/* 3 leaderboard categories */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, maxWidth:860, margin:"0 auto 24px" }}>
             {[
-              { rank:"#1", icon:"👑", label:"Champion",    color:"#ffd700", bg:"rgba(255,215,0,0.08)",  border:"rgba(255,215,0,0.25)",  perks:["1.25× XP for 7 days","+ 20 credits","Featured listing","Gold avatar border","🏆 Champion title"] },
-              { rank:"#2", icon:"🥈", label:"Runner-up",   color:"#c0c0c0", bg:"rgba(192,192,192,0.08)",border:"rgba(192,192,192,0.2)",  perks:["1.15× XP for 7 days","+ 10 credits","Silver avatar border","🔥 Hot Teacher tag"] },
-              { rank:"#3", icon:"🥉", label:"Third Place", color:"#cd7f32", bg:"rgba(205,127,50,0.08)", border:"rgba(205,127,50,0.2)",   perks:["1.10× XP for 7 days","+ 5 credits","Bronze avatar border","🔥 Hot Teacher tag"] },
+              { icon:"🏆", label:"XP Leaders",       color:"#52b788", border:"rgba(82,183,136,0.25)", bg:"rgba(82,183,136,0.07)",
+                desc:"Most XP earned this week",
+                perks:["👑 Champion Crown Title","📌 Featured Listing on Browse","⚡ 1.25x XP Boost","+ 20 / 10 / 5 credits"] },
+              { icon:"🎓", label:"Teaching Activity", color:"#93c5fd", border:"rgba(147,197,253,0.25)", bg:"rgba(147,197,253,0.07)",
+                desc:"Most sessions completed as teacher",
+                perks:["🏫 Most Dedicated Teacher title","🎓 Active Mentor title","🌟 Rising Teacher title","🔥 Hot Teacher Tag"] },
+              { icon:"⭐", label:"Student Ratings",   color:"#fcd34d", border:"rgba(252,211,77,0.25)",  bg:"rgba(252,211,77,0.07)",
+                desc:"Highest rated by learners",
+                perks:["⭐ Star Border on Avatar","Top Rated Badge on Profile","🌟 Highly Rated Badge","💎 Trusted Teacher Badge"] },
             ].map(r => (
-              <div key={r.rank} style={{ background:r.bg, borderRadius:18, padding:"24px 18px", border:`1.5px solid ${r.border}`, textAlign:"left" as const }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
-                  <span style={{ fontSize:28 }}>{r.icon}</span>
+              <div key={r.label} style={{ background:r.bg, borderRadius:18, padding:"22px 18px", border:`1.5px solid ${r.border}`, textAlign:"left" as const }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                  <span style={{ fontSize:24 }}>{r.icon}</span>
                   <div>
-                    <div style={{ fontSize:18, fontWeight:900, color:r.color, fontFamily:"'Fraunces',serif" }}>{r.rank}</div>
-                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", fontWeight:700, textTransform:"uppercase" as const, letterSpacing:1 }}>{r.label}</div>
+                    <div style={{ fontSize:14, fontWeight:900, color:r.color, fontFamily:"'Fraunces',serif" }}>{r.label}</div>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontWeight:600 }}>{r.desc}</div>
                   </div>
                 </div>
-                <div style={{ display:"flex", flexDirection:"column" as const, gap:6 }}>
+                <div style={{ width:"100%", height:"1px", background:"rgba(255,255,255,0.07)", margin:"10px 0" }} />
+                <div style={{ display:"flex", flexDirection:"column" as const, gap:5 }}>
                   {r.perks.map(p => (
-                    <div key={p} style={{ display:"flex", alignItems:"center", gap:7, fontSize:11, color:"rgba(255,255,255,0.7)", fontWeight:600 }}>
+                    <div key={p} style={{ display:"flex", alignItems:"center", gap:7, fontSize:11, color:"rgba(255,255,255,0.65)", fontWeight:600 }}>
                       <span style={{ color:r.color, fontSize:10 }}>✓</span> {p}
                     </div>
                   ))}
@@ -493,6 +502,22 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+
+          {/* Top 3 placement rewards — XP Leaders only since those have credits */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, maxWidth:560, margin:"0 auto 36px" }}>
+            {[
+              { rank:"#1", icon:"🥇", color:"#ffd700", border:"rgba(255,215,0,0.2)",  bg:"rgba(255,215,0,0.06)",  bonus:"+ 20 credits · 1.25× XP" },
+              { rank:"#2", icon:"🥈", color:"#c0c0c0", border:"rgba(192,192,192,0.2)", bg:"rgba(192,192,192,0.05)", bonus:"+ 10 credits · 1.15× XP" },
+              { rank:"#3", icon:"🥉", color:"#cd7f32", border:"rgba(205,127,50,0.2)",  bg:"rgba(205,127,50,0.05)",  bonus:"+ 5 credits · 1.10× XP" },
+            ].map(r => (
+              <div key={r.rank} style={{ background:r.bg, borderRadius:14, padding:"14px 16px", border:`1px solid ${r.border}`, textAlign:"center" as const }}>
+                <div style={{ fontSize:22, marginBottom:4 }}>{r.icon}</div>
+                <div style={{ fontSize:14, fontWeight:900, color:r.color, fontFamily:"'Fraunces',serif", marginBottom:4 }}>{r.rank} XP Leader</div>
+                <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", fontWeight:600 }}>{r.bonus}</div>
+              </div>
+            ))}
+          </div>
+
           <a href="/leaderboard" className="cta-btn" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"linear-gradient(135deg,#e8a800,#ffd700)", color:"#1a1a1a", padding:"14px 28px", borderRadius:12, fontWeight:900, fontSize:14, boxShadow:"0 6px 24px rgba(232,168,0,0.4)" }}>
             👑 See this week's leaderboard →
           </a>

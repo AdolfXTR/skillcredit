@@ -11,6 +11,10 @@ type Profile = {
   avatar_url?: string | null;
   xp_multiplier?: number;
   champion_title?: string;
+  teaching_title?: string | null;
+  teaching_title_ends_at?: string | null;
+  rating_title?: string | null;
+  rating_title_ends_at?: string | null;
 };
 
 type Message = {
@@ -42,6 +46,14 @@ type CreditTransferPayload = {
   to_id: string;
 };
 
+type CallPayload = {
+  room: string;
+  started_at: string;
+  duration_minutes: number;
+  status: "active" | "ended";
+  ended_by?: string;
+};
+
 const LEVEL_COLORS: Record<string, string> = {
   Seedling: "#2d6a4f", Learner: "#1d4ed8", Contributor: "#7c3aed",
   Skilled: "#b45309", Expert: "#dc2626", Master: "#0891b2", Legend: "#d97706",
@@ -49,7 +61,7 @@ const LEVEL_COLORS: Record<string, string> = {
 
 const CHAMPION_RING: Record<number, { border: string; glow: string; badge: string; label: string }> = {
   1: { border: "linear-gradient(135deg,#FFD700,#FFA500,#FFD700)", glow: "0 0 12px rgba(255,215,0,.55)", badge: "👑", label: "Champion" },
-  2: { border: "linear-gradient(135deg,#C0C0C0,#A8A8A8,#C0C0C0)", glow: "0 0 10px rgba(192,192,192,.45)", badge: "🥈", label: "2nd Place" },
+  2: { border: "linear-gradient(135deg,#C0C0C0,#A8A8A8,#C0C0C0)", glow: "0 0 10px rgba(192,192,192,.45)", badge: "🥈", label: "Runner-up" },
   3: { border: "linear-gradient(135deg,#CD7F32,#A0522D,#CD7F32)", glow: "0 0 10px rgba(205,127,50,.45)", badge: "🥉", label: "3rd Place" },
 };
 
@@ -74,6 +86,11 @@ function timeAgo(iso: string) {
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" });
 }
+function formatFileSize(bytes: number) {
+  if (!bytes) return "";
+  if (bytes > 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + " MB";
+  return Math.round(bytes / 1024) + " KB";
+}
 function groupByDate(messages: Message[]) {
   const groups: { date: string; messages: Message[] }[] = [];
   let currentDate = "";
@@ -90,6 +107,10 @@ function groupByDate(messages: Message[]) {
   });
   return groups;
 }
+function getRoomName(idA: string, idB: string) {
+  const slug = [idA, idB].sort().join("").replace(/-/g, "").slice(0, 20);
+  return `skillcredit-${slug}`;
+}
 function getChampionRank(xp_multiplier?: number): number {
   if (!xp_multiplier) return 0;
   if (xp_multiplier >= 1.25) return 1;
@@ -97,9 +118,17 @@ function getChampionRank(xp_multiplier?: number): number {
   if (xp_multiplier >= 1.1) return 3;
   return 0;
 }
+function getPerkLine(user: Profile): string {
+  const rank = getChampionRank(user.xp_multiplier);
+  const parts: string[] = [];
+  if (rank > 0) parts.push(`${CHAMPION_RING[rank].badge} ${user.champion_title || CHAMPION_RING[rank].label}`);
+  if (user.teaching_title && new Date(user.teaching_title_ends_at || 0) > new Date()) parts.push("🎓 Teacher");
+  if (user.rating_title && new Date(user.rating_title_ends_at || 0) > new Date()) parts.push("⭐ Top Rated");
+  return parts.join(" · ");
+}
 
 // ─── AVATAR ───────────────────────────────────────────────────────────────────
-function Avatar({ profile, size = 38, online = false }: { profile: Profile; size?: number; online?: boolean }) {
+function Avatar({ profile, size = 36, online = false }: { profile: Profile; size?: number; online?: boolean }) {
   const color = LEVEL_COLORS[profile.level] || "#2d6a4f";
   const rank = getChampionRank(profile.xp_multiplier);
   const champ = rank > 0 ? CHAMPION_RING[rank] : null;
@@ -116,31 +145,8 @@ function Avatar({ profile, size = 38, online = false }: { profile: Profile; size
           : getInitials(profile.full_name)
         }
       </div>
-      {champ && (
-        <div style={{ position: "absolute", top: -6, right: -6, fontSize: size * 0.38, lineHeight: 1, zIndex: 2, filter: "drop-shadow(0 1px 2px rgba(0,0,0,.25))" }}>{champ.badge}</div>
-      )}
-      {online && !champ && (
-        <div style={{ position: "absolute", bottom: 1, right: 1, width: 9, height: 9, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff", zIndex: 2 }} />
-      )}
-    </div>
-  );
-}
-
-// ─── CREDIT TRANSFER MESSAGE ──────────────────────────────────────────────────
-function CreditTransferBubble({ payload, isMe, senderName }: { payload: CreditTransferPayload; isMe: boolean; senderName: string }) {
-  return (
-    <div style={{ background: isMe ? "linear-gradient(135deg,#1a4a36,#2d6a4f)" : "linear-gradient(135deg,#fef9ec,#fef3c7)", borderRadius: 14, border: isMe ? "none" : "1.5px solid #fbbf24", padding: "14px 18px", maxWidth: 260, boxShadow: isMe ? "0 2px 12px rgba(45,106,79,0.25)" : "0 2px 12px rgba(251,191,36,0.15)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <div style={{ width: 32, height: 32, borderRadius: "50%", background: isMe ? "rgba(255,255,255,0.15)" : "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>💰</div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: isMe ? "rgba(255,255,255,0.7)" : "#92400e" }}>CREDIT TRANSFER</div>
-          <div style={{ fontSize: 18, fontWeight: 900, color: isMe ? "#fff" : "#1a1a1a", fontFamily: "'Fraunces', serif", lineHeight: 1 }}>{payload.amount} cr</div>
-        </div>
-      </div>
-      {payload.note && <div style={{ fontSize: 12, color: isMe ? "rgba(255,255,255,0.8)" : "#666", lineHeight: 1.5, fontStyle: "italic" }}>"{payload.note}"</div>}
-      <div style={{ marginTop: 8, fontSize: 10, color: isMe ? "rgba(255,255,255,0.5)" : "#bbb" }}>
-        {isMe ? "You sent" : `${senderName} sent you`} {payload.amount} credits
-      </div>
+      {champ && <div style={{ position: "absolute", top: -5, right: -5, fontSize: size * 0.36, lineHeight: 1, zIndex: 2, filter: "drop-shadow(0 1px 2px rgba(0,0,0,.25))" }}>{champ.badge}</div>}
+      {online && !champ && <div style={{ position: "absolute", bottom: 0, right: 0, width: 9, height: 9, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff", zIndex: 2 }} />}
     </div>
   );
 }
@@ -152,17 +158,37 @@ function FileBubble({ content, isMe }: { content: string; isMe: boolean }) {
   if (!fp?.url) return null;
   const ext = fp.name?.split(".").pop()?.toLowerCase() || "";
   const icon = ["pdf"].includes(ext) ? "📄" : ["doc","docx"].includes(ext) ? "📝" : ["xls","xlsx"].includes(ext) ? "📊" : ["zip","rar","7z"].includes(ext) ? "🗜️" : ["mp4","mov","avi"].includes(ext) ? "🎬" : ["mp3","wav"].includes(ext) ? "🎵" : "📎";
-  const sizeStr = fp.size ? (fp.size > 1024*1024 ? (fp.size/1024/1024).toFixed(1)+"MB" : Math.round(fp.size/1024)+"KB") : "";
   return (
     <a href={fp.url} target="_blank" rel="noopener noreferrer"
-      style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: isMe ? "rgba(255,255,255,0.15)" : "#f5f0e8", borderRadius: 12, border: isMe ? "1px solid rgba(255,255,255,0.2)" : "1px solid #e8e2d9", textDecoration: "none", minWidth: 200, maxWidth: 280 }}>
-      <span style={{ fontSize: 24, flexShrink: 0 }}>{icon}</span>
+      style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: isMe ? "rgba(255,255,255,0.15)" : "#f0f0f5", borderRadius: 12, border: isMe ? "1px solid rgba(255,255,255,0.2)" : "1px solid #e4e4ed", textDecoration: "none", minWidth: 200, maxWidth: 280 }}>
+      <div style={{ width: 36, height: 36, borderRadius: 8, background: isMe ? "rgba(255,255,255,0.2)" : "#e8e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{icon}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13, fontWeight: 700, color: isMe ? "#fff" : "#1a1a1a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fp.name}</p>
-        {sizeStr && <p style={{ fontSize: 11, color: isMe ? "rgba(255,255,255,0.7)" : "#aaa" }}>{sizeStr} · click to download</p>}
+        <p style={{ fontSize: 13, fontWeight: 700, color: isMe ? "#fff" : "#1a1a1a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 2 }}>{fp.name}</p>
+        <p style={{ fontSize: 11, color: isMe ? "rgba(255,255,255,0.65)" : "#999" }}>{fp.size ? formatFileSize(fp.size) : ""} · tap to download</p>
       </div>
-      <span style={{ fontSize: 16, flexShrink: 0, color: isMe ? "rgba(255,255,255,0.8)" : "#2d6a4f" }}>↓</span>
+      <div style={{ width: 28, height: 28, borderRadius: "50%", background: isMe ? "rgba(255,255,255,0.2)" : "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <span style={{ fontSize: 13, color: isMe ? "#fff" : "#fff" }}>↓</span>
+      </div>
     </a>
+  );
+}
+
+// ─── CREDIT TRANSFER BUBBLE ───────────────────────────────────────────────────
+function CreditTransferBubble({ payload, isMe, senderName }: { payload: CreditTransferPayload; isMe: boolean; senderName: string }) {
+  return (
+    <div style={{ background: isMe ? "linear-gradient(135deg,#1a4a36,#2d6a4f)" : "linear-gradient(135deg,#fef9ec,#fef3c7)", borderRadius: 14, border: isMe ? "none" : "1.5px solid #fbbf24", padding: "14px 18px", maxWidth: 240, boxShadow: isMe ? "0 2px 12px rgba(45,106,79,0.25)" : "0 2px 12px rgba(251,191,36,0.15)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <div style={{ width: 30, height: 30, borderRadius: "50%", background: isMe ? "rgba(255,255,255,0.15)" : "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>💰</div>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: isMe ? "rgba(255,255,255,0.6)" : "#92400e", letterSpacing: 0.5 }}>CREDIT TRANSFER</div>
+          <div style={{ fontSize: 20, fontWeight: 900, color: isMe ? "#fff" : "#1a1a1a", fontFamily: "'Fraunces', serif", lineHeight: 1 }}>{payload.amount} cr</div>
+        </div>
+      </div>
+      {payload.note && <div style={{ fontSize: 12, color: isMe ? "rgba(255,255,255,0.75)" : "#666", fontStyle: "italic", marginBottom: 6 }}>"{payload.note}"</div>}
+      <div style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.45)" : "#bbb" }}>
+        {isMe ? "You sent" : `${senderName} sent you`} {payload.amount} credits
+      </div>
+    </div>
   );
 }
 
@@ -181,10 +207,13 @@ export default function MessagesPage() {
   const [showNewChat, setShowNewChat] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
+  const [startingCall, setStartingCall] = useState(false);
+  const [convoFilter, setConvoFilter] = useState<"all" | "teachers" | "students">("all");
 
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -202,48 +231,38 @@ export default function MessagesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachInputRef = useRef<HTMLInputElement>(null);
   const presenceChannelRef = useRef<any>(null);
-
-  // ── FIX #1: refs that always have current values (fixes stale closure) ──────
   const profileRef = useRef<Profile | null>(null);
   const activeConvoRef = useRef<Profile | null>(null);
 
   useEffect(() => { profileRef.current = profile; }, [profile]);
   useEffect(() => { activeConvoRef.current = activeConvo; }, [activeConvo]);
-
   useEffect(() => { loadData(); }, []);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-
   useEffect(() => {
     const handler = () => { setContextMenu(null); setShowReactionPicker(null); };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, []);
 
-  // ── FIX #1 APPLIED: use refs inside the channel callback ──────────────────
   useEffect(() => {
     if (!profile) return;
     const channel = supabase.channel(`messages-${profile.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${profile.id}` }, (payload) => {
         const msg = payload.new as Message;
-        const currentConvo = activeConvoRef.current;  // ← always current, never stale
-        const currentProfile = profileRef.current;
-        if (currentConvo && msg.sender_id === currentConvo.id) {
-          setMessages(prev => [...prev, msg]);
-          if (currentProfile) markRead(currentConvo.id, currentProfile.id);
-        }
-        if (currentProfile) loadConversations(currentProfile.id);
+        const cur = activeConvoRef.current;
+        if (cur && msg.sender_id === cur.id) { setMessages(prev => [...prev, msg]); markRead(cur.id); }
+        const p = profileRef.current;
+        if (p) loadConversations(p.id);
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
-        const updated = payload.new as Message;
-        setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
+        setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (payload) => {
-        const deleted = payload.old as Message;
-        setMessages(prev => prev.map(m => m.id === deleted.id ? { ...m, is_deleted: true, content: "[deleted]" } : m));
+        setMessages(prev => prev.map(m => m.id === payload.old.id ? { ...m, is_deleted: true, content: "[deleted]" } : m));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [profile]); // ← only depends on profile now, NOT activeConvo
+  }, [profile]);
 
   useEffect(() => {
     if (!profile || !activeConvo) return;
@@ -251,20 +270,14 @@ export default function MessagesPage() {
     const ch = supabase.channel(`typing-${roomId}`, { config: { presence: { key: profile.id } } })
       .on("presence", { event: "sync" }, () => {
         const state = ch.presenceState() as Record<string, any[]>;
-        const typers = Object.entries(state)
-          .filter(([uid, data]) => uid !== profile.id && data[0]?.isTyping)
-          .map(([uid]) => uid);
+        const typers = Object.entries(state).filter(([uid, data]) => uid !== profile.id && data[0]?.isTyping).map(([uid]) => uid);
         setTypingUsers(typers);
-      })
-      .subscribe();
+      }).subscribe();
     presenceChannelRef.current = ch;
     return () => { supabase.removeChannel(ch); presenceChannelRef.current = null; };
   }, [profile, activeConvo]);
 
-  function broadcastTyping(isTyping: boolean) {
-    presenceChannelRef.current?.track({ isTyping });
-  }
-
+  function broadcastTyping(isTyping: boolean) { presenceChannelRef.current?.track({ isTyping }); }
   function handleTyping(val: string) {
     setNewMsg(val);
     broadcastTyping(true);
@@ -278,7 +291,6 @@ export default function MessagesPage() {
     const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
     if (prof) setProfile(prof);
     await loadConversations(user.id);
-
     const openWith = sessionStorage.getItem("openMessageWith");
     if (openWith) {
       sessionStorage.removeItem("openMessageWith");
@@ -299,39 +311,26 @@ export default function MessagesPage() {
     setLoading(false);
   }
 
-  // ── FIX #2: batch profile fetch instead of N+1 queries ────────────────────
   async function loadConversations(userId: string) {
-    const { data: msgs } = await supabase.from("messages").select("*")
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .order("created_at", { ascending: false });
+    const { data: msgs } = await supabase.from("messages").select("*").or(`sender_id.eq.${userId},receiver_id.eq.${userId}`).order("created_at", { ascending: false });
     if (!msgs) return;
-
     const convoMap = new Map<string, Message[]>();
     msgs.forEach(msg => {
       const otherId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
       if (!convoMap.has(otherId)) convoMap.set(otherId, []);
       convoMap.get(otherId)!.push(msg);
     });
-
     const otherIds = Array.from(convoMap.keys());
     if (otherIds.length === 0) { setConversations([]); return; }
-
-    // ← ONE query for all profiles instead of one per conversation
     const { data: profiles } = await supabase.from("profiles").select("*").in("id", otherIds);
     const profileMap = new Map((profiles || []).map(p => [p.id, p]));
-
     const convos: Conversation[] = [];
     for (const [otherId, ms] of convoMap) {
       const op = profileMap.get(otherId);
       if (!op) continue;
       const last = ms[0];
       const unread = ms.filter(m => m.receiver_id === userId && !m.is_read && !m.is_deleted).length;
-      const lastText = last.is_deleted ? "🚫 Message deleted"
-        : last.message_type === "image" ? "📷 Photo"
-        : last.message_type === "session_call" ? "📹 Video session"
-        : last.message_type === "credit_transfer" ? "💰 Credits sent"
-        : last.message_type === "file" ? "📎 File"
-        : last.content;
+      const lastText = last.is_deleted ? "🚫 Deleted" : last.message_type === "image" ? "📷 Photo" : last.message_type === "session_call" ? "📹 Video session" : last.message_type === "credit_transfer" ? "💰 Credits sent" : last.message_type === "file" ? "📎 File" : last.content;
       convos.push({ other_user: op, last_message: lastText, last_time: last.created_at, unread_count: unread });
     }
     setConversations(convos);
@@ -344,13 +343,14 @@ export default function MessagesPage() {
       .or(`and(sender_id.eq.${profile.id},receiver_id.eq.${other.id}),and(sender_id.eq.${other.id},receiver_id.eq.${profile.id})`)
       .order("created_at", { ascending: true });
     setMessages(data || []);
-    await markRead(other.id, profile.id);
+    await markRead(other.id);
     await loadConversations(profile.id);
     setTimeout(() => textareaRef.current?.focus(), 100);
   }
 
-  async function markRead(senderId: string, receiverId: string) {
-    await supabase.from("messages").update({ is_read: true }).eq("sender_id", senderId).eq("receiver_id", receiverId).eq("is_read", false);
+  async function markRead(senderId: string) {
+    if (!profile) return;
+    await supabase.from("messages").update({ is_read: true }).eq("sender_id", senderId).eq("receiver_id", profile.id).eq("is_read", false);
   }
 
   async function toggleReaction(msgId: string, emoji: string) {
@@ -362,9 +362,7 @@ export default function MessagesPage() {
     if (users.includes(profile.id)) {
       reactions[emoji] = users.filter(id => id !== profile.id);
       if (reactions[emoji].length === 0) delete reactions[emoji];
-    } else {
-      reactions[emoji] = [...users, profile.id];
-    }
+    } else { reactions[emoji] = [...users, profile.id]; }
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, reactions } : m));
     await supabase.from("messages").update({ reactions }).eq("id", msgId);
     setShowReactionPicker(null);
@@ -382,24 +380,46 @@ export default function MessagesPage() {
     const amount = parseInt(creditAmount);
     if (isNaN(amount) || amount <= 0 || amount > profile.credits) return;
     setSendingCredits(true);
-
     await supabase.from("profiles").update({ credits: profile.credits - amount }).eq("id", profile.id);
     await supabase.rpc("increment_credits", { user_id: activeConvo.id, amount });
-
     const payload: CreditTransferPayload = { amount, note: creditNote, from_id: profile.id, to_id: activeConvo.id };
-    const { data: msg } = await supabase.from("messages").insert({
-      sender_id: profile.id, receiver_id: activeConvo.id,
-      content: JSON.stringify(payload), message_type: "credit_transfer", is_read: false,
-    }).select().single();
+    const { data: msg } = await supabase.from("messages").insert({ sender_id: profile.id, receiver_id: activeConvo.id, content: JSON.stringify(payload), message_type: "credit_transfer", is_read: false }).select().single();
     if (msg) setMessages(prev => [...prev, msg]);
-
     setProfile(prev => prev ? { ...prev, credits: prev.credits - amount } : prev);
     try { await supabase.from("notifications").insert({ user_id: activeConvo.id, type: "credit_transfer", title: `${profile.full_name} sent you ${amount} credits!`, body: creditNote || "Credits received!", link: "/messages" }); } catch (_) {}
     try { await supabase.from("moderation_logs").insert({ mod_id: profile.id, target_id: activeConvo.id, target_type: "credit_transfer", action: "sent", reason: `${amount} credits`, author_id: profile.id }); } catch (_) {}
-
-    setCreditAmount(""); setCreditNote(""); setShowCreditModal(false);
-    setSendingCredits(false);
+    setCreditAmount(""); setCreditNote(""); setShowCreditModal(false); setSendingCredits(false);
     await loadConversations(profile.id);
+  }
+
+  async function startVideoSession() {
+    if (!profile || !activeConvo || startingCall) return;
+    const alreadyActive = messages.some(m => { if (m.message_type !== "session_call") return false; try { return (JSON.parse(m.content) as CallPayload).status === "active"; } catch { return false; } });
+    if (alreadyActive) { alert("There's already an active session!"); return; }
+    setStartingCall(true);
+    const { data: sessionRow } = await supabase.from("sessions").select("listing:listing_id(duration)")
+      .or(`and(teacher_id.eq.${profile.id},learner_id.eq.${activeConvo.id}),and(teacher_id.eq.${activeConvo.id},learner_id.eq.${profile.id})`)
+      .eq("status", "upcoming").order("proposed_time", { ascending: true }).limit(1).maybeSingle();
+    const duration = (sessionRow?.listing as any)?.duration || 60;
+    const room = getRoomName(profile.id, activeConvo.id);
+    const payload: CallPayload = { room, started_at: new Date().toISOString(), duration_minutes: duration, status: "active" };
+    const { data: msg } = await supabase.from("messages").insert({ sender_id: profile.id, receiver_id: activeConvo.id, content: JSON.stringify(payload), message_type: "session_call", is_read: false }).select().single();
+    if (msg) setMessages(prev => [...prev, msg]);
+    try { await supabase.from("notifications").insert({ user_id: activeConvo.id, type: "session_call", title: `${profile.full_name} started a video session`, body: "Join now in Messages!", link: "/messages" }); } catch (_) {}
+    await loadConversations(profile.id);
+    setStartingCall(false);
+  }
+
+  async function endVideoSession(msgId: string) {
+    if (!profile) return;
+    const msg = messages.find(m => m.id === msgId);
+    if (!msg) return;
+    try {
+      const p = JSON.parse(msg.content) as CallPayload;
+      p.status = "ended"; p.ended_by = profile.id;
+      await supabase.from("messages").update({ content: JSON.stringify(p) }).eq("id", msgId);
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: JSON.stringify(p) } : m));
+    } catch (_) {}
   }
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -425,8 +445,7 @@ export default function MessagesPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 20 * 1024 * 1024) { alert("File must be under 20MB"); return; }
-    setAttachFile(file);
-    e.target.value = "";
+    setAttachFile(file); e.target.value = "";
   }
 
   async function uploadAttachment(file: File): Promise<string | null> {
@@ -446,48 +465,36 @@ export default function MessagesPage() {
     if (!profile || !activeConvo) return;
     if (!newMsg.trim() && !imageFile && !attachFile) return;
     setSending(true); setShowEmoji(false);
-
-    // ── FIX #3: capture file info BEFORE clearing state ───────────────────
-    const currentAttachFile = attachFile;
-    const currentImageFile = imageFile;
-
+    const capturedAttach = attachFile;
+    const capturedImage = imageFile;
     let imageUrl: string | null = null;
     let fileUrl: string | null = null;
-
-    if (currentImageFile) {
-      setUploading(true);
-      imageUrl = await uploadImage(currentImageFile);
-      setUploading(false);
-      setImageFile(null);
-      setImagePreview(null);
+    if (capturedImage) {
+      setUploading(true); setUploadProgress(30);
+      imageUrl = await uploadImage(capturedImage);
+      setUploadProgress(100); setTimeout(() => setUploadProgress(0), 400);
+      setUploading(false); setImageFile(null); setImagePreview(null);
     }
-    if (currentAttachFile) {
-      setUploading(true);
-      fileUrl = await uploadAttachment(currentAttachFile);
-      setUploading(false);
-      setAttachFile(null);
+    if (capturedAttach) {
+      setUploading(true); setUploadProgress(30);
+      fileUrl = await uploadAttachment(capturedAttach);
+      setUploadProgress(100); setTimeout(() => setUploadProgress(0), 400);
+      setUploading(false); setAttachFile(null);
     }
-
     const msgType = imageUrl ? "image" : fileUrl ? "file" : "text";
     const msgData: any = {
       sender_id: profile.id, receiver_id: activeConvo.id,
-      // ── FIX #3: use captured variable for size, not cleared state ─────
-      content: fileUrl
-        ? JSON.stringify({ url: fileUrl, name: currentAttachFile!.name, size: currentAttachFile!.size })
-        : (newMsg.trim() || ""),
+      content: fileUrl ? JSON.stringify({ url: fileUrl, name: capturedAttach!.name, size: capturedAttach!.size }) : (newMsg.trim() || ""),
       image_url: imageUrl, message_type: msgType, is_read: false,
     };
-    if (replyingTo) { msgData.reply_to_id = replyingTo.id; }
-
+    if (replyingTo) msgData.reply_to_id = replyingTo.id;
     const { data: msg } = await supabase.from("messages").insert(msgData).select().single();
     if (msg) {
       const withReply = replyingTo ? { ...msg, reply_to: { content: replyingTo.content, sender_id: replyingTo.sender_id } } : msg;
       setMessages(prev => [...prev, withReply]);
     }
-    setNewMsg(""); setReplyingTo(null);
-    broadcastTyping(false);
-
-    try { await supabase.from("notifications").insert({ user_id: activeConvo.id, type: "message", title: `New message from ${profile.full_name}`, body: imageUrl ? "📷 Sent a photo" : fileUrl ? `📎 Sent a file: ${currentAttachFile!.name}` : newMsg.trim().slice(0, 80), link: "/messages" }); } catch (_) {}
+    setNewMsg(""); setReplyingTo(null); broadcastTyping(false);
+    try { await supabase.from("notifications").insert({ user_id: activeConvo.id, type: "message", title: `New message from ${profile.full_name}`, body: imageUrl ? "📷 Sent a photo" : fileUrl ? `📎 ${capturedAttach!.name}` : newMsg.trim().slice(0, 80), link: "/messages" }); } catch (_) {}
     await loadConversations(profile.id);
     setSending(false);
   }
@@ -506,61 +513,75 @@ export default function MessagesPage() {
 
   const totalUnread = conversations.reduce((s, c) => s + c.unread_count, 0);
   const grouped = groupByDate(messages.filter(m => !m.is_deleted || m.sender_id === profile?.id));
+  const activeCallMsg = messages.find(m => { if (m.message_type !== "session_call") return false; try { return (JSON.parse(m.content) as CallPayload).status === "active"; } catch { return false; } });
+
+  const filteredConvos = conversations.filter(c => {
+    if (convoFilter === "all") return true;
+    const hasTitles = getPerkLine(c.other_user);
+    if (convoFilter === "teachers") return hasTitles.includes("🎓") || hasTitles.includes("👑");
+    if (convoFilter === "students") return !hasTitles.includes("🎓");
+    return true;
+  });
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#faf8f4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#F8F9FB", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap'); @keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <div style={{ textAlign: "center" }}>
-        <div style={{ width: 32, height: 32, border: "2px solid #2d6a4f", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
-        <p style={{ color: "#aaa", fontSize: 13 }}>Loading messages...</p>
+        <div style={{ width: 32, height: 32, border: "3px solid #2d6a4f", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+        <p style={{ color: "#999", fontSize: 13 }}>Loading messages…</p>
       </div>
     </div>
   );
 
   return (
-    <div style={{ height: "100vh", background: "#faf8f4", fontFamily: "'DM Sans', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ height: "100vh", background: "#F8F9FB", fontFamily: "'DM Sans', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         a { text-decoration: none; }
-        @keyframes popIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+        @keyframes popIn { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:none} }
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-        @keyframes slideUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes slideUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
         @keyframes spin { to{transform:rotate(360deg)} }
-        @keyframes typingBounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
-        ::-webkit-scrollbar { width: 3px; }
+        @keyframes typingBounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+        @keyframes progressFill { from{width:0%} to{width:var(--target)} }
+        ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #e0dbd4; border-radius: 999px; }
-        .convo-item { transition: background 0.12s; cursor: pointer; border-radius: 10px; }
-        .convo-item:hover { background: #f5f0e8 !important; }
-        .convo-item.active { background: #e8f4e8 !important; }
-        .send-btn { transition: all 0.15s; }
-        .send-btn:hover:not(:disabled) { transform: scale(1.05); }
-        .emoji-btn { transition: transform 0.1s; cursor: pointer; border-radius: 6px; padding: 3px; font-size: 19px; display: inline-block; }
-        .emoji-btn:hover { transform: scale(1.3); background: #f5f0e8; }
-        .msg-in { animation: popIn 0.18s ease; }
-        .tool-btn { background: #f5f0e8; border: 1.5px solid #e8e2d9; border-radius: 8px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 15px; transition: all 0.12s; flex-shrink: 0; }
-        .tool-btn:hover { background: #ede8de; }
-        .img-msg { cursor: zoom-in; transition: opacity 0.12s; border-radius: 12px; }
-        .img-msg:hover { opacity: 0.88; }
+        .convo-item { transition: background 0.1s; cursor: pointer; border-radius: 12px; }
+        .convo-item:hover { background: #f2f2f5 !important; }
+        .convo-item.active { background: #eef6f2 !important; }
+        .send-btn:hover:not(:disabled) { filter: brightness(1.08); }
+        .emoji-btn { transition: transform 0.1s; cursor: pointer; border-radius: 6px; padding: 3px; font-size: 20px; display: inline-block; }
+        .emoji-btn:hover { transform: scale(1.3); background: #f0f0f5; }
+        .msg-in { animation: popIn 0.15s ease; }
+        .img-msg { cursor: zoom-in; transition: opacity 0.1s; }
+        .img-msg:hover { opacity: 0.9; }
         textarea:focus { outline: none; }
         input:focus { outline: none; }
         .nav-link { padding: 6px 12px; border-radius: 8px; color: #666; font-size: 13px; font-weight: 600; transition: all 0.12s; }
-        .nav-link:hover { background: #f5f0e8; color: #333; }
-        .nav-link.active { background: #e8f4e8; color: #2d6a4f; }
-        .reaction-pill { cursor: pointer; transition: transform 0.1s, background 0.1s; border-radius: 999px; padding: 2px 7px; display: inline-flex; align-items: center; gap: 3px; font-size: 12px; border: 1px solid #e8e2d9; background: #fff; }
-        .reaction-pill:hover { transform: scale(1.12); background: #f5f0e8; }
-        .reaction-pill.mine { background: #e8f4e8; border-color: #86efac; }
+        .nav-link:hover { background: #f0f0f5; color: #333; }
+        .nav-link.active { background: #eef6f2; color: #2d6a4f; }
+        .reaction-pill { cursor: pointer; transition: transform 0.1s; border-radius: 999px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 3px; font-size: 12px; border: 1px solid #e4e4ed; background: #fff; }
+        .reaction-pill:hover { transform: scale(1.1); }
+        .reaction-pill.mine { background: #eef6f2; border-color: #86efac; }
         .msg-actions { opacity: 0; transition: opacity 0.12s; }
         .msg-wrapper:hover .msg-actions { opacity: 1; }
-        .ctx-menu-item { padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.1s; border-radius: 6px; }
-        .ctx-menu-item:hover { background: #f5f0e8; }
-        .ctx-menu-item.danger { color: #dc2626; }
-        .ctx-menu-item.danger:hover { background: #fce8e8; }
+        .ctx-item { padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.1s; border-radius: 8px; color: #333; }
+        .ctx-item:hover { background: #f2f2f5; }
+        .ctx-item.danger { color: #dc2626; }
+        .ctx-item.danger:hover { background: #fef2f2; }
+        .filter-tab { padding: 5px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid transparent; transition: all 0.12s; background: transparent; color: #999; font-family: 'DM Sans', sans-serif; }
+        .filter-tab:hover { color: #333; }
+        .filter-tab.active { background: #eef6f2; color: #2d6a4f; border-color: #c6e8d4; }
+        .action-btn { display: flex; align-items: center; gap: 6px; padding: 7px 15px; border-radius: 9px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1.5px solid transparent; transition: all 0.12s; font-family: 'DM Sans', sans-serif; }
+        .action-btn:hover { filter: brightness(0.96); }
+        .input-tool { width: 34px; height: 34px; border-radius: 9px; border: none; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 17px; transition: background 0.1s; flex-shrink: 0; color: #888; }
+        .input-tool:hover { background: #f0f0f5; }
       `}</style>
 
-      {/* NAVBAR */}
-      <nav style={{ background: "#fff", borderBottom: "1.5px solid #e8e2d9", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+      {/* ── NAVBAR ── */}
+      <nav style={{ background: "#fff", borderBottom: "1px solid #ebebef", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, zIndex: 10 }}>
         <a href="/dashboard">
           <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
           <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
@@ -569,75 +590,78 @@ export default function MessagesPage() {
           {[["Browse", "/listings"], ["Bounties", "/bounties"], ["Community", "/community"], ["Sessions", "/sessions"], ["Messages", "/messages"]].map(([l, h]) => (
             <a key={l} href={h} className={`nav-link ${h === "/messages" ? "active" : ""}`} style={{ position: "relative" }}>
               {l}
-              {l === "Messages" && totalUnread > 0 && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#dc2626", border: "1.5px solid #fff" }} />}
+              {l === "Messages" && totalUnread > 0 && <span style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: "50%", background: "#ef4444", border: "1.5px solid #fff" }} />}
             </a>
           ))}
         </div>
-        <a href="/profile" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 12px", borderRadius: 10, background: "#f5f0e8", textDecoration: "none" }}>
+        <a href="/profile" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 12px", borderRadius: 10, background: "#f5f5f8", textDecoration: "none" }}>
           {profile && <Avatar profile={profile} size={26} />}
           <span style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>@{profile?.username}</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#2d6a4f", background: "#e8f4e8", padding: "2px 8px", borderRadius: 20 }}>{profile?.credits} cr</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#2d6a4f", background: "#eef6f2", padding: "2px 8px", borderRadius: 20 }}>{profile?.credits} cr</span>
         </a>
       </nav>
 
-      {/* LAYOUT */}
+      {/* ── LAYOUT ── */}
       <div style={{ flex: 1, display: "grid", gridTemplateColumns: "300px 1fr", overflow: "hidden" }}>
 
-        {/* SIDEBAR */}
-        <div style={{ background: "#fff", borderRight: "1.5px solid #e8e2d9", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "14px 16px", borderBottom: "1.5px solid #f0ece4", flexShrink: 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <span style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 800, color: "#1a1a1a" }}>
+        {/* ── SIDEBAR ── */}
+        <div style={{ background: "#fff", borderRight: "1px solid #ebebef", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/* Sidebar header */}
+          <div style={{ padding: "16px 16px 10px", borderBottom: "1px solid #f2f2f5", flexShrink: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 900, color: "#1a1a1a", display: "flex", alignItems: "center", gap: 8 }}>
                 Messages
-                {totalUnread > 0 && <span style={{ marginLeft: 7, fontSize: 11, fontWeight: 700, background: "#dc2626", color: "#fff", padding: "1px 7px", borderRadius: 999 }}>{totalUnread}</span>}
+                {totalUnread > 0 && <span style={{ fontSize: 11, fontWeight: 800, background: "#ef4444", color: "#fff", padding: "1px 7px", borderRadius: 999 }}>{totalUnread}</span>}
               </span>
               <button onClick={() => { setShowNewChat(true); setActiveConvo(null); setSearchUser(""); setSearchResults([]); }}
-                style={{ width: 26, height: 26, borderRadius: "50%", background: "#2d6a4f", color: "#fff", border: "none", fontSize: 17, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
-                +
-              </button>
+                style={{ width: 28, height: 28, borderRadius: "50%", background: "#2d6a4f", color: "#fff", border: "none", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, lineHeight: 1 }}>+</button>
             </div>
-            <input placeholder="Search conversations..." style={{ width: "100%", padding: "7px 11px", borderRadius: 8, border: "1.5px solid #e8e2d9", background: "#faf8f4", color: "#333", fontSize: 12, fontFamily: "'DM Sans', sans-serif" }} />
+            <input placeholder="Search conversations…"
+              style={{ width: "100%", padding: "8px 12px", borderRadius: 9, border: "1.5px solid #ebebef", background: "#F8F9FB", color: "#333", fontSize: 13, fontFamily: "'DM Sans', sans-serif" }} />
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: "6px" }}>
-            {conversations.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "44px 20px", color: "#bbb" }}>
-                <div style={{ fontSize: 30, marginBottom: 8 }}>💬</div>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>No conversations yet</div>
-                <div style={{ fontSize: 11, marginTop: 3 }}>Click + to start chatting</div>
+          {/* Filter tabs */}
+          <div style={{ padding: "8px 12px", borderBottom: "1px solid #f2f2f5", display: "flex", gap: 4, flexShrink: 0 }}>
+            {(["all", "teachers", "students"] as const).map(tab => (
+              <button key={tab} className={`filter-tab ${convoFilter === tab ? "active" : ""}`} onClick={() => setConvoFilter(tab)}>
+                {tab === "all" ? "All" : tab === "teachers" ? "🎓 Teachers" : "📚 Students"}
+              </button>
+            ))}
+          </div>
+
+          {/* Conversation list */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
+            {filteredConvos.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "44px 20px", color: "#ccc" }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>💬</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#bbb" }}>No conversations yet</div>
+                <div style={{ fontSize: 12, marginTop: 4, color: "#ccc" }}>Click + to start chatting</div>
               </div>
-            ) : conversations.map(c => {
+            ) : filteredConvos.map(c => {
               const rank = getChampionRank(c.other_user.xp_multiplier);
+              const perk = getPerkLine(c.other_user);
               return (
                 <div key={c.other_user.id}
                   className={`convo-item ${activeConvo?.id === c.other_user.id ? "active" : ""}`}
                   onClick={() => openConversation(c.other_user)}
-                  style={{ padding: "10px 10px", display: "flex", gap: 10, alignItems: "center", marginBottom: 1,
-                    background: rank === 1 ? "linear-gradient(90deg, rgba(255,215,0,0.08), transparent)" : rank === 2 ? "linear-gradient(90deg, rgba(192,192,192,0.08), transparent)" : rank === 3 ? "linear-gradient(90deg, rgba(205,127,50,0.08), transparent)" : undefined,
-                    borderLeft: rank === 1 ? "2px solid #FFD700" : rank === 2 ? "2px solid #C0C0C0" : rank === 3 ? "2px solid #CD7F32" : "2px solid transparent",
-                  }}>
+                  style={{ padding: "12px 10px", display: "flex", gap: 10, alignItems: "center", marginBottom: 2,
+                    borderLeft: rank === 1 ? "2px solid #FFD700" : rank === 2 ? "2px solid #C0C0C0" : rank === 3 ? "2px solid #CD7F32" : "2px solid transparent" }}>
                   <div style={{ position: "relative", flexShrink: 0 }}>
-                    <Avatar profile={c.other_user} size={40} online />
+                    <Avatar profile={c.other_user} size={36} online />
                     {c.unread_count > 0 && (
-                      <div style={{ position: "absolute", top: -2, right: -2, minWidth: 15, height: 15, borderRadius: 999, background: "#dc2626", fontSize: 8, fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+                      <div style={{ position: "absolute", top: -2, right: -2, minWidth: 15, height: 15, borderRadius: 999, background: "#ef4444", fontSize: 8, fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
                         {c.unread_count}
                       </div>
                     )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 1, alignItems: "center" }}>
-                      <span style={{ fontSize: 13, fontWeight: c.unread_count > 0 ? 700 : 600, color: "#1a1a1a", display: "flex", alignItems: "center", gap: 4 }}>
-                        {c.other_user.full_name}
-                        {rank > 0 && <span style={{ fontSize: 10 }}>{CHAMPION_RING[rank].badge}</span>}
-                      </span>
-                      <span style={{ fontSize: 10, color: "#bbb", flexShrink: 0 }}>{timeAgo(c.last_time)}</span>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: c.unread_count > 0 ? 800 : 600, color: "#1a1a1a" }}>{c.other_user.full_name}</span>
+                      <span style={{ fontSize: 10, color: "#bbb", flexShrink: 0, marginLeft: 6 }}>{timeAgo(c.last_time)}</span>
                     </div>
-                    {rank > 0 && c.other_user.champion_title && (
-                      <div style={{ fontSize: 9, fontWeight: 700, color: rank === 1 ? "#92400e" : rank === 2 ? "#6b7280" : "#78350f", marginBottom: 1 }}>
-                        {CHAMPION_RING[rank].label} · {c.other_user.champion_title}
-                      </div>
-                    )}
-                    <div style={{ fontSize: 11, color: c.unread_count > 0 ? "#555" : "#aaa", fontWeight: c.unread_count > 0 ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {perk && <div style={{ fontSize: 10, fontWeight: 600, color: rank === 1 ? "#92400e" : "#6b7280", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{perk}</div>}
+                    <div style={{ fontSize: 12, color: c.unread_count > 0 ? "#444" : "#aaa", fontWeight: c.unread_count > 0 ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
+                      {c.unread_count > 0 && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2d6a4f", flexShrink: 0, display: "inline-block" }} />}
                       {c.last_message}
                     </div>
                   </div>
@@ -647,25 +671,24 @@ export default function MessagesPage() {
           </div>
         </div>
 
-        {/* MAIN PANEL */}
-        <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", background: "#faf8f4" }}>
+        {/* ── MAIN PANEL ── */}
+        <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", background: "#F8F9FB" }}>
 
+          {/* New chat search */}
           {showNewChat && (
             <div style={{ display: "flex", flexDirection: "column", height: "100%", animation: "fadeIn 0.15s ease", background: "#fff" }}>
-              <div style={{ padding: "18px 22px", borderBottom: "1.5px solid #f0ece4", flexShrink: 0 }}>
-                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 800, color: "#1a1a1a", marginBottom: 12 }}>New Message</div>
-                <input value={searchUser} onChange={e => handleSearchUsers(e.target.value)} placeholder="Search by name or @username..." autoFocus
-                  style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid #e8e2d9", background: "#faf8f4", color: "#333", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }}
-                  onFocus={e => e.target.style.borderColor = "#2d6a4f"} onBlur={e => e.target.style.borderColor = "#e8e2d9"} />
+              <div style={{ padding: "20px 24px", borderBottom: "1px solid #f2f2f5", flexShrink: 0 }}>
+                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a", marginBottom: 14 }}>New Message</div>
+                <input value={searchUser} onChange={e => handleSearchUsers(e.target.value)} placeholder="Search by name or @username…" autoFocus
+                  style={{ width: "100%", padding: "11px 15px", borderRadius: 11, border: "1.5px solid #ebebef", background: "#F8F9FB", color: "#333", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }}
+                  onFocus={e => e.target.style.borderColor = "#2d6a4f"} onBlur={e => e.target.style.borderColor = "#ebebef"} />
               </div>
-              <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
-                {searching && <div style={{ textAlign: "center", padding: 20, color: "#bbb", fontSize: 13 }}>Searching...</div>}
-                {!searching && searchUser.length >= 2 && searchResults.length === 0 && (
-                  <div style={{ textAlign: "center", padding: 20, color: "#bbb", fontSize: 13 }}>No users found</div>
-                )}
+              <div style={{ flex: 1, overflowY: "auto", padding: "10px 16px" }}>
+                {searching && <div style={{ textAlign: "center", padding: 24, color: "#ccc", fontSize: 13 }}>Searching…</div>}
+                {!searching && searchUser.length >= 2 && searchResults.length === 0 && <div style={{ textAlign: "center", padding: 24, color: "#ccc", fontSize: 13 }}>No users found</div>}
                 {searchResults.map(user => (
-                  <div key={user.id} className="convo-item" onClick={() => openConversation(user)} style={{ padding: "10px 12px", display: "flex", alignItems: "center", gap: 12, marginBottom: 3 }}>
-                    <Avatar profile={user} size={42} />
+                  <div key={user.id} className="convo-item" onClick={() => openConversation(user)} style={{ padding: "11px 12px", display: "flex", alignItems: "center", gap: 12, marginBottom: 3 }}>
+                    <Avatar profile={user} size={40} />
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{user.full_name}</div>
                       <div style={{ fontSize: 12, color: "#aaa" }}>@{user.username} · {user.level}</div>
@@ -674,10 +697,10 @@ export default function MessagesPage() {
                 ))}
                 {searchUser.length < 2 && conversations.length > 0 && (
                   <>
-                    <p style={{ fontSize: 11, color: "#bbb", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8, fontWeight: 600 }}>Recent</p>
+                    <p style={{ fontSize: 11, color: "#ccc", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, fontWeight: 700 }}>Recent</p>
                     {conversations.slice(0, 6).map(c => (
-                      <div key={c.other_user.id} className="convo-item" onClick={() => openConversation(c.other_user)} style={{ padding: "10px 12px", display: "flex", alignItems: "center", gap: 12, marginBottom: 3 }}>
-                        <Avatar profile={c.other_user} size={40} />
+                      <div key={c.other_user.id} className="convo-item" onClick={() => openConversation(c.other_user)} style={{ padding: "11px 12px", display: "flex", alignItems: "center", gap: 12, marginBottom: 3 }}>
+                        <Avatar profile={c.other_user} size={38} />
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>{c.other_user.full_name}</div>
                           <div style={{ fontSize: 12, color: "#aaa" }}>@{c.other_user.username}</div>
@@ -690,69 +713,110 @@ export default function MessagesPage() {
             </div>
           )}
 
+          {/* Empty state */}
           {!showNewChat && !activeConvo && (
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-              <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#e8f4e8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>💬</div>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 14 }}>
+              <div style={{ width: 68, height: 68, borderRadius: "50%", background: "#eef6f2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>💬</div>
               <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 800, color: "#ccc" }}>Your messages</div>
               <div style={{ fontSize: 13, color: "#bbb" }}>Select a conversation or start a new one</div>
-              <button onClick={() => setShowNewChat(true)} style={{ marginTop: 6, padding: "10px 24px", borderRadius: 10, background: "#2d6a4f", color: "#fff", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+              <button onClick={() => setShowNewChat(true)} style={{ marginTop: 4, padding: "10px 24px", borderRadius: 10, background: "#2d6a4f", color: "#fff", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
                 + New Message
               </button>
             </div>
           )}
 
+          {/* ── ACTIVE CONVERSATION ── */}
           {activeConvo && !showNewChat && (
             <>
-              {/* Chat header */}
-              <div style={{ padding: "12px 20px", borderBottom: "1.5px solid #e8e2d9", display: "flex", alignItems: "center", gap: 12, flexShrink: 0, background: "#fff" }}>
-                <Avatar profile={activeConvo} size={38} online />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a", display: "flex", alignItems: "center", gap: 6 }}>
-                    {activeConvo.full_name}
-                    {(() => { const rank = getChampionRank(activeConvo.xp_multiplier); return rank > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 8px", borderRadius: 99, background: rank === 1 ? "#fef9ec" : rank === 2 ? "#f3f4f6" : "#fef3ec", color: rank === 1 ? "#92400e" : rank === 2 ? "#374151" : "#78350f", border: `1px solid ${rank === 1 ? "#fbbf24" : rank === 2 ? "#d1d5db" : "#d97706"}` }}>{CHAMPION_RING[rank].badge} {CHAMPION_RING[rank].label}</span> : null; })()}
+              {/* Chat header — clean 2-row layout */}
+              <div style={{ padding: "14px 20px", borderBottom: "1px solid #ebebef", background: "#fff", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  <Avatar profile={activeConvo} size={40} online />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: "#1a1a1a", marginBottom: 2 }}>
+                      {activeConvo.full_name}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#999", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+                        Online
+                      </span>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 11, color: "#aaa" }}>@{activeConvo.username} · {activeConvo.level}</div>
+                  {/* Actions — Book Session first, then Send Credits */}
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <button onClick={startVideoSession} disabled={startingCall} className="action-btn"
+                      style={{ background: "#2d6a4f", color: "#fff", border: "1.5px solid #2d6a4f" }}>
+                      📹 {startingCall ? "Starting…" : "Book Session"}
+                    </button>
+                    <button onClick={() => setShowCreditModal(true)} className="action-btn"
+                      style={{ background: "#fef9ec", color: "#92400e", border: "1.5px solid #fbbf24" }}>
+                      💰 Credits
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => setShowCreditModal(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, background: "#fef9ec", color: "#92400e", border: "1.5px solid #fbbf24", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
-                  💰 Send Credits
-                </button>
-                <a href="/sessions" style={{ padding: "6px 14px", borderRadius: 8, background: "#e8f4e8", color: "#2d6a4f", fontSize: 12, fontWeight: 700, border: "1.5px solid #c6e8d4" }}>📅 Sessions</a>
               </div>
 
-              {/* Messages */}
-              <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 8px" }}>
+              {/* Active call banner */}
+              {activeCallMsg && (() => {
+                try {
+                  const p = JSON.parse(activeCallMsg.content) as CallPayload;
+                  if (p.status !== "active") return null;
+                  return (
+                    <div style={{ padding: "10px 20px", background: "linear-gradient(135deg,#1a4a36,#2d6a4f)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80", animation: "pulse 1.5s infinite", flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", flex: 1 }}>Live session with {activeConvo.full_name}</span>
+                      <a href={`https://meet.jit.si/${p.room}`} target="_blank" rel="noopener noreferrer"
+                        style={{ padding: "5px 14px", borderRadius: 8, background: "rgba(255,255,255,0.2)", color: "#fff", fontSize: 12, fontWeight: 700 }}>Join</a>
+                      <button onClick={() => endVideoSession(activeCallMsg.id)} style={{ padding: "5px 14px", borderRadius: 8, background: "rgba(220,38,38,0.8)", color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>End</button>
+                    </div>
+                  );
+                } catch { return null; }
+              })()}
+
+              {/* Messages area */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 12px" }}>
                 {messages.length === 0 && (
-                  <div style={{ textAlign: "center", paddingTop: "18vh" }}>
-                    <Avatar profile={activeConvo} size={50} />
-                    <div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 800, color: "#999", marginBottom: 4, marginTop: 12 }}>{activeConvo.full_name}</div>
-                    <div style={{ fontSize: 12, color: "#bbb", marginBottom: 20 }}>Say hello 👋</div>
+                  <div style={{ textAlign: "center", paddingTop: "16vh" }}>
+                    <Avatar profile={activeConvo} size={52} />
+                    <div style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 800, color: "#ccc", marginTop: 14, marginBottom: 4 }}>{activeConvo.full_name}</div>
+                    <div style={{ fontSize: 13, color: "#ccc" }}>Say hello 👋</div>
                   </div>
                 )}
 
                 {grouped.map(group => (
                   <div key={group.date}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0" }}>
-                      <div style={{ flex: 1, height: 1, background: "#ede8de" }} />
-                      <span style={{ fontSize: 10, color: "#bbb", fontWeight: 600, letterSpacing: 0.5 }}>{group.date}</span>
-                      <div style={{ flex: 1, height: 1, background: "#ede8de" }} />
+                    {/* Date divider */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0 14px" }}>
+                      <div style={{ flex: 1, height: 1, background: "#ebebef" }} />
+                      <span style={{ fontSize: 11, color: "#bbb", fontWeight: 600, letterSpacing: 0.4 }}>{group.date}</span>
+                      <div style={{ flex: 1, height: 1, background: "#ebebef" }} />
                     </div>
 
                     {group.messages.map((msg, i) => {
                       const isMe = msg.sender_id === profile?.id;
                       const prevMsg = group.messages[i - 1];
                       const nextMsg = group.messages[i + 1];
-                      const sameSenderNext = nextMsg?.sender_id === msg.sender_id;
-                      const showAvatar = !isMe && !sameSenderNext;
-                      const sameSenderPrev = prevMsg?.sender_id === msg.sender_id;
-                      const reactionEntries = Object.entries(msg.reactions || {}).filter(([_, users]) => users.length > 0);
 
-                      if (msg.message_type === "session_call") return null;
+                      // Grouping logic
+                      const isFirstInGroup = !prevMsg || prevMsg.sender_id !== msg.sender_id;
+                      const isLastInGroup = !nextMsg || nextMsg.sender_id !== msg.sender_id;
+
+                      const reactionEntries = Object.entries(msg.reactions || {}).filter(([_, u]) => u.length > 0);
+
+                      if (msg.message_type === "session_call") {
+                        try {
+                          const p = JSON.parse(msg.content) as CallPayload;
+                          if (p.status === "ended") return null;
+                        } catch { return null; }
+                        return null;
+                      }
 
                       if (msg.message_type === "credit_transfer") {
                         let payload: CreditTransferPayload | null = null;
                         try { payload = JSON.parse(msg.content) as CreditTransferPayload; } catch { return null; }
                         return (
-                          <div key={msg.id} className="msg-in" style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", marginBottom: 10 }}>
+                          <div key={msg.id} className="msg-in" style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", marginBottom: 12 }}>
                             <CreditTransferBubble payload={payload} isMe={isMe} senderName={activeConvo.full_name} />
                           </div>
                         );
@@ -760,14 +824,21 @@ export default function MessagesPage() {
 
                       return (
                         <div key={msg.id} className="msg-wrapper msg-in"
-                          style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 7, alignItems: "flex-end", marginBottom: reactionEntries.length > 0 ? 18 : (sameSenderNext ? 2 : 8), position: "relative" }}>
+                          style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 8, alignItems: "flex-end",
+                            marginBottom: reactionEntries.length > 0 ? 22 : (isLastInGroup ? 12 : 3), position: "relative" }}>
 
-                          {!isMe ? (showAvatar ? <Avatar profile={activeConvo} size={26} /> : <div style={{ width: 26, flexShrink: 0 }} />) : null}
+                          {/* Avatar — only on last message in group */}
+                          {!isMe && (
+                            isLastInGroup
+                              ? <Avatar profile={activeConvo} size={32} />
+                              : <div style={{ width: 32, flexShrink: 0 }} />
+                          )}
 
-                          <div style={{ maxWidth: "65%", display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", position: "relative" }}>
+                          <div style={{ maxWidth: "62%", display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
+                            {/* Reply preview */}
                             {msg.reply_to && (
-                              <div style={{ marginBottom: 4, padding: "5px 10px", borderRadius: 8, background: "#f0ece4", borderLeft: `2px solid ${isMe ? "#86efac" : "#2d6a4f"}`, fontSize: 11, color: "#888", maxWidth: "100%" }}>
-                                <div style={{ fontWeight: 700, color: "#555", marginBottom: 1, fontSize: 10 }}>
+                              <div style={{ marginBottom: 4, padding: "5px 10px", borderRadius: 8, background: "#f0f0f5", borderLeft: `2px solid ${isMe ? "#86efac" : "#2d6a4f"}`, fontSize: 11, color: "#999", maxWidth: "100%" }}>
+                                <div style={{ fontWeight: 700, color: "#666", marginBottom: 1, fontSize: 10 }}>
                                   {msg.reply_to.sender_id === profile?.id ? "You" : activeConvo.full_name}
                                 </div>
                                 <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -776,32 +847,38 @@ export default function MessagesPage() {
                               </div>
                             )}
 
-                            {/* ── FIX #3: file type renders FileBubble only, no text blob ── */}
+                            {/* File message */}
                             {msg.message_type === "file" && !msg.is_deleted && (
                               <FileBubble content={msg.content} isMe={isMe} />
                             )}
 
+                            {/* Image message */}
                             {msg.message_type === "image" && msg.image_url && !msg.is_deleted && (
                               <img src={msg.image_url} alt="img" className="img-msg" onClick={() => setLightboxImg(msg.image_url!)}
-                                style={{ maxWidth: 240, maxHeight: 280, objectFit: "cover", display: "block", marginBottom: msg.content ? 3 : 0, border: "1.5px solid #e8e2d9" }} />
+                                style={{ maxWidth: 220, maxHeight: 260, objectFit: "cover", display: "block", borderRadius: isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px", marginBottom: msg.content && msg.content !== "" ? 3 : 0, border: "1px solid #e4e4ed" }} />
                             )}
 
-                            {/* Only render text bubble for text messages and deleted messages — NOT for file type */}
+                            {/* Text bubble */}
                             {msg.message_type !== "file" && (msg.content || msg.is_deleted) && (
                               <div style={{
-                                padding: "9px 13px",
-                                borderRadius: isMe ? (sameSenderPrev ? "16px 4px 4px 16px" : "16px 16px 4px 16px") : (sameSenderPrev ? "4px 16px 16px 4px" : "4px 16px 16px 16px"),
-                                background: msg.is_deleted ? "#f5f0e8" : isMe ? "#2d6a4f" : "#fff",
+                                padding: "10px 14px",
+                                borderRadius: isMe
+                                  ? (isFirstInGroup ? "18px 18px 4px 18px" : isLastInGroup ? "4px 18px 18px 18px" : "4px 18px 18px 4px")
+                                  : (isFirstInGroup ? "18px 18px 18px 4px" : isLastInGroup ? "18px 4px 18px 18px" : "18px 4px 4px 18px"),
+                                background: msg.is_deleted ? "#f5f5f8" : isMe ? "#2d6a4f" : "#fff",
                                 color: msg.is_deleted ? "#bbb" : isMe ? "#fff" : "#1a1a1a",
-                                fontSize: msg.is_deleted ? 12 : 14, lineHeight: 1.5, wordBreak: "break-word",
-                                border: isMe ? "none" : "1.5px solid #e8e2d9",
-                                boxShadow: isMe ? "none" : "0 1px 3px rgba(0,0,0,0.04)",
+                                fontSize: msg.is_deleted ? 12 : 14,
+                                lineHeight: 1.55,
+                                wordBreak: "break-word",
+                                border: isMe ? "none" : "1px solid #ebebef",
+                                boxShadow: isMe ? "0 1px 4px rgba(45,106,79,0.18)" : "0 1px 3px rgba(0,0,0,0.05)",
                                 fontStyle: msg.is_deleted ? "italic" : "normal",
                               }}>
                                 {msg.is_deleted ? "🚫 Message deleted" : msg.content}
                               </div>
                             )}
 
+                            {/* Reactions */}
                             {reactionEntries.length > 0 && (
                               <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 4, position: "absolute", bottom: -20, [isMe ? "right" : "left"]: 0 }}>
                                 {reactionEntries.map(([emoji, users]) => (
@@ -813,26 +890,26 @@ export default function MessagesPage() {
                               </div>
                             )}
 
-                            {(!sameSenderNext || nextMsg?.sender_id !== msg.sender_id) && (
-                              <div style={{ fontSize: 10, color: "#bbb", marginTop: 3, display: "flex", alignItems: "center", gap: 3 }}>
+                            {/* Timestamp — only on last in group (WhatsApp style) */}
+                            {isLastInGroup && (
+                              <div style={{ fontSize: 10, color: "#bbb", marginTop: 4, display: "flex", alignItems: "center", gap: 3 }}>
                                 {formatTime(msg.created_at)}
-                                {isMe && <span style={{ color: msg.is_read ? "#2d6a4f" : "#bbb" }}>{msg.is_read ? "✓✓" : "✓"}</span>}
+                                {isMe && <span style={{ color: msg.is_read ? "#2d6a4f" : "#ccc", fontSize: 11 }}>{msg.is_read ? "✓✓" : "✓"}</span>}
                               </div>
                             )}
                           </div>
 
+                          {/* Hover actions */}
                           {!msg.is_deleted && (
-                            <div className="msg-actions" style={{ display: "flex", alignItems: "center", gap: 3, alignSelf: "center", flexDirection: isMe ? "row" : "row-reverse" }}>
+                            <div className="msg-actions" style={{ display: "flex", alignItems: "center", gap: 2, alignSelf: "center", flexDirection: isMe ? "row" : "row-reverse" }}>
                               <div style={{ position: "relative" }}>
                                 <button onClick={e => { e.stopPropagation(); setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id); }}
-                                  style={{ width: 26, height: 26, borderRadius: "50%", background: "#f5f0e8", border: "1px solid #e8e2d9", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  😊
-                                </button>
+                                  style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "1px solid #ebebef", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>😊</button>
                                 {showReactionPicker === msg.id && (
-                                  <div onClick={e => e.stopPropagation()} style={{ position: "absolute", [isMe ? "right" : "left"]: 0, bottom: 30, background: "#fff", borderRadius: 10, border: "1.5px solid #e8e2d9", padding: "6px 8px", display: "flex", gap: 4, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, animation: "slideUp 0.1s ease" }}>
+                                  <div onClick={e => e.stopPropagation()} style={{ position: "absolute", [isMe ? "right" : "left"]: 0, bottom: 30, background: "#fff", borderRadius: 12, border: "1px solid #ebebef", padding: "6px 8px", display: "flex", gap: 4, boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 10, animation: "slideUp 0.1s ease" }}>
                                     {QUICK_REACTIONS.map(emoji => (
                                       <button key={emoji} onClick={() => toggleReaction(msg.id, emoji)}
-                                        style={{ width: 30, height: 30, borderRadius: 7, border: "none", background: "transparent", fontSize: 18, cursor: "pointer", transition: "transform 0.1s" }}
+                                        style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", fontSize: 19, cursor: "pointer", transition: "transform 0.1s" }}
                                         onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.3)")}
                                         onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}>
                                         {emoji}
@@ -842,14 +919,10 @@ export default function MessagesPage() {
                                 )}
                               </div>
                               <button onClick={() => { setReplyingTo(msg); textareaRef.current?.focus(); }}
-                                style={{ width: 26, height: 26, borderRadius: "50%", background: "#f5f0e8", border: "1px solid #e8e2d9", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                ↩
-                              </button>
+                                style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "1px solid #ebebef", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>↩</button>
                               {isMe && (
                                 <button onClick={e => { e.stopPropagation(); setContextMenu({ msgId: msg.id, x: e.clientX, y: e.clientY }); }}
-                                  style={{ width: 26, height: 26, borderRadius: "50%", background: "#f5f0e8", border: "1px solid #e8e2d9", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", color: "#888" }}>
-                                  ⋯
-                                </button>
+                                  style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "1px solid #ebebef", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", color: "#999", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>⋯</button>
                               )}
                             </div>
                           )}
@@ -859,80 +932,107 @@ export default function MessagesPage() {
                   </div>
                 ))}
 
+                {/* Typing indicator */}
                 {typingUsers.length > 0 && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", animation: "fadeIn 0.2s ease" }}>
-                    <Avatar profile={activeConvo} size={24} />
-                    <div style={{ background: "#fff", border: "1.5px solid #e8e2d9", borderRadius: "4px 14px 14px 14px", padding: "8px 14px", display: "flex", gap: 3, alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0 10px", animation: "fadeIn 0.2s ease" }}>
+                    <Avatar profile={activeConvo} size={28} />
+                    <div style={{ background: "#fff", border: "1px solid #ebebef", borderRadius: "4px 14px 14px 14px", padding: "8px 14px", display: "flex", gap: 3, alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
                       {[0, 1, 2].map(i => (
                         <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#bbb", animation: `typingBounce 1.2s ease ${i * 0.2}s infinite` }} />
                       ))}
                     </div>
+                    <span style={{ fontSize: 11, color: "#bbb" }}>{activeConvo.full_name.split(" ")[0]} is typing…</span>
                   </div>
                 )}
 
                 <div ref={bottomRef} />
               </div>
 
+              {/* Reply bar */}
               {replyingTo && (
-                <div style={{ padding: "8px 16px", background: "#f0fdf4", borderTop: "1.5px solid #c6e8d4", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ padding: "8px 18px", background: "#f0fdf6", borderTop: "1px solid #c6e8d4", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                   <div style={{ width: 3, height: 36, borderRadius: 3, background: "#2d6a4f", flexShrink: 0 }} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "#2d6a4f", marginBottom: 1 }}>
-                      Replying to {replyingTo.sender_id === profile?.id ? "yourself" : activeConvo.full_name}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {replyingTo.content?.slice(0, 80)}
-                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#2d6a4f", marginBottom: 1 }}>Replying to {replyingTo.sender_id === profile?.id ? "yourself" : activeConvo.full_name}</div>
+                    <div style={{ fontSize: 12, color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{replyingTo.content?.slice(0, 80)}</div>
                   </div>
-                  <button onClick={() => setReplyingTo(null)} style={{ background: "none", border: "none", color: "#aaa", fontSize: 16, cursor: "pointer" }}>✕</button>
+                  <button onClick={() => setReplyingTo(null)} style={{ background: "none", border: "none", color: "#bbb", fontSize: 16, cursor: "pointer" }}>✕</button>
                 </div>
               )}
 
+              {/* Image preview */}
               {imagePreview && (
-                <div style={{ padding: "10px 18px", background: "#e8f4e8", borderTop: "1.5px solid #c6e8d4", display: "flex", alignItems: "center", gap: 12 }}>
-                  <img src={imagePreview} alt="preview" style={{ height: 52, width: 52, objectFit: "cover", borderRadius: 7, border: "1.5px solid #c6e8d4" }} />
+                <div style={{ padding: "10px 18px", background: "#f0fdf6", borderTop: "1px solid #c6e8d4", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                  <img src={imagePreview} alt="preview" style={{ height: 50, width: 50, objectFit: "cover", borderRadius: 8, border: "1.5px solid #c6e8d4" }} />
                   <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 12, color: "#2d6a4f", fontWeight: 600 }}>Image ready to send</p>
+                    <p style={{ fontSize: 12, color: "#2d6a4f", fontWeight: 700 }}>Image ready</p>
                     <p style={{ fontSize: 11, color: "#888" }}>{imageFile?.name}</p>
                   </div>
-                  <button onClick={() => { setImagePreview(null); setImageFile(null); }} style={{ background: "#fce8e8", border: "1.5px solid #fca5a5", borderRadius: 7, color: "#dc2626", fontSize: 12, fontWeight: 600, padding: "4px 10px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Remove</button>
-                </div>
-              )}
-              {attachFile && (
-                <div style={{ padding: "10px 18px", background: "#f0f4ff", borderTop: "1.5px solid #c7d2fe", display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontSize: 28 }}>📎</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 12, color: "#3730a3", fontWeight: 700 }}>File ready to send</p>
-                    <p style={{ fontSize: 11, color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{attachFile.name} · {attachFile.size > 1024*1024 ? (attachFile.size/1024/1024).toFixed(1)+"MB" : Math.round(attachFile.size/1024)+"KB"}</p>
-                  </div>
-                  <button onClick={() => setAttachFile(null)} style={{ background: "#fce8e8", border: "1.5px solid #fca5a5", borderRadius: 7, color: "#dc2626", fontSize: 12, fontWeight: 600, padding: "4px 10px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Remove</button>
+                  <button onClick={() => { setImagePreview(null); setImageFile(null); }} style={{ background: "#fef2f2", border: "1.5px solid #fca5a5", borderRadius: 7, color: "#ef4444", fontSize: 12, fontWeight: 600, padding: "4px 10px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Remove</button>
                 </div>
               )}
 
+              {/* File preview */}
+              {attachFile && (
+                <div style={{ padding: "10px 18px", background: "#f5f5ff", borderTop: "1px solid #c7d2fe", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                  <span style={{ fontSize: 26 }}>📎</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: "#3730a3", fontWeight: 700 }}>File ready</p>
+                    <p style={{ fontSize: 11, color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{attachFile.name} · {formatFileSize(attachFile.size)}</p>
+                  </div>
+                  <button onClick={() => setAttachFile(null)} style={{ background: "#fef2f2", border: "1.5px solid #fca5a5", borderRadius: 7, color: "#ef4444", fontSize: 12, fontWeight: 600, padding: "4px 10px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Remove</button>
+                </div>
+              )}
+
+              {/* Upload progress */}
+              {uploading && uploadProgress > 0 && (
+                <div style={{ padding: "8px 18px", background: "#fff", borderTop: "1px solid #ebebef", flexShrink: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#888", marginBottom: 4 }}>
+                    <span>Uploading…</span><span>{uploadProgress}%</span>
+                  </div>
+                  <div style={{ height: 4, borderRadius: 99, background: "#ebebef", overflow: "hidden" }}>
+                    <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg,#2d6a4f,#4ade80)", width: `${uploadProgress}%`, transition: "width 0.3s ease" }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Emoji picker */}
               {showEmoji && (
-                <div style={{ padding: "10px 14px", background: "#fff", borderTop: "1.5px solid #e8e2d9", display: "flex", flexWrap: "wrap", gap: 2, animation: "slideUp 0.12s ease" }}>
+                <div style={{ padding: "10px 14px 8px", background: "#fff", borderTop: "1px solid #ebebef", display: "flex", flexWrap: "wrap", gap: 2, animation: "slideUp 0.12s ease", flexShrink: 0 }}>
                   {EMOJI_LIST.map(emoji => (
                     <span key={emoji} className="emoji-btn" onClick={() => { setNewMsg(prev => prev + emoji); textareaRef.current?.focus(); }}>{emoji}</span>
                   ))}
                 </div>
               )}
 
-              <div style={{ padding: "10px 14px", borderTop: "1.5px solid #e8e2d9", background: "#fff", display: "flex", gap: 7, alignItems: "flex-end", flexShrink: 0 }}>
-                <button className="tool-btn" onClick={() => fileInputRef.current?.click()} title="Send photo">📷</button>
-                <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageSelect} />
-                <button className="tool-btn" onClick={() => attachInputRef.current?.click()} title="Attach file">📎</button>
+              {/* ── INPUT BAR ── */}
+              <div style={{ padding: "10px 16px 12px", borderTop: "1px solid #ebebef", background: "#fff", display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0 }}>
+                {/* + attach menu */}
+                <button className="input-tool" onClick={() => attachInputRef.current?.click()} title="Attach file" style={{ width: 36, height: 36, borderRadius: 10, background: "#f5f5f8", border: "1.5px solid #ebebef", fontSize: 18 }}>+</button>
                 <input ref={attachInputRef} type="file" accept="*/*" style={{ display: "none" }} onChange={handleAttachSelect} />
-                <button className="tool-btn" onClick={() => setShowEmoji(p => !p)} title="Emoji" style={{ background: showEmoji ? "#e8f4e8" : "#f5f0e8", borderColor: showEmoji ? "#c6e8d4" : "#e8e2d9" }}>😊</button>
-                <textarea ref={textareaRef} value={newMsg}
-                  onChange={e => { handleTyping(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 110) + "px"; }}
-                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                  placeholder="Type a message… (Enter to send)"
-                  rows={1}
-                  style={{ flex: 1, padding: "9px 13px", borderRadius: 11, border: "1.5px solid #e8e2d9", background: "#faf8f4", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif", resize: "none", maxHeight: 110, lineHeight: 1.5, transition: "border-color 0.15s" }}
-                  onFocus={e => e.target.style.borderColor = "#2d6a4f"} onBlur={e => e.target.style.borderColor = "#e8e2d9"} />
-                <button onClick={sendMessage} disabled={(!newMsg.trim() && !imageFile && !attachFile) || sending || uploading} className="send-btn"
-                  style={{ width: 38, height: 38, borderRadius: 10, background: (newMsg.trim() || imageFile || attachFile) ? "#2d6a4f" : "#e8e2d9", color: (newMsg.trim() || imageFile || attachFile) ? "#fff" : "#bbb", border: "none", fontSize: 16, cursor: (newMsg.trim() || imageFile || attachFile) ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  {uploading ? "⏳" : sending ? "…" : "↑"}
+                <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageSelect} />
+
+                {/* Textarea */}
+                <div style={{ flex: 1, display: "flex", alignItems: "flex-end", background: "#F8F9FB", borderRadius: 14, border: "1.5px solid #ebebef", padding: "2px 10px 2px 14px", transition: "border-color 0.15s" }}
+                  onFocusCapture={e => (e.currentTarget.style.borderColor = "#2d6a4f")}
+                  onBlurCapture={e => (e.currentTarget.style.borderColor = "#ebebef")}>
+                  <textarea ref={textareaRef} value={newMsg}
+                    onChange={e => { handleTyping(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 110) + "px"; }}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                    placeholder="Type a message…"
+                    rows={1}
+                    style={{ flex: 1, padding: "9px 0", background: "transparent", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif", resize: "none", maxHeight: 110, lineHeight: 1.5, border: "none", outline: "none" }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 2, paddingBottom: 6 }}>
+                    <button className="input-tool" onClick={() => fileInputRef.current?.click()} title="Photo">📷</button>
+                    <button className="input-tool" onClick={() => setShowEmoji(p => !p)} title="Emoji"
+                      style={{ color: showEmoji ? "#2d6a4f" : undefined }}>😊</button>
+                  </div>
+                </div>
+
+                {/* Send */}
+                <button onClick={sendMessage} disabled={(!newMsg.trim() && !imageFile && !attachFile) || sending || uploading}
+                  style={{ width: 40, height: 40, borderRadius: 12, background: (newMsg.trim() || imageFile || attachFile) && !sending && !uploading ? "#2d6a4f" : "#e8e8ef", color: (newMsg.trim() || imageFile || attachFile) ? "#fff" : "#bbb", border: "none", fontSize: 17, cursor: (newMsg.trim() || imageFile || attachFile) ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s", boxShadow: (newMsg.trim() || imageFile || attachFile) ? "0 2px 8px rgba(45,106,79,0.3)" : "none" }}>
+                  {uploading ? "⏳" : sending ? "…" : "➤"}
                 </button>
               </div>
             </>
@@ -940,57 +1040,60 @@ export default function MessagesPage() {
         </div>
       </div>
 
+      {/* ── LIGHTBOX ── */}
       {lightboxImg && (
-        <div onClick={() => setLightboxImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, cursor: "zoom-out", animation: "fadeIn 0.15s ease" }}>
-          <img src={lightboxImg} alt="full" style={{ maxWidth: "88vw", maxHeight: "88vh", objectFit: "contain", borderRadius: 10 }} onClick={e => e.stopPropagation()} />
-          <button onClick={() => setLightboxImg(null)} style={{ position: "absolute", top: 18, right: 18, background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", width: 34, height: 34, borderRadius: "50%", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        <div onClick={() => setLightboxImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, cursor: "zoom-out", animation: "fadeIn 0.15s ease" }}>
+          <img src={lightboxImg} alt="full" style={{ maxWidth: "88vw", maxHeight: "88vh", objectFit: "contain", borderRadius: 12 }} onClick={e => e.stopPropagation()} />
+          <button onClick={() => setLightboxImg(null)} style={{ position: "absolute", top: 18, right: 18, background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", width: 36, height: 36, borderRadius: "50%", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
       )}
 
+      {/* ── CONTEXT MENU ── */}
       {contextMenu && (
-        <div onClick={e => e.stopPropagation()} style={{ position: "fixed", top: contextMenu.y, left: contextMenu.x, background: "#fff", borderRadius: 10, border: "1.5px solid #e8e2d9", boxShadow: "0 8px 28px rgba(0,0,0,0.12)", zIndex: 200, padding: 4, minWidth: 160, animation: "slideUp 0.1s ease" }}>
-          <div className="ctx-menu-item" onClick={() => { const msg = messages.find(m => m.id === contextMenu.msgId); if (msg) { setReplyingTo(msg); textareaRef.current?.focus(); } setContextMenu(null); }}>↩ Reply</div>
-          <div className="ctx-menu-item danger" onClick={() => deleteMessage(contextMenu.msgId)}>🗑️ Delete for everyone</div>
+        <div onClick={e => e.stopPropagation()} style={{ position: "fixed", top: contextMenu.y, left: contextMenu.x, background: "#fff", borderRadius: 12, border: "1px solid #ebebef", boxShadow: "0 8px 30px rgba(0,0,0,0.12)", zIndex: 200, padding: 6, minWidth: 160, animation: "slideUp 0.1s ease" }}>
+          <div className="ctx-item" onClick={() => { const m = messages.find(m => m.id === contextMenu.msgId); if (m) { setReplyingTo(m); textareaRef.current?.focus(); } setContextMenu(null); }}>↩ Reply</div>
+          <div className="ctx-item danger" onClick={() => deleteMessage(contextMenu.msgId)}>🗑️ Delete for everyone</div>
         </div>
       )}
 
+      {/* ── CREDIT MODAL ── */}
       {showCreditModal && activeConvo && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20, animation: "fadeIn 0.15s ease" }}>
-          <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 400, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20, animation: "fadeIn 0.15s ease" }}>
+          <div style={{ background: "#fff", borderRadius: 22, width: "100%", maxWidth: 400, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.16)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
               <div>
-                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a", marginBottom: 2 }}>💰 Send Credits</div>
-                <div style={{ fontSize: 12, color: "#aaa" }}>To {activeConvo.full_name} · Your balance: <strong style={{ color: "#2d6a4f" }}>{profile?.credits} cr</strong></div>
+                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 21, fontWeight: 900, color: "#1a1a1a", marginBottom: 3 }}>💰 Send Credits</div>
+                <div style={{ fontSize: 12, color: "#aaa" }}>To {activeConvo.full_name} · Balance: <strong style={{ color: "#2d6a4f" }}>{profile?.credits} cr</strong></div>
               </div>
-              <button onClick={() => setShowCreditModal(false)} style={{ background: "none", border: "none", color: "#aaa", fontSize: 20, cursor: "pointer" }}>✕</button>
+              <button onClick={() => setShowCreditModal(false)} style={{ background: "none", border: "none", color: "#ccc", fontSize: 20, cursor: "pointer" }}>✕</button>
             </div>
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: "#888", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Amount</label>
-              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "#999", display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>Amount</label>
+              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
                 {[5, 10, 20, 50].map(amt => (
                   <button key={amt} onClick={() => setCreditAmount(String(amt))}
-                    style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${creditAmount === String(amt) ? "#2d6a4f" : "#e8e2d9"}`, background: creditAmount === String(amt) ? "#e8f4e8" : "#faf8f4", color: creditAmount === String(amt) ? "#2d6a4f" : "#555", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+                    style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: `1.5px solid ${creditAmount === String(amt) ? "#2d6a4f" : "#ebebef"}`, background: creditAmount === String(amt) ? "#eef6f2" : "#F8F9FB", color: creditAmount === String(amt) ? "#2d6a4f" : "#555", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.12s" }}>
                     {amt}
                   </button>
                 ))}
               </div>
-              <input value={creditAmount} onChange={e => setCreditAmount(e.target.value.replace(/\D/g, ""))} placeholder="Or enter custom amount..."
-                style={{ width: "100%", padding: "10px 13px", borderRadius: 10, border: "1.5px solid #e8e2d9", background: "#faf8f4", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }} />
+              <input value={creditAmount} onChange={e => setCreditAmount(e.target.value.replace(/\D/g, ""))} placeholder="Custom amount…"
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid #ebebef", background: "#F8F9FB", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }} />
             </div>
             <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: "#888", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Note (optional)</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "#999", display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>Note (optional)</label>
               <input value={creditNote} onChange={e => setCreditNote(e.target.value)} placeholder="e.g. Thanks for the session!"
-                style={{ width: "100%", padding: "10px 13px", borderRadius: 10, border: "1.5px solid #e8e2d9", background: "#faf8f4", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }} />
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid #ebebef", background: "#F8F9FB", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }} />
             </div>
             {creditAmount && parseInt(creditAmount) > (profile?.credits || 0) && (
-              <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: "#fce8e8", border: "1px solid #fca5a5", fontSize: 12, color: "#dc2626", fontWeight: 600 }}>
-                ⚠️ Insufficient credits. You have {profile?.credits} cr.
+              <div style={{ marginBottom: 14, padding: "9px 12px", borderRadius: 9, background: "#fef2f2", border: "1px solid #fca5a5", fontSize: 12, color: "#ef4444", fontWeight: 600 }}>
+                ⚠️ Insufficient credits — you have {profile?.credits} cr.
               </div>
             )}
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowCreditModal(false)} style={{ flex: 1, padding: "11px", borderRadius: 10, border: "1.5px solid #e8e2d9", background: "transparent", color: "#888", fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
+              <button onClick={() => setShowCreditModal(false)} style={{ flex: 1, padding: "12px", borderRadius: 11, border: "1.5px solid #ebebef", background: "transparent", color: "#999", fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
               <button onClick={handleSendCredits} disabled={sendingCredits || !creditAmount || parseInt(creditAmount) <= 0 || parseInt(creditAmount) > (profile?.credits || 0)}
-                style={{ flex: 2, padding: "11px", borderRadius: 10, border: "none", background: creditAmount && parseInt(creditAmount) > 0 && parseInt(creditAmount) <= (profile?.credits || 0) ? "#2d6a4f" : "#e8e2d9", color: creditAmount && parseInt(creditAmount) > 0 ? "#fff" : "#bbb", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+                style={{ flex: 2, padding: "12px", borderRadius: 11, border: "none", background: creditAmount && parseInt(creditAmount) > 0 && parseInt(creditAmount) <= (profile?.credits || 0) ? "#2d6a4f" : "#e8e8ef", color: creditAmount && parseInt(creditAmount) > 0 ? "#fff" : "#bbb", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.15s" }}>
                 {sendingCredits ? "Sending…" : `💰 Send ${creditAmount || "0"} Credits`}
               </button>
             </div>

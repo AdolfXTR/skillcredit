@@ -20,8 +20,10 @@ type User = {
   id: string; full_name: string; username: string; bio: string | null;
   location: string | null; level: string; credits: number; xp: number;
   role: string; is_verified: boolean; avatar_url: string | null; created_at: string;
-  // ── Perk columns ──
-  xp_multiplier?: number; multiplier_ends_at?: string | null; champion_title?: string | null;
+  xp_multiplier?: number; multiplier_ends_at?: string | null;
+  champion_title?: string | null;
+  teaching_title?: string | null; teaching_title_ends_at?: string | null;
+  rating_title?: string | null;   rating_title_ends_at?: string | null;
 };
 type Listing  = { id: string; title: string; credit_price: number; format: string; skill?: { name: string } };
 type Review   = { id: string; overall: number; review: string; created_at: string; rater?: { full_name: string; username: string; level: string; avatar_url?: string | null } };
@@ -47,21 +49,22 @@ function timeAgo(iso: string) {
   if (months < 12) return `${months}mo`;
   return `${Math.floor(months/12)}yr`;
 }
+function isTitleActive(endsAt?: string | null) {
+  return !!endsAt && new Date(endsAt) > new Date();
+}
 function Stars({ rating }: { rating: number }) {
   return <span style={{ color:"#f59e0b", fontSize:12 }}>{"★".repeat(Math.round(rating))}{"☆".repeat(5-Math.round(rating))}</span>;
 }
 
-// ── Get rank from profile perk columns ─────────────────────────────────────
 function getUserRank(u: User): number {
   if (!u.champion_title) return 0;
   if (u.xp_multiplier === 1.25) return 1;
   if (u.xp_multiplier === 1.15) return 2;
   if (u.xp_multiplier === 1.10) return 3;
-  if (u.champion_title) return 1; // fallback
+  if (u.champion_title) return 1;
   return 0;
 }
 
-// ── PREMIUM AVATAR — shows animated gold/silver/bronze border for top 3 ────
 const RANK_BORDER_STYLE: Record<number, React.CSSProperties> = {
   1: { boxShadow:"0 0 0 3px #e8a800, 0 0 18px rgba(232,168,0,0.7), 0 0 36px rgba(255,215,0,0.35)", animation:"goldPulse 2s ease infinite" },
   2: { boxShadow:"0 0 0 2.5px #c0c0c0, 0 0 14px rgba(192,192,192,0.55)", animation:"silverPulse 2s ease infinite" },
@@ -73,20 +76,11 @@ function PremiumAvatar({ name, level, avatarUrl, size=44, radius=12, rank=0 }: {
   name: string; level: string; avatarUrl?: string | null;
   size?: number; radius?: number; rank?: number;
 }) {
-  const lvl        = LEVEL_PALETTE[level] || LEVEL_PALETTE.Seedling;
+  const lvl = LEVEL_PALETTE[level] || LEVEL_PALETTE.Seedling;
   const borderStyle = rank >= 1 && rank <= 3 ? RANK_BORDER_STYLE[rank] : {};
-
   return (
     <div style={{ position:"relative", flexShrink:0, width:size, height:size }}>
-      <div style={{
-        width:size, height:size, borderRadius:radius, overflow:"hidden", flexShrink:0,
-        background: avatarUrl ? "transparent" : lvl.bg,
-        display:"flex", alignItems:"center", justifyContent:"center",
-        fontSize:size*0.34, fontWeight:800, color:"#fff",
-        boxShadow:`0 3px 12px ${lvl.glow}`, fontFamily:"'Fraunces',serif",
-        ...borderStyle,
-        transition:"box-shadow .3s",
-      }}>
+      <div style={{ width:size, height:size, borderRadius:radius, overflow:"hidden", flexShrink:0, background:avatarUrl?"transparent":lvl.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*0.34, fontWeight:800, color:"#fff", boxShadow:`0 3px 12px ${lvl.glow}`, fontFamily:"'Fraunces',serif", ...borderStyle, transition:"box-shadow .3s" }}>
         {avatarUrl
           ? <img src={avatarUrl} alt={name} style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
           : getInitials(name)
@@ -98,6 +92,39 @@ function PremiumAvatar({ name, level, avatarUrl, size=44, radius=12, rank=0 }: {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Perk pills component — reused in drawer + cards ──────────────────────────
+function PerkPills({ user, size="sm" }: { user: User; size?: "sm"|"md" }) {
+  const p = size === "md" ? "3px 10px" : "2px 7px";
+  const f = size === "md" ? 11 : 9;
+  const hasTeaching = isTitleActive(user.teaching_title_ends_at) && !!user.teaching_title;
+  const hasRating   = isTitleActive(user.rating_title_ends_at)   && !!user.rating_title;
+  const hasMulti    = !!(user.xp_multiplier && user.xp_multiplier > 1 && user.multiplier_ends_at && new Date(user.multiplier_ends_at) > new Date());
+  return (
+    <>
+      {user.champion_title && (
+        <span style={{ fontSize:f, padding:p, borderRadius:999, background:"#fffbeb", color:"#e8a800", fontWeight:800, border:"1px solid #f0d890" }}>
+          🏆 {size==="md" ? user.champion_title : ""}
+        </span>
+      )}
+      {hasTeaching && (
+        <span style={{ fontSize:f, padding:p, borderRadius:999, background:"#eff6ff", color:"#1d4ed8", fontWeight:800, border:"1px solid #bfdbfe" }}>
+          🎓 {size==="md" ? user.teaching_title : ""}
+        </span>
+      )}
+      {hasRating && (
+        <span style={{ fontSize:f, padding:p, borderRadius:999, background:"#fffbeb", color:"#92400e", fontWeight:800, border:"1px solid #fde68a" }}>
+          ⭐ {size==="md" ? user.rating_title : ""}
+        </span>
+      )}
+      {hasMulti && (
+        <span style={{ fontSize:f, padding:p, borderRadius:999, background:"#fdf0ee", color:"#c0392b", fontWeight:800, border:"1px solid #f0b8b0" }}>
+          ⚡ {size==="md" ? `${user.xp_multiplier}x XP` : ""}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -119,8 +146,7 @@ function UserDrawer({ userId, onClose, currentUserId }: { userId: string; onClos
   async function load() {
     setLoading(true);
     const [userRes, listingsRes, reviewsRes, sessionsRes, skillsRes] = await Promise.all([
-      // Fetch perk columns too
-      supabase.from("profiles").select("*,xp_multiplier,multiplier_ends_at,champion_title").eq("id", userId).single(),
+      supabase.from("profiles").select("*,xp_multiplier,multiplier_ends_at,champion_title,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at").eq("id", userId).single(),
       supabase.from("listings").select("id,title,credit_price,format,skill:skills(name)").eq("teacher_id", userId).eq("is_active",true).limit(6),
       supabase.from("ratings").select("id,overall,review,created_at,rater:profiles!ratings_rater_id_fkey(full_name,username,level,avatar_url)").eq("rated_id", userId).order("created_at",{ascending:false}).limit(5),
       supabase.from("sessions").select("id",{count:"exact",head:true}).eq("teacher_id", userId).eq("status","completed"),
@@ -147,8 +173,8 @@ function UserDrawer({ userId, onClose, currentUserId }: { userId: string; onClos
       <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:300, backdropFilter:"blur(4px)", animation:"fadeIn 0.15s ease" }} />
       <div style={{ position:"fixed", top:0, right:0, width:420, height:"100vh", background:"#fff", zIndex:301, display:"flex", flexDirection:"column", boxShadow:"-16px 0 60px rgba(0,0,0,0.15)", animation:"slideInRight 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
 
-        {/* Header banner — gold tint if champion */}
-        <div style={{ height:80, background: rank===1 ? "linear-gradient(135deg,#1a3d2e,#2d6a4f)" : rank===2 ? "linear-gradient(135deg,#2c3e50,#34495e)" : rank===3 ? "linear-gradient(135deg,#4a2c0a,#7a4a1a)" : `linear-gradient(135deg,${lvl.bg},${lvl.bg}bb)`, position:"relative", flexShrink:0, overflow:"hidden" }}>
+        {/* Header banner */}
+        <div style={{ height:80, background: rank===1?"linear-gradient(135deg,#1a3d2e,#2d6a4f)":rank===2?"linear-gradient(135deg,#2c3e50,#34495e)":rank===3?"linear-gradient(135deg,#4a2c0a,#7a4a1a)":`linear-gradient(135deg,${lvl.bg},${lvl.bg}bb)`, position:"relative", flexShrink:0, overflow:"hidden" }}>
           <div style={{ position:"absolute", top:-30, left:-20, width:120, height:120, borderRadius:"50%", background:"rgba(255,255,255,0.06)" }} />
           <div style={{ position:"absolute", bottom:-40, right:-10, width:140, height:140, borderRadius:"50%", background:"rgba(255,255,255,0.04)" }} />
           <div style={{ position:"absolute", right:16, top:"50%", transform:"translateY(-50%)", fontSize:52, opacity:0.1 }}>{rank===1?"👑":rank===2?"🥈":rank===3?"🥉":lvl.pattern}</div>
@@ -169,43 +195,40 @@ function UserDrawer({ userId, onClose, currentUserId }: { userId: string; onClos
           <>
             <div style={{ padding:"0 20px 16px", borderBottom:"1.5px solid #f0ece4", flexShrink:0 }}>
               <div style={{ marginTop:-28, marginBottom:12, display:"flex", alignItems:"flex-end", justifyContent:"space-between" }}>
-                {/* Premium avatar in drawer */}
                 <PremiumAvatar name={user.full_name} level={user.level} avatarUrl={user.avatar_url} size={62} radius={16} rank={rank} />
                 {!isOwn ? (
                   <div style={{ display:"flex", gap:7, paddingBottom:2 }}>
-                    <button onClick={openMsg} style={{ padding:"8px 16px", borderRadius:10, background:lvl.bg, color:"#fff", border:"none", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", boxShadow:`0 2px 10px ${lvl.glow}` }}>
-                      💬 Message
-                    </button>
-                    <a href={`/listings?teacher=${user.id}`} style={{ padding:"8px 14px", borderRadius:10, background:"#f5f0e8", color:"#555", border:"1.5px solid #e8e2d9", fontSize:12, fontWeight:700, textDecoration:"none", display:"flex", alignItems:"center" }}>
-                      📚 Book
-                    </a>
+                    <button onClick={openMsg} style={{ padding:"8px 16px", borderRadius:10, background:lvl.bg, color:"#fff", border:"none", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", boxShadow:`0 2px 10px ${lvl.glow}` }}>💬 Message</button>
+                    <a href={`/listings?teacher=${user.id}`} style={{ padding:"8px 14px", borderRadius:10, background:"#f5f0e8", color:"#555", border:"1.5px solid #e8e2d9", fontSize:12, fontWeight:700, textDecoration:"none", display:"flex", alignItems:"center" }}>📚 Book</a>
                   </div>
                 ) : (
                   <a href="/profile" style={{ padding:"7px 14px", borderRadius:10, background:"#f5f0e8", color:"#555", border:"1.5px solid #e8e2d9", fontSize:12, fontWeight:700, textDecoration:"none" }}>✏️ Edit</a>
                 )}
               </div>
 
+              {/* Name row */}
               <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap", marginBottom:3 }}>
                 <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#1a1a1a" }}>{user.full_name}</span>
                 {user.is_verified && <span style={{ fontSize:10, fontWeight:700, color:"#166534", background:"#f0fdf4", padding:"2px 8px", borderRadius:999, border:"1px solid #bbf7d0" }}>✅ Verified</span>}
                 {badge && <span style={{ fontSize:10, fontWeight:700, padding:"2px 9px", borderRadius:999, background:badge.bg, color:badge.color, border:`1px solid ${badge.border}` }}>{badge.emoji} {badge.name}</span>}
-                {/* Champion title badge */}
-                {user.champion_title && (
-                  <span style={{ fontSize:10, fontWeight:800, padding:"2px 9px", borderRadius:999, background:"#fffbeb", color:"#e8a800", border:"1px solid #f0d890" }}>
-                    🏆 {user.champion_title}
-                  </span>
-                )}
               </div>
+
+              {/* Username + level + location */}
               <div style={{ fontSize:12, color:"#aaa", marginBottom:8 }}>
                 @{user.username}
                 <span style={{ margin:"0 6px", color:"#e0dbd4" }}>·</span>
                 <span style={{ background:lvl.light, color:lvl.bg, padding:"1px 7px", borderRadius:999, fontSize:10, fontWeight:700 }}>{lvl.pattern} {user.level}</span>
                 {user.location && <span style={{ marginLeft:8 }}>📍 {user.location}</span>}
-                {user.xp_multiplier && user.xp_multiplier > 1 && user.multiplier_ends_at && new Date(user.multiplier_ends_at) > new Date() && (
-                  <span style={{ marginLeft:8, background:"#fdf0ee", color:"#c0392b", padding:"1px 7px", borderRadius:999, fontSize:10, fontWeight:800, border:"1px solid #f0b8b0" }}>⚡ {user.xp_multiplier}x XP</span>
-                )}
               </div>
-              {user.bio && <p style={{ fontSize:13, color:"#555", lineHeight:1.65, marginTop:0, marginBottom:0 }}>{user.bio}</p>}
+
+              {/* PERK PILLS — full text in drawer */}
+              {(user.champion_title || isTitleActive(user.teaching_title_ends_at) || isTitleActive(user.rating_title_ends_at) || (user.xp_multiplier && user.xp_multiplier > 1)) && (
+                <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:10 }}>
+                  <PerkPills user={user} size="md" />
+                </div>
+              )}
+
+              {user.bio && <p style={{ fontSize:13, color:"#555", lineHeight:1.65, marginBottom:0 }}>{user.bio}</p>}
 
               <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginTop:14 }}>
                 {[
@@ -315,12 +338,7 @@ function UserDrawer({ userId, onClose, currentUserId }: { userId: string; onClos
                   ) : reviews.map(r => (
                     <div key={r.id} style={{ padding:"14px", borderRadius:14, border:"1.5px solid #e8e2d9", background:"#faf8f4" }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                        <PremiumAvatar
-                          name={(r.rater as any)?.full_name||"?"}
-                          level={(r.rater as any)?.level||"Seedling"}
-                          avatarUrl={(r.rater as any)?.avatar_url}
-                          size={30} radius={999}
-                        />
+                        <PremiumAvatar name={(r.rater as any)?.full_name||"?"} level={(r.rater as any)?.level||"Seedling"} avatarUrl={(r.rater as any)?.avatar_url} size={30} radius={999} />
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:12, fontWeight:700, color:"#333" }}>{(r.rater as any)?.full_name}</div>
                           <div style={{ fontSize:10, color:"#bbb" }}>@{(r.rater as any)?.username}</div>
@@ -369,10 +387,14 @@ export default function PeoplePage() {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { window.location.href = "/login"; return; }
-    const { data: prof } = await supabase.from("profiles").select("*,xp_multiplier,multiplier_ends_at,champion_title").eq("id", user.id).single();
+    const { data: prof } = await supabase.from("profiles")
+      .select("*,xp_multiplier,multiplier_ends_at,champion_title,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at")
+      .eq("id", user.id).single();
     if (prof) setCurrentUser(prof);
-    // Fetch all profiles with perk columns
-    const { data } = await supabase.from("profiles").select("*,xp_multiplier,multiplier_ends_at,champion_title").order("xp", { ascending: false });
+
+    const { data } = await supabase.from("profiles")
+      .select("*,xp_multiplier,multiplier_ends_at,champion_title,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at")
+      .order("xp", { ascending: false });
     const all = data || [];
     setUsers(all);
 
@@ -385,10 +407,7 @@ export default function PeoplePage() {
         supabase.from("user_skills").select("skill_name").eq("user_id",u.id).limit(3),
       ]);
       const avg = bayesianAvg((ratRes.data||[]).map((r: any) => r.overall));
-      statsMap[u.id] = {
-        sessions: sessRes.count||0, listings: listRes.count||0, avgRating: avg,
-        skills: (skillRes.data||[]).map((s: any) => s.skill_name),
-      };
+      statsMap[u.id] = { sessions:sessRes.count||0, listings:listRes.count||0, avgRating:avg, skills:(skillRes.data||[]).map((s: any) => s.skill_name) };
     }));
     setUserStats(statsMap);
     setLoading(false);
@@ -402,7 +421,7 @@ export default function PeoplePage() {
     }
     if (levelFilter !== "all") result = result.filter(u => u.level === levelFilter);
     if (roleFilter  !== "all") result = result.filter(u => u.role  === roleFilter);
-    result.sort((a,b) => sortBy==="xp" ? (b.xp||0)-(a.xp||0) : new Date(b.created_at).getTime()-new Date(a.created_at).getTime());
+    result.sort((a,b) => sortBy==="xp"?(b.xp||0)-(a.xp||0):new Date(b.created_at).getTime()-new Date(a.created_at).getTime());
     setFiltered(result);
   }
 
@@ -457,7 +476,6 @@ export default function PeoplePage() {
             <a key={l} href={h} className={`nav-link ${h==="/people"?"active":""}`}>{l}</a>
           ))}
         </div>
-        {/* Navbar avatar — shows YOUR border if you're top 3 */}
         <a href="/profile" style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 12px 5px 6px", borderRadius:999, background:"#f5f0e8", border:"1.5px solid #e8e2d9" }}>
           <PremiumAvatar name={currentUser?.full_name||""} level={currentUser?.level||"Seedling"} avatarUrl={currentUser?.avatar_url} size={28} radius={999} rank={currentUserRank} />
           <span style={{ fontSize:13, fontWeight:600, color:"#333" }}>@{currentUser?.username}</span>
@@ -550,80 +568,54 @@ export default function PeoplePage() {
                 const s     = userStats[user.id];
                 const badge = getBadgeTier(user.xp, s?.sessions??0);
                 const isMe  = user.id === currentUser?.id;
+                const rank  = idx + 1;
                 const medals = ["🥇","🥈","🥉"];
-                // Always use position as rank for top 3 visuals — DB columns only needed for title/multiplier
-                const rank   = idx + 1;
-                // Card border: gold glow for actual champion, medal for position
-                const cardGlow = rank===1 ? "0 8px 32px rgba(232,168,0,0.3), 0 0 0 2px rgba(232,168,0,0.4)"
-                               : rank===2 ? "0 8px 32px rgba(192,192,192,0.25), 0 0 0 1.5px rgba(192,192,192,0.4)"
-                               : rank===3 ? "0 8px 32px rgba(205,127,50,0.2), 0 0 0 1.5px rgba(205,127,50,0.35)"
-                               : idx===0  ? `0 8px 32px ${lvl.glow}` : "0 2px 12px rgba(0,0,0,.05)";
+                const cardGlow = rank===1?"0 8px 32px rgba(232,168,0,0.3), 0 0 0 2px rgba(232,168,0,0.4)":rank===2?"0 8px 32px rgba(192,192,192,0.25), 0 0 0 1.5px rgba(192,192,192,0.4)":"0 8px 32px rgba(205,127,50,0.2), 0 0 0 1.5px rgba(205,127,50,0.35)";
                 return (
                   <div key={user.id} className="top-card" onClick={() => setSelectedUserId(user.id)}
                     style={{ background:"#fff", borderRadius:20, border:idx===0?`2px solid ${lvl.bg}33`:"1.5px solid #e8e2d9", overflow:"hidden", boxShadow:cardGlow, animation:`fadeUp 0.5s ${idx*.08}s ease both`, position:"relative" }}>
-
                     <div style={{ position:"absolute", top:14, right:14, fontSize:22, filter:"drop-shadow(0 2px 4px rgba(0,0,0,0.1))", zIndex:2 }}>{medals[idx]}</div>
-                    {/* Champion ribbon for actual rank 1 */}
-                    {rank===1 && (
-                      <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:"linear-gradient(90deg,#e8a800,#ffd700,#e8a800)", animation:"goldPulse 2s ease infinite" }} />
-                    )}
-
+                    {rank===1&&<div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:"linear-gradient(90deg,#e8a800,#ffd700,#e8a800)", animation:"goldPulse 2s ease infinite" }}/>}
                     <div style={{ padding:"22px 18px 18px" }}>
                       <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:14 }}>
-                        {/* Premium avatar on top cards */}
                         <PremiumAvatar name={user.full_name} level={user.level} avatarUrl={user.avatar_url} size={54} radius={15} rank={rank} />
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", marginBottom:2 }}>
                             <span style={{ fontFamily:"'Fraunces',serif", fontSize:15, fontWeight:900, color:"#1a1a1a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.full_name}</span>
-                            {isMe && <span style={{ fontSize:8, fontWeight:700, background:"#2d6a4f", color:"#fff", padding:"1px 5px", borderRadius:999, flexShrink:0 }}>YOU</span>}
-                            {user.is_verified && <span style={{ fontSize:11, flexShrink:0 }}>✅</span>}
+                            {isMe&&<span style={{ fontSize:8, fontWeight:700, background:"#2d6a4f", color:"#fff", padding:"1px 5px", borderRadius:999, flexShrink:0 }}>YOU</span>}
+                            {user.is_verified&&<span style={{ fontSize:11, flexShrink:0 }}>✅</span>}
                           </div>
                           <div style={{ fontSize:11, color:"#bbb", marginBottom:6 }}>@{user.username}</div>
                           <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                            <span style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 8px", borderRadius:999, background:badge.bg, color:badge.color, fontSize:10, fontWeight:700, border:`1px solid ${badge.border}` }}>
-                              {badge.emoji} {badge.name}
-                            </span>
-                            <span style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 8px", borderRadius:999, background:lvl.light, color:lvl.bg, fontSize:10, fontWeight:700 }}>
-                              {lvl.pattern} {user.level}
-                            </span>
-                            {/* Champion title pill */}
-                            {user.champion_title && (
-                              <span style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 8px", borderRadius:999, background:"#fffbeb", color:"#e8a800", fontSize:10, fontWeight:700, border:"1px solid #f0d890" }}>
-                                🏆 {user.champion_title}
-                              </span>
-                            )}
+                            <span style={{ fontSize:10, padding:"2px 8px", borderRadius:999, background:badge.bg, color:badge.color, fontWeight:700, border:`1px solid ${badge.border}` }}>{badge.emoji} {badge.name}</span>
+                            <span style={{ fontSize:10, padding:"2px 8px", borderRadius:999, background:lvl.light, color:lvl.bg, fontWeight:700 }}>{lvl.pattern} {user.level}</span>
+                            {/* All perk pills on top cards */}
+                            <PerkPills user={user} size="sm" />
                           </div>
                         </div>
                       </div>
 
-                      {user.bio && (
-                        <p style={{ fontSize:12, color:"#666", lineHeight:1.55, marginBottom:14, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{user.bio}</p>
-                      )}
+                      {user.bio&&<p style={{ fontSize:12, color:"#666", lineHeight:1.55, marginBottom:14, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{user.bio}</p>}
 
-                      {s?.skills && s.skills.length > 0 && (
+                      {s?.skills&&s.skills.length>0&&(
                         <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:14 }}>
-                          {s.skills.slice(0,3).map(sk => (
-                            <span key={sk} style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, background:"#f0fdf4", color:"#166634", border:"1px solid #bbf7d0" }}>{sk}</span>
-                          ))}
+                          {s.skills.slice(0,3).map(sk=><span key={sk} style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, background:"#f0fdf4", color:"#166634", border:"1px solid #bbf7d0" }}>{sk}</span>)}
                         </div>
                       )}
 
                       <div style={{ display:"flex", flexDirection:"column", gap:5, paddingTop:12, borderTop:"1px solid #f5f0e8" }}>
                         {[
-                          { icon:"⚡", label:"XP",       val:user.xp.toLocaleString(),                                        color:lvl.bg    },
-                          { icon:"📅", label:"Sessions", val:String(s?.sessions??0),                                          color:"#0891b2" },
-                          { icon:"⭐", label:"Rating",   val:s?.avgRating?`${s.avgRating.toFixed(2)} ★`:"No reviews yet",    color:"#f59e0b" },
-                        ].map(st => (
+                          {icon:"⚡",label:"XP",      val:user.xp.toLocaleString(),                                      color:lvl.bg},
+                          {icon:"📅",label:"Sessions",val:String(s?.sessions??0),                                        color:"#0891b2"},
+                          {icon:"⭐",label:"Rating",  val:s?.avgRating?`${s.avgRating.toFixed(2)} ★`:"No reviews yet",  color:"#f59e0b"},
+                        ].map(st=>(
                           <div key={st.label} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:12 }}>
                             <span style={{ color:"#bbb", fontWeight:600 }}>{st.icon} {st.label}</span>
                             <span style={{ fontWeight:800, color:st.color, fontFamily:"'Fraunces',serif" }}>{st.val}</span>
                           </div>
                         ))}
                       </div>
-
-                      <div style={{ marginTop:14, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"8px", borderRadius:10, background:"#f7f5f0", border:"1px solid #e8e2d9", fontSize:12, fontWeight:700, color:"#2d6a4f" }}>
-                        View Profile →
-                      </div>
+                      <div style={{ marginTop:14, display:"flex", alignItems:"center", justifyContent:"center", padding:"8px", borderRadius:10, background:"#f7f5f0", border:"1px solid #e8e2d9", fontSize:12, fontWeight:700, color:"#2d6a4f" }}>View Profile →</div>
                     </div>
                   </div>
                 );
@@ -632,13 +624,11 @@ export default function PeoplePage() {
           </div>
         )}
 
-        {/* ALL MEMBERS GRID */}
+        {/* ALL MEMBERS */}
         {(isFiltering ? filtered : rest).length > 0 && (
           <>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:18 }}>
-              <span style={{ fontSize:11, fontWeight:700, color:"#bbb", textTransform:"uppercase", letterSpacing:1.5 }}>
-                {isFiltering?"Results":"All Members"}
-              </span>
+              <span style={{ fontSize:11, fontWeight:700, color:"#bbb", textTransform:"uppercase", letterSpacing:1.5 }}>{isFiltering?"Results":"All Members"}</span>
               <div style={{ flex:1, height:1, background:"#e8e2d9" }} />
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))", gap:12 }}>
@@ -651,59 +641,46 @@ export default function PeoplePage() {
                 return (
                   <div key={user.id} className="user-card" onClick={() => setSelectedUserId(user.id)}
                     style={{ background:"#fff", borderRadius:16, border:"1.5px solid #e8e2d9", overflow:"hidden", animation:`fadeUp 0.4s ${(idx%8)*.04}s ease both`, boxShadow:"0 2px 8px rgba(0,0,0,.04)" }}>
-                    {/* Color strip — gold for rank 1 */}
-                    <div style={{ height:3, background: rank===1?"linear-gradient(90deg,#e8a800,#ffd700,#e8a800)":rank===2?"linear-gradient(90deg,#c0c0c0,#e8e8e8,#c0c0c0)":rank===3?"linear-gradient(90deg,#cd7f32,#e8a060,#cd7f32)":`linear-gradient(90deg,${lvl.bg},${lvl.bg}33)` }} />
-
+                    <div style={{ height:3, background:rank===1?"linear-gradient(90deg,#e8a800,#ffd700,#e8a800)":rank===2?"linear-gradient(90deg,#c0c0c0,#e8e8e8,#c0c0c0)":rank===3?"linear-gradient(90deg,#cd7f32,#e8a060,#cd7f32)":`linear-gradient(90deg,${lvl.bg},${lvl.bg}33)` }}/>
                     <div style={{ padding:"16px" }}>
                       <div style={{ display:"flex", alignItems:"flex-start", gap:11, marginBottom:12 }}>
-                        {/* Premium avatar on member cards */}
                         <PremiumAvatar name={user.full_name} level={user.level} avatarUrl={user.avatar_url} size={46} radius={13} rank={rank} />
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", marginBottom:1 }}>
                             <span style={{ fontSize:14, fontWeight:800, color:"#1a1a1a", fontFamily:"'Fraunces',serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.full_name}</span>
-                            {isMe && <span style={{ fontSize:8, fontWeight:700, background:"#2d6a4f", color:"#fff", padding:"1px 5px", borderRadius:999, flexShrink:0 }}>YOU</span>}
-                            {user.is_verified && <span style={{ fontSize:10, flexShrink:0 }}>✅</span>}
+                            {isMe&&<span style={{ fontSize:8, fontWeight:700, background:"#2d6a4f", color:"#fff", padding:"1px 5px", borderRadius:999, flexShrink:0 }}>YOU</span>}
+                            {user.is_verified&&<span style={{ fontSize:10, flexShrink:0 }}>✅</span>}
                           </div>
                           <div style={{ fontSize:11, color:"#bbb", marginBottom:5 }}>@{user.username}</div>
                           <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                            <span style={{ fontSize:9, padding:"2px 7px", borderRadius:999, background:badge.bg, color:badge.color, fontWeight:700, border:`1px solid ${badge.border}` }}>
-                              {badge.emoji} {badge.name}
-                            </span>
-                            <span style={{ fontSize:9, padding:"2px 7px", borderRadius:999, background:lvl.light, color:lvl.bg, fontWeight:700 }}>
-                              {lvl.pattern} {user.level}
-                            </span>
-                            {/* Champion title on member cards too */}
-                            {user.champion_title && (
-                              <span style={{ fontSize:9, padding:"2px 7px", borderRadius:999, background:"#fffbeb", color:"#e8a800", fontWeight:700, border:"1px solid #f0d890" }}>
-                                🏆
-                              </span>
-                            )}
+                            <span style={{ fontSize:9, padding:"2px 7px", borderRadius:999, background:badge.bg, color:badge.color, fontWeight:700, border:`1px solid ${badge.border}` }}>{badge.emoji} {badge.name}</span>
+                            <span style={{ fontSize:9, padding:"2px 7px", borderRadius:999, background:lvl.light, color:lvl.bg, fontWeight:700 }}>{lvl.pattern} {user.level}</span>
+                            {/* Perk pills (icon-only on small cards) */}
+                            <PerkPills user={user} size="sm" />
                           </div>
                         </div>
                         <div style={{ fontSize:10, color:"#ccc", fontWeight:600, flexShrink:0 }}>{timeAgo(user.created_at)}</div>
                       </div>
 
                       {user.bio
-                        ? <p style={{ fontSize:12, color:"#666", lineHeight:1.55, marginBottom:10, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{user.bio}</p>
-                        : <p style={{ fontSize:12, color:"#ccc", fontStyle:"italic", marginBottom:10 }}>🌱 New member — no bio yet</p>
+                        ?<p style={{ fontSize:12, color:"#666", lineHeight:1.55, marginBottom:10, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{user.bio}</p>
+                        :<p style={{ fontSize:12, color:"#ccc", fontStyle:"italic", marginBottom:10 }}>🌱 New member — no bio yet</p>
                       }
 
-                      {user.location && <div style={{ fontSize:11, color:"#bbb", marginBottom:10 }}>📍 {user.location}</div>}
+                      {user.location&&<div style={{ fontSize:11, color:"#bbb", marginBottom:10 }}>📍 {user.location}</div>}
 
-                      {s?.skills && s.skills.length > 0 && (
+                      {s?.skills&&s.skills.length>0&&(
                         <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:12 }}>
-                          {s.skills.slice(0,3).map(sk => (
-                            <span key={sk} style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, background:"#f0fdf4", color:"#166534", border:"1px solid #bbf7d0" }}>{sk}</span>
-                          ))}
+                          {s.skills.slice(0,3).map(sk=><span key={sk} style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, background:"#f0fdf4", color:"#166534", border:"1px solid #bbf7d0" }}>{sk}</span>)}
                         </div>
                       )}
 
                       <div style={{ display:"flex", flexDirection:"column", gap:4, paddingTop:10, borderTop:"1px solid #f5f0e8" }}>
                         {[
-                          { icon:"⚡", label:"XP",       val:user.xp>0?user.xp.toLocaleString():"Getting started",         color:lvl.bg    },
-                          { icon:"📅", label:"Sessions", val:(s?.sessions??0)>0?String(s!.sessions):"No sessions yet",      color:"#0891b2" },
-                          { icon:"⭐", label:"Rating",   val:s?.avgRating?`${s.avgRating.toFixed(2)} ★`:"No reviews yet",  color:"#f59e0b" },
-                        ].map(st => (
+                          {icon:"⚡",label:"XP",      val:user.xp>0?user.xp.toLocaleString():"Getting started", color:lvl.bg},
+                          {icon:"📅",label:"Sessions",val:(s?.sessions??0)>0?String(s!.sessions):"No sessions yet",color:"#0891b2"},
+                          {icon:"⭐",label:"Rating",  val:s?.avgRating?`${s.avgRating.toFixed(2)} ★`:"No reviews yet",color:"#f59e0b"},
+                        ].map(st=>(
                           <div key={st.label} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:12 }}>
                             <span style={{ color:"#bbb", fontWeight:600 }}>{st.icon} {st.label}</span>
                             <span style={{ fontWeight:800, color:st.color, fontFamily:"'Fraunces',serif", fontSize:12 }}>{st.val}</span>
