@@ -167,7 +167,7 @@ function FileBubble({ content, isMe }: { content: string; isMe: boolean }) {
         <p style={{ fontSize: 11, color: isMe ? "rgba(255,255,255,0.65)" : "#999" }}>{fp.size ? formatFileSize(fp.size) : ""} · tap to download</p>
       </div>
       <div style={{ width: 28, height: 28, borderRadius: "50%", background: isMe ? "rgba(255,255,255,0.2)" : "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <span style={{ fontSize: 13, color: isMe ? "#fff" : "#fff" }}>↓</span>
+        <span style={{ fontSize: 13, color: "#fff" }}>↓</span>
       </div>
     </a>
   );
@@ -212,7 +212,6 @@ export default function MessagesPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
-  const [startingCall, setStartingCall] = useState(false);
   const [convoFilter, setConvoFilter] = useState<"all" | "teachers" | "students">("all");
 
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -392,36 +391,6 @@ export default function MessagesPage() {
     await loadConversations(profile.id);
   }
 
-  async function startVideoSession() {
-    if (!profile || !activeConvo || startingCall) return;
-    const alreadyActive = messages.some(m => { if (m.message_type !== "session_call") return false; try { return (JSON.parse(m.content) as CallPayload).status === "active"; } catch { return false; } });
-    if (alreadyActive) { alert("There's already an active session!"); return; }
-    setStartingCall(true);
-    const { data: sessionRow } = await supabase.from("sessions").select("listing:listing_id(duration)")
-      .or(`and(teacher_id.eq.${profile.id},learner_id.eq.${activeConvo.id}),and(teacher_id.eq.${activeConvo.id},learner_id.eq.${profile.id})`)
-      .eq("status", "upcoming").order("proposed_time", { ascending: true }).limit(1).maybeSingle();
-    const duration = (sessionRow?.listing as any)?.duration || 60;
-    const room = getRoomName(profile.id, activeConvo.id);
-    const payload: CallPayload = { room, started_at: new Date().toISOString(), duration_minutes: duration, status: "active" };
-    const { data: msg } = await supabase.from("messages").insert({ sender_id: profile.id, receiver_id: activeConvo.id, content: JSON.stringify(payload), message_type: "session_call", is_read: false }).select().single();
-    if (msg) setMessages(prev => [...prev, msg]);
-    try { await supabase.from("notifications").insert({ user_id: activeConvo.id, type: "session_call", title: `${profile.full_name} started a video session`, body: "Join now in Messages!", link: "/messages" }); } catch (_) {}
-    await loadConversations(profile.id);
-    setStartingCall(false);
-  }
-
-  async function endVideoSession(msgId: string) {
-    if (!profile) return;
-    const msg = messages.find(m => m.id === msgId);
-    if (!msg) return;
-    try {
-      const p = JSON.parse(msg.content) as CallPayload;
-      p.status = "ended"; p.ended_by = profile.id;
-      await supabase.from("messages").update({ content: JSON.stringify(p) }).eq("id", msgId);
-      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: JSON.stringify(p) } : m));
-    } catch (_) {}
-  }
-
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -513,7 +482,6 @@ export default function MessagesPage() {
 
   const totalUnread = conversations.reduce((s, c) => s + c.unread_count, 0);
   const grouped = groupByDate(messages.filter(m => !m.is_deleted || m.sender_id === profile?.id));
-  const activeCallMsg = messages.find(m => { if (m.message_type !== "session_call") return false; try { return (JSON.parse(m.content) as CallPayload).status === "active"; } catch { return false; } });
 
   const filteredConvos = conversations.filter(c => {
     if (convoFilter === "all") return true;
@@ -545,7 +513,6 @@ export default function MessagesPage() {
         @keyframes spin { to{transform:rotate(360deg)} }
         @keyframes typingBounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-        @keyframes progressFill { from{width:0%} to{width:var(--target)} }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #e0dbd4; border-radius: 999px; }
         .convo-item { transition: background 0.1s; cursor: pointer; border-radius: 12px; }
@@ -574,7 +541,7 @@ export default function MessagesPage() {
         .filter-tab { padding: 5px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid transparent; transition: all 0.12s; background: transparent; color: #999; font-family: 'DM Sans', sans-serif; }
         .filter-tab:hover { color: #333; }
         .filter-tab.active { background: #eef6f2; color: #2d6a4f; border-color: #c6e8d4; }
-        .action-btn { display: flex; align-items: center; gap: 6px; padding: 7px 15px; border-radius: 9px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1.5px solid transparent; transition: all 0.12s; font-family: 'DM Sans', sans-serif; }
+        .action-btn { display: flex; align-items: center; gap: 6px; padding: 7px 15px; border-radius: 9px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1.5px solid transparent; transition: all 0.12s; font-family: 'DM Sans', sans-serif; text-decoration: none; }
         .action-btn:hover { filter: brightness(0.96); }
         .input-tool { width: 34px; height: 34px; border-radius: 9px; border: none; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 17px; transition: background 0.1s; flex-shrink: 0; color: #888; }
         .input-tool:hover { background: #f0f0f5; }
@@ -587,7 +554,7 @@ export default function MessagesPage() {
           <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
         </a>
         <div style={{ display: "flex", gap: 2 }}>
-          {[["Browse", "/listings"], ["Bounties", "/bounties"], ["Community", "/community"], ["Sessions", "/sessions"], ["Messages", "/messages"]].map(([l, h]) => (
+          {[["Bounties", "/bounties"], ["Community", "/community"], ["Sessions", "/sessions"], ["Messages", "/messages"]].map(([l, h]) => (
             <a key={l} href={h} className={`nav-link ${h === "/messages" ? "active" : ""}`} style={{ position: "relative" }}>
               {l}
               {l === "Messages" && totalUnread > 0 && <span style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: "50%", background: "#ef4444", border: "1.5px solid #fff" }} />}
@@ -728,51 +695,55 @@ export default function MessagesPage() {
           {/* ── ACTIVE CONVERSATION ── */}
           {activeConvo && !showNewChat && (
             <>
-              {/* Chat header — clean 2-row layout */}
+              {/* Chat header */}
               <div style={{ padding: "14px 20px", borderBottom: "1px solid #ebebef", background: "#fff", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
                   <Avatar profile={activeConvo} size={40} online />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: "#1a1a1a", marginBottom: 2 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: "#1a1a1a", marginBottom: 3, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       {activeConvo.full_name}
+                      {(() => {
+                        const rank = getChampionRank(activeConvo.xp_multiplier);
+                        return rank > 0 ? (
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 999,
+                            background: rank === 1 ? "#fef9ec" : rank === 2 ? "#f3f4f6" : "#fef3ec",
+                            color: rank === 1 ? "#92400e" : rank === 2 ? "#374151" : "#78350f",
+                            border: `1px solid ${rank === 1 ? "#fbbf24" : rank === 2 ? "#d1d5db" : "#d97706"}` }}>
+                            {CHAMPION_RING[rank].badge} {activeConvo.champion_title || CHAMPION_RING[rank].label}
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
-                    <div style={{ fontSize: 12, color: "#999", display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ fontSize: 11, color: "#999", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-                        Online
+                        @{activeConvo.username} · {activeConvo.level}
                       </span>
+                      {activeConvo.teaching_title && new Date(activeConvo.teaching_title_ends_at || 0) > new Date() && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "#eef6f2", color: "#2d6a4f", border: "1px solid #c6e8d4" }}>
+                          🎓 {activeConvo.teaching_title}
+                        </span>
+                      )}
+                      {activeConvo.rating_title && new Date(activeConvo.rating_title_ends_at || 0) > new Date() && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "#fefce8", color: "#92400e", border: "1px solid #fde68a" }}>
+                          ⭐ {activeConvo.rating_title}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  {/* Actions — Book Session first, then Send Credits */}
+                  {/* ── ACTIONS: Send Credits + Sessions (no video session) ── */}
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <button onClick={startVideoSession} disabled={startingCall} className="action-btn"
-                      style={{ background: "#2d6a4f", color: "#fff", border: "1.5px solid #2d6a4f" }}>
-                      📹 {startingCall ? "Starting…" : "Book Session"}
-                    </button>
                     <button onClick={() => setShowCreditModal(true)} className="action-btn"
                       style={{ background: "#fef9ec", color: "#92400e", border: "1.5px solid #fbbf24" }}>
-                      💰 Credits
+                      💰 Send Credits
                     </button>
+                    <a href="/sessions" className="action-btn"
+                      style={{ background: "#e8f4e8", color: "#2d6a4f", border: "1.5px solid #c6e8d4" }}>
+                      📅 Sessions
+                    </a>
                   </div>
                 </div>
               </div>
-
-              {/* Active call banner */}
-              {activeCallMsg && (() => {
-                try {
-                  const p = JSON.parse(activeCallMsg.content) as CallPayload;
-                  if (p.status !== "active") return null;
-                  return (
-                    <div style={{ padding: "10px 20px", background: "linear-gradient(135deg,#1a4a36,#2d6a4f)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80", animation: "pulse 1.5s infinite", flexShrink: 0 }} />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", flex: 1 }}>Live session with {activeConvo.full_name}</span>
-                      <a href={`https://meet.jit.si/${p.room}`} target="_blank" rel="noopener noreferrer"
-                        style={{ padding: "5px 14px", borderRadius: 8, background: "rgba(255,255,255,0.2)", color: "#fff", fontSize: 12, fontWeight: 700 }}>Join</a>
-                      <button onClick={() => endVideoSession(activeCallMsg.id)} style={{ padding: "5px 14px", borderRadius: 8, background: "rgba(220,38,38,0.8)", color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>End</button>
-                    </div>
-                  );
-                } catch { return null; }
-              })()}
 
               {/* Messages area */}
               <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 12px" }}>
@@ -797,20 +768,11 @@ export default function MessagesPage() {
                       const isMe = msg.sender_id === profile?.id;
                       const prevMsg = group.messages[i - 1];
                       const nextMsg = group.messages[i + 1];
-
-                      // Grouping logic
                       const isFirstInGroup = !prevMsg || prevMsg.sender_id !== msg.sender_id;
                       const isLastInGroup = !nextMsg || nextMsg.sender_id !== msg.sender_id;
-
                       const reactionEntries = Object.entries(msg.reactions || {}).filter(([_, u]) => u.length > 0);
 
-                      if (msg.message_type === "session_call") {
-                        try {
-                          const p = JSON.parse(msg.content) as CallPayload;
-                          if (p.status === "ended") return null;
-                        } catch { return null; }
-                        return null;
-                      }
+                      if (msg.message_type === "session_call") return null;
 
                       if (msg.message_type === "credit_transfer") {
                         let payload: CreditTransferPayload | null = null;
@@ -827,7 +789,6 @@ export default function MessagesPage() {
                           style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 8, alignItems: "flex-end",
                             marginBottom: reactionEntries.length > 0 ? 22 : (isLastInGroup ? 12 : 3), position: "relative" }}>
 
-                          {/* Avatar — only on last message in group */}
                           {!isMe && (
                             isLastInGroup
                               ? <Avatar profile={activeConvo} size={32} />
@@ -835,7 +796,6 @@ export default function MessagesPage() {
                           )}
 
                           <div style={{ maxWidth: "62%", display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
-                            {/* Reply preview */}
                             {msg.reply_to && (
                               <div style={{ marginBottom: 4, padding: "5px 10px", borderRadius: 8, background: "#f0f0f5", borderLeft: `2px solid ${isMe ? "#86efac" : "#2d6a4f"}`, fontSize: 11, color: "#999", maxWidth: "100%" }}>
                                 <div style={{ fontWeight: 700, color: "#666", marginBottom: 1, fontSize: 10 }}>
@@ -847,18 +807,15 @@ export default function MessagesPage() {
                               </div>
                             )}
 
-                            {/* File message */}
                             {msg.message_type === "file" && !msg.is_deleted && (
                               <FileBubble content={msg.content} isMe={isMe} />
                             )}
 
-                            {/* Image message */}
                             {msg.message_type === "image" && msg.image_url && !msg.is_deleted && (
                               <img src={msg.image_url} alt="img" className="img-msg" onClick={() => setLightboxImg(msg.image_url!)}
                                 style={{ maxWidth: 220, maxHeight: 260, objectFit: "cover", display: "block", borderRadius: isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px", marginBottom: msg.content && msg.content !== "" ? 3 : 0, border: "1px solid #e4e4ed" }} />
                             )}
 
-                            {/* Text bubble */}
                             {msg.message_type !== "file" && (msg.content || msg.is_deleted) && (
                               <div style={{
                                 padding: "10px 14px",
@@ -878,7 +835,6 @@ export default function MessagesPage() {
                               </div>
                             )}
 
-                            {/* Reactions */}
                             {reactionEntries.length > 0 && (
                               <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 4, position: "absolute", bottom: -20, [isMe ? "right" : "left"]: 0 }}>
                                 {reactionEntries.map(([emoji, users]) => (
@@ -890,7 +846,6 @@ export default function MessagesPage() {
                               </div>
                             )}
 
-                            {/* Timestamp — only on last in group (WhatsApp style) */}
                             {isLastInGroup && (
                               <div style={{ fontSize: 10, color: "#bbb", marginTop: 4, display: "flex", alignItems: "center", gap: 3 }}>
                                 {formatTime(msg.created_at)}
@@ -899,7 +854,6 @@ export default function MessagesPage() {
                             )}
                           </div>
 
-                          {/* Hover actions */}
                           {!msg.is_deleted && (
                             <div className="msg-actions" style={{ display: "flex", alignItems: "center", gap: 2, alignSelf: "center", flexDirection: isMe ? "row" : "row-reverse" }}>
                               <div style={{ position: "relative" }}>
@@ -1007,12 +961,10 @@ export default function MessagesPage() {
 
               {/* ── INPUT BAR ── */}
               <div style={{ padding: "10px 16px 12px", borderTop: "1px solid #ebebef", background: "#fff", display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0 }}>
-                {/* + attach menu */}
                 <button className="input-tool" onClick={() => attachInputRef.current?.click()} title="Attach file" style={{ width: 36, height: 36, borderRadius: 10, background: "#f5f5f8", border: "1.5px solid #ebebef", fontSize: 18 }}>+</button>
                 <input ref={attachInputRef} type="file" accept="*/*" style={{ display: "none" }} onChange={handleAttachSelect} />
                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageSelect} />
 
-                {/* Textarea */}
                 <div style={{ flex: 1, display: "flex", alignItems: "flex-end", background: "#F8F9FB", borderRadius: 14, border: "1.5px solid #ebebef", padding: "2px 10px 2px 14px", transition: "border-color 0.15s" }}
                   onFocusCapture={e => (e.currentTarget.style.borderColor = "#2d6a4f")}
                   onBlurCapture={e => (e.currentTarget.style.borderColor = "#ebebef")}>
@@ -1029,7 +981,6 @@ export default function MessagesPage() {
                   </div>
                 </div>
 
-                {/* Send */}
                 <button onClick={sendMessage} disabled={(!newMsg.trim() && !imageFile && !attachFile) || sending || uploading}
                   style={{ width: 40, height: 40, borderRadius: 12, background: (newMsg.trim() || imageFile || attachFile) && !sending && !uploading ? "#2d6a4f" : "#e8e8ef", color: (newMsg.trim() || imageFile || attachFile) ? "#fff" : "#bbb", border: "none", fontSize: 17, cursor: (newMsg.trim() || imageFile || attachFile) ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s", boxShadow: (newMsg.trim() || imageFile || attachFile) ? "0 2px 8px rgba(45,106,79,0.3)" : "none" }}>
                   {uploading ? "⏳" : sending ? "…" : "➤"}
