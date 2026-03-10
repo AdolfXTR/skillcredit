@@ -14,7 +14,12 @@ type Listing = {
   thumbnail_url?: string; avg_rating?: number; total_ratings?: number; total_students?: number;
   is_featured?: boolean; is_hot_teacher?: boolean; difficulty?: string;
   skills: { name: string; category: string };
-  profiles: { full_name: string; username: string; level: string; xp: number; xp_multiplier?: number; champion_title?: string | null; avatar_url?: string | null };
+  profiles: {
+    full_name: string; username: string; level: string; xp: number;
+    xp_multiplier?: number; champion_title?: string | null; avatar_url?: string | null;
+    teaching_title?: string | null; teaching_title_ends_at?: string | null;
+    rating_title?: string | null;   rating_title_ends_at?: string | null;
+  };
 };
 type Profile = {
   id: string; full_name: string; username: string; credits: number; level: string; xp: number;
@@ -53,6 +58,9 @@ const LEVEL_COLORS: Record<string, string> = {
   Skilled:"#b45309", Expert:"#dc2626", Master:"#0891b2", Legend:"#d97706",
 };
 
+// Profile fields used in Supabase select — includes all 4 perk fields
+const PROFILE_FIELDS = "full_name,username,level,xp,xp_multiplier,champion_title,avatar_url,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at";
+
 // ─────────────────────────────────────────────────────────────
 // UTILS
 // ─────────────────────────────────────────────────────────────
@@ -65,6 +73,10 @@ function getLevelFromXP(xp: number): string {
 function getRank(xp_multiplier?: number): 0|1|2|3 {
   if (!xp_multiplier||xp_multiplier<1.1) return 0;
   if (xp_multiplier>=1.25) return 1; if (xp_multiplier>=1.15) return 2; return 3;
+}
+function isActiveTitle(endsAt?: string | null) {
+  if (!endsAt) return false;
+  return new Date(endsAt) > new Date();
 }
 function renderStars(rating: number, max = 5) {
   return Array.from({ length: max }, (_, i) => (
@@ -91,6 +103,39 @@ function PremiumAvatar({ name, xp, xp_multiplier, avatar_url, size = 32 }:
         {avatar_url ? <img src={avatar_url} alt={name} style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : getInitials(name)}
       </div>
       {badge && <span style={{ position:"absolute", bottom:-3, right:-5, fontSize:size*.36, lineHeight:1, filter:"drop-shadow(0 1px 3px rgba(0,0,0,.5))", zIndex:2 }}>{badge}</span>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// PERK BADGES — champion + teaching + rating (compact for cards)
+// ─────────────────────────────────────────────────────────────
+function PerkBadges({ p, rank }: { p: Listing["profiles"]; rank: 0|1|2|3 }) {
+  const hasTeaching = p.teaching_title && isActiveTitle(p.teaching_title_ends_at);
+  const hasRating   = p.rating_title   && isActiveTitle(p.rating_title_ends_at);
+  if (rank === 0 && !hasTeaching && !hasRating) return null;
+  return (
+    <div style={{ display:"flex", flexWrap:"wrap", gap:3, marginTop:3 }}>
+      {rank > 0 && p.champion_title && (
+        <span style={{ fontSize:9, fontWeight:800, padding:"1px 7px", borderRadius:999,
+          background: rank===1?"rgba(255,215,0,.15)":rank===2?"rgba(192,192,192,.15)":"rgba(205,127,50,.15)",
+          color: rank===1?"#b8860b":rank===2?"#888":"#a0522d",
+          border: `1px solid ${rank===1?"rgba(255,215,0,.3)":rank===2?"rgba(192,192,192,.3)":"rgba(205,127,50,.3)"}` }}>
+          {rank===1?"👑":rank===2?"🥈":"🥉"} {p.champion_title}
+        </span>
+      )}
+      {hasTeaching && (
+        <span style={{ fontSize:9, fontWeight:800, padding:"1px 7px", borderRadius:999,
+          background:"#eef6f2", color:"#2d6a4f", border:"1px solid #c6e8d4" }}>
+          🎓 {p.teaching_title}
+        </span>
+      )}
+      {hasRating && (
+        <span style={{ fontSize:9, fontWeight:800, padding:"1px 7px", borderRadius:999,
+          background:"#fefce8", color:"#92400e", border:"1px solid #fde68a" }}>
+          ⭐ {p.rating_title}
+        </span>
+      )}
     </div>
   );
 }
@@ -218,21 +263,23 @@ function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
           </div>
         )}
 
-        {/* Teacher row */}
-        <div style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 11px", background:"#fafaf8", borderRadius:11, marginBottom:13 }}>
-          <PremiumAvatar name={listing.profiles?.full_name||"?"} xp={listing.profiles?.xp||0} xp_multiplier={listing.profiles?.xp_multiplier} avatar_url={listing.profiles?.avatar_url} size={30} />
-          <div style={{ flex:1, minWidth:0 }}>
-            <p style={{ fontSize:12, fontWeight:700, color:"#222", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{listing.profiles?.full_name}</p>
-            <p style={{ fontSize:10, color:"#aaa" }}>{getLevelFromXP(listing.profiles?.xp||0)} · @{listing.profiles?.username}</p>
+        {/* Teacher row — with perk badges */}
+        <div style={{ padding:"9px 11px", background:"#fafaf8", borderRadius:11, marginBottom:13 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <PremiumAvatar name={listing.profiles?.full_name||"?"} xp={listing.profiles?.xp||0} xp_multiplier={listing.profiles?.xp_multiplier} avatar_url={listing.profiles?.avatar_url} size={30} />
+            <div style={{ flex:1, minWidth:0 }}>
+              <p style={{ fontSize:12, fontWeight:700, color:"#222", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{listing.profiles?.full_name}</p>
+              <p style={{ fontSize:10, color:"#aaa" }}>{getLevelFromXP(listing.profiles?.xp||0)} · @{listing.profiles?.username}</p>
+            </div>
           </div>
-          {rank === 1 && listing.profiles?.champion_title && (
-            <span style={{ fontSize:9, fontWeight:800, background:"#fef3c7", color:"#92400e", padding:"2px 7px", borderRadius:20, border:"1px solid #fbbf24", flexShrink:0 }}>👑</span>
+          {/* Perk badges row — below name/level */}
+          {listing.profiles && (
+            <PerkBadges p={listing.profiles} rank={rank} />
           )}
         </div>
 
         {/* CTA */}
         {isOwn ? (
-          // Own listing — show Edit + View, no Book Now
           <div style={{ display:"flex", gap:7 }}>
             <a href={href}
               style={{ flex:1, padding:"9px 0", borderRadius:10, background:"#f5f0e8", color:"#2d6a4f", border:"1.5px solid #e8e2d9", fontSize:12, fontWeight:800, textAlign:"center", textDecoration:"none", display:"block" }}
@@ -248,7 +295,6 @@ function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
             </a>
           </div>
         ) : (
-          // Other's listing — normal dual CTA
           <div style={{ display:"flex", gap:7 }}>
             <a href={href}
               style={{ flex:1, padding:"9px 0", borderRadius:10, background:"#f5f0e8", color:"#2d6a4f", border:"1.5px solid #e8e2d9", fontSize:12, fontWeight:800, textAlign:"center", textDecoration:"none", display:"block", transition:"all .15s" }}
@@ -308,7 +354,6 @@ export default function ListingsPage() {
       if (prof) setProfile(prof);
       userId = user.id;
 
-      // Fetch completed sessions to track which listings the user has already done
       const { data: completedSessions } = await supabase
         .from("sessions")
         .select("listing_id")
@@ -318,10 +363,13 @@ export default function ListingsPage() {
         setCompletedListingIds(new Set(completedSessions.map((s: any) => s.listing_id).filter(Boolean)));
       }
     }
+
+    // Fetch listings with all perk profile fields
     const { data, error } = await supabase.from("listings")
-      .select(`*, skills(name,category), profiles(full_name,username,level,xp,xp_multiplier,champion_title,avatar_url)`)
+      .select(`*, skills(name,category), profiles(${PROFILE_FIELDS})`)
       .eq("is_active", true).order("created_at", { ascending: false });
     if (error) { setLoading(false); return; }
+
     const rows = (data || []) as Listing[];
     const teacherIds = [...new Set(rows.map(l => l.teacher_id))];
     let avgMap: Record<string, { avg: number; count: number }> = {};
@@ -353,7 +401,6 @@ export default function ListingsPage() {
     setLoading(false);
   }
 
-  // Active filters for pills
   const activeFilters: { label: string; clear: () => void }[] = [];
   if (category !== "All")    activeFilters.push({ label:`📂 ${category}`, clear: () => setCategory("All") });
   if (format !== "All")      activeFilters.push({ label:`${FORMAT_CONFIG[format]?.icon} ${format}`, clear: () => setFormat("All") });
@@ -384,7 +431,6 @@ export default function ListingsPage() {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  // Sidebar filter block component
   function FilterBlock({ title, children }: { title: string; children: React.ReactNode }) {
     return (
       <div style={{ background:"#fff", borderRadius:16, border:"1.5px solid #e8e2d9", padding:"16px 18px" }}>

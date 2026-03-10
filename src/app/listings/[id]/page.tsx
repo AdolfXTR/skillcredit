@@ -16,7 +16,14 @@ type Listing = {
   is_active: boolean; created_at: string; teacher_id: string;
   thumbnail_url?: string; is_featured?: boolean; is_hot_teacher?: boolean; difficulty?: string;
   skills: { name: string; category: string };
-  profiles: { id: string; full_name: string; username: string; level: string; bio: string; xp: number; xp_multiplier?: number; champion_title?: string | null; champion_streak?: number; avatar_url?: string | null };
+  profiles: {
+    id: string; full_name: string; username: string; level: string; bio: string;
+    xp: number; xp_multiplier?: number;
+    champion_title?: string | null; champion_streak?: number;
+    avatar_url?: string | null;
+    teaching_title?: string | null; teaching_title_ends_at?: string | null;
+    rating_title?: string | null;   rating_title_ends_at?: string | null;
+  };
 };
 type UserProfile = { id: string; full_name: string; credits: number };
 
@@ -50,6 +57,9 @@ const LEVEL_COLORS: Record<string, string> = {
   Skilled:"#b45309", Expert:"#dc2626", Master:"#0891b2", Legend:"#d97706",
 };
 
+// ─────────────────────────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────────────────────────
 function getInitials(n: string) { return (n||"??").split(" ").map(c=>c[0]).join("").slice(0,2).toUpperCase(); }
 function getLevelFromXP(xp: number): string {
   if (xp>=4000) return "Legend"; if (xp>=2000) return "Master"; if (xp>=1000) return "Expert";
@@ -59,6 +69,10 @@ function getLevelFromXP(xp: number): string {
 function getRank(m?: number): 0|1|2|3 {
   if (!m||m<1.1) return 0; if (m>=1.25) return 1; if (m>=1.15) return 2; return 3;
 }
+function isActiveTitle(endsAt?: string | null) {
+  if (!endsAt) return false;
+  return new Date(endsAt) > new Date();
+}
 function Stars({ rating, count, size = 14 }: { rating: number; count?: number; size?: number }) {
   return (
     <div style={{ display:"inline-flex", alignItems:"center", gap:3 }}>
@@ -67,6 +81,41 @@ function Stars({ rating, count, size = 14 }: { rating: number; count?: number; s
       ))}
       <span style={{ fontSize:size-2, fontWeight:700, color:"#b45309", marginLeft:3 }}>{rating.toFixed(1)}</span>
       {count != null && <span style={{ fontSize:size-3, color:"#bbb" }}>({count})</span>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// PERK BADGES — champion + teaching + rating titles
+// ─────────────────────────────────────────────────────────────
+function PerkBadges({ profiles, rank }: {
+  profiles: Listing["profiles"]; rank: 0|1|2|3;
+}) {
+  const hasTeaching = profiles.teaching_title && isActiveTitle(profiles.teaching_title_ends_at);
+  const hasRating   = profiles.rating_title   && isActiveTitle(profiles.rating_title_ends_at);
+  return (
+    <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:5 }}>
+      {rank > 0 && profiles.champion_title && (
+        <span style={{ fontSize:11, fontWeight:800, padding:"2px 9px", borderRadius:999,
+          background: rank===1?"rgba(255,215,0,.15)":rank===2?"rgba(192,192,192,.15)":"rgba(205,127,50,.15)",
+          color: rank===1?"#b8860b":rank===2?"#888":"#a0522d",
+          border: `1px solid ${rank===1?"rgba(255,215,0,.3)":rank===2?"rgba(192,192,192,.3)":"rgba(205,127,50,.3)"}` }}>
+          {rank===1?"👑":rank===2?"🥈":"🥉"} {profiles.champion_title}
+          {(profiles.champion_streak||0)>1 ? ` ×${profiles.champion_streak} 🔥` : ""}
+        </span>
+      )}
+      {hasTeaching && (
+        <span style={{ fontSize:11, fontWeight:800, padding:"2px 9px", borderRadius:999,
+          background:"#eef6f2", color:"#2d6a4f", border:"1px solid #c6e8d4" }}>
+          🎓 {profiles.teaching_title}
+        </span>
+      )}
+      {hasRating && (
+        <span style={{ fontSize:11, fontWeight:800, padding:"2px 9px", borderRadius:999,
+          background:"#fefce8", color:"#92400e", border:"1px solid #fde68a" }}>
+          ⭐ {profiles.rating_title}
+        </span>
+      )}
     </div>
   );
 }
@@ -120,7 +169,7 @@ function PortfolioGallery({ items }: { items: PortfolioItem[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// REVIEWS SECTION (fix #7)
+// REVIEWS SECTION
 // ─────────────────────────────────────────────────────────────
 function ReviewsSection({ teacherId, avgRating, totalRatings }: { teacherId: string; avgRating: number; totalRatings: number }) {
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -146,8 +195,6 @@ function ReviewsSection({ teacherId, avgRating, totalRatings }: { teacherId: str
         </h3>
         {avgRating > 0 && <Stars rating={avgRating} count={totalRatings} size={15} />}
       </div>
-
-      {/* Rating distribution bar */}
       {reviews.length >= 3 && (() => {
         const dist = [5,4,3,2,1].map(star => ({ star, count: reviews.filter(r => Math.round(r.overall) === star).length }));
         return (
@@ -164,13 +211,11 @@ function ReviewsSection({ teacherId, avgRating, totalRatings }: { teacherId: str
           </div>
         );
       })()}
-
       {loading ? (
         <div style={{ textAlign:"center", padding:24, color:"#bbb", fontSize:13 }}>Loading reviews…</div>
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
           {visible.map(r => {
-            // Supabase may return reviewer as array or object
             const rev = Array.isArray(r.reviewer) ? r.reviewer[0] : r.reviewer;
             return (
             <div key={r.id} style={{ padding:"14px 16px", background:"#fafaf8", borderRadius:14, border:"1.5px solid #f0ece4" }}>
@@ -203,6 +248,11 @@ function ReviewsSection({ teacherId, avgRating, totalRatings }: { teacherId: str
 }
 
 // ─────────────────────────────────────────────────────────────
+// PROFILE FIELDS for FK joins
+// ─────────────────────────────────────────────────────────────
+const PROFILE_FIELDS = "id,full_name,username,level,bio,xp,xp_multiplier,champion_title,champion_streak,avatar_url,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at";
+
+// ─────────────────────────────────────────────────────────────
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────
 export default function ListingDetailPage() {
@@ -225,7 +275,6 @@ export default function ListingDetailPage() {
   const [descExpanded, setDescExpanded] = useState(false);
   const [isMobile, setIsMobile]         = useState(false);
 
-  // Detect mobile
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -233,7 +282,6 @@ export default function ListingDetailPage() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Open modal with ?book=1 query param
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("book=1") && listing) {
       setShowBookModal(true);
@@ -248,7 +296,7 @@ export default function ListingDetailPage() {
         if (prof) setCurrentUser(prof);
       }
       const { data, error } = await supabase.from("listings")
-        .select(`*, skills(name,category), profiles(id,full_name,username,level,bio,xp,xp_multiplier,champion_title,champion_streak,avatar_url)`)
+        .select(`*, skills(name,category), profiles(${PROFILE_FIELDS})`)
         .eq("id", id).single();
       if (error || !data) { setLoading(false); return; }
       setListing(data as Listing);
@@ -304,7 +352,6 @@ export default function ListingDetailPage() {
   const tomorrow     = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate      = tomorrow.toISOString().split("T")[0];
 
-  // Parse outcomes into bullets
   function parseBullets(text: string): string[] {
     return text.split(/\n|•|–|-(?=\s)/).map(s => s.trim()).filter(s => s.length > 3);
   }
@@ -470,7 +517,7 @@ export default function ListingDetailPage() {
           {/* ── LEFT COLUMN ── */}
           <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
 
-            {/* HERO IMAGE — full width on mobile, fix mobile #1 */}
+            {/* HERO */}
             <div className="hero-section" style={{ borderRadius: isMobile ? 0 : 20, overflow:"hidden", border: isMobile ? "none" : "1.5px solid #e8e2d9", height: isMobile ? 240 : 300, position:"relative", boxShadow: isMobile ? "none" : "0 4px 20px rgba(0,0,0,.06)" }}>
               {listing.thumbnail_url
                 ? <img src={listing.thumbnail_url} alt={listing.title} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
@@ -478,7 +525,6 @@ export default function ListingDetailPage() {
                     <span style={{ fontSize:80, filter:"drop-shadow(0 4px 20px rgba(0,0,0,.3))", lineHeight:1 }}>{cat.icon}</span>
                   </div>
               }
-              {/* Overlay: rating + duration */}
               <div style={{ position:"absolute", bottom:14, left:14, display:"flex", gap:8 }}>
                 {teacherAvgRating > 0 && (
                   <div style={{ background:"rgba(0,0,0,.55)", backdropFilter:"blur(10px)", borderRadius:20, padding:"5px 12px" }}>
@@ -492,9 +538,8 @@ export default function ListingDetailPage() {
               {listing.is_featured && <div style={{ position:"absolute", top:14, right:14, background:"rgba(255,215,0,.9)", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:800, color:"#78350f" }}>⭐ Featured</div>}
             </div>
 
-            {/* TITLE + TAGS card */}
+            {/* TITLE + TAGS */}
             <div style={{ background:"#fff", borderRadius:20, border:"1.5px solid #e8e2d9", padding: isMobile ? "20px 18px" : 26 }}>
-              {/* Tags — MAX 3, fix #3 */}
               <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
                 <span style={{ fontSize:11, fontWeight:700, padding:"3px 11px", borderRadius:20, background:fmt.bg, color:fmt.color, border:`1px solid ${fmt.border}` }}>
                   {fmt.icon} {fmt.label}
@@ -508,10 +553,7 @@ export default function ListingDetailPage() {
                   </span>
                 )}
               </div>
-
               <h1 style={{ fontFamily:"'Fraunces',serif", fontSize: isMobile ? 22 : 26, fontWeight:900, color:"#1a1a1a", lineHeight:1.2, marginBottom:14 }}>{listing.title}</h1>
-
-              {/* Social proof row */}
               {(teacherAvgRating > 0 || teacherSessions > 0) && (
                 <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:14, flexWrap:"wrap" }}>
                   {teacherAvgRating > 0 && <Stars rating={teacherAvgRating} count={teacherTotalRatings} size={13} />}
@@ -519,8 +561,6 @@ export default function ListingDetailPage() {
                   {listing.is_hot_teacher && <span style={{ fontSize:11, fontWeight:800, background:"#fff7ed", color:"#c2410c", padding:"2px 9px", borderRadius:99, border:"1px solid #fed7aa" }}>🔥 Hot Teacher</span>}
                 </div>
               )}
-
-              {/* Description — collapsible on mobile, fix mobile #5 */}
               <div>
                 <div style={{ color:"#555", fontSize:14, lineHeight:1.8, overflow:"hidden", maxHeight: isMobile && !descExpanded ? "5em" : "none", maskImage: isMobile && !descExpanded ? "linear-gradient(to bottom, black 60%, transparent 100%)" : "none", WebkitMaskImage: isMobile && !descExpanded ? "linear-gradient(to bottom, black 60%, transparent 100%)" : "none" }}>
                   {listing.description}
@@ -534,7 +574,7 @@ export default function ListingDetailPage() {
               </div>
             </div>
 
-            {/* WHAT YOU'LL WALK AWAY WITH — bullet list, fix #5 */}
+            {/* OUTCOMES */}
             {outcomeBullets.length > 0 && (
               <div style={{ background:"linear-gradient(135deg,#f0fdf4,#ecfdf5)", border:"1.5px solid #86efac", borderRadius:20, padding:22 }}>
                 <h3 style={{ fontFamily:"'Fraunces',serif", fontSize:15, fontWeight:900, color:"#15803d", marginBottom:14, display:"flex", alignItems:"center", gap:7 }}>
@@ -551,7 +591,7 @@ export default function ListingDetailPage() {
               </div>
             )}
 
-            {/* SESSION INCLUDES — fix #8 */}
+            {/* SESSION INCLUDES */}
             <div style={{ background:"#fff", borderRadius:20, border:"1.5px solid #e8e2d9", padding:22 }}>
               <h3 style={{ fontFamily:"'Fraunces',serif", fontSize:15, fontWeight:900, color:"#1a1a1a", marginBottom:16 }}>📦 Session Includes</h3>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -592,24 +632,21 @@ export default function ListingDetailPage() {
             {/* PORTFOLIO */}
             <PortfolioGallery items={portfolio} />
 
-            {/* TEACHER CARD — fix #2 */}
+            {/* TEACHER CARD — with perk badges */}
             <div style={{ background:"#fff", borderRadius:20, border:`1.5px solid ${teacherRank===1?"rgba(255,215,0,.4)":teacherRank===2?"rgba(170,170,170,.5)":teacherRank===3?"rgba(160,82,45,.4)":"#e8e2d9"}`, padding:22 }}>
               {teacherRank === 1 && <div style={{ height:2, background:"linear-gradient(90deg,transparent,#ffd700,#e8a800,#ffd700,transparent)", borderRadius:"2px 2px 0 0", margin:"-22px -22px 20px" }} />}
               <h3 style={{ fontFamily:"'Fraunces',serif", fontSize:15, fontWeight:900, color:"#1a1a1a", marginBottom:16 }}>👤 About the Teacher</h3>
-              <div style={{ display:"flex", gap:14, marginBottom:16 }}>
+              <div style={{ display:"flex", gap:14, marginBottom:12 }}>
                 <TeacherAvatar name={listing.profiles?.full_name||"?"} xp={listing.profiles?.xp||0} xp_multiplier={listing.profiles?.xp_multiplier} avatar_url={listing.profiles?.avatar_url} size={56} />
                 <div style={{ flex:1 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:3 }}>
                     <h4 style={{ fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:900, color:"#1a1a1a" }}>{listing.profiles?.full_name}</h4>
-                    {listing.profiles?.champion_title && teacherRank > 0 && (
-                      <span style={{ fontSize:10, fontWeight:800, background:"rgba(255,215,0,.15)", color:"#b8860b", padding:"2px 9px", borderRadius:999, border:"1px solid rgba(255,215,0,.3)" }}>
-                        {teacherRank===1?"👑":teacherRank===2?"🥈":"🥉"} {listing.profiles.champion_title}{(listing.profiles.champion_streak||0)>1?` ×${listing.profiles.champion_streak} 🔥`:""}
-                      </span>
-                    )}
                   </div>
                   <p style={{ fontSize:12, color:"#aaa", marginBottom:6 }}>@{listing.profiles?.username} · {getLevelFromXP(listing.profiles?.xp||0)}</p>
-                  {/* Credibility stats — fix #7 context */}
-                  <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+                  {/* Perk badges row — champion + teaching + rating */}
+                  <PerkBadges profiles={listing.profiles} rank={teacherRank} />
+                  {/* Credibility stats */}
+                  <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginTop:8 }}>
                     {teacherAvgRating > 0 && <span style={{ fontSize:12, fontWeight:700, color:"#b45309" }}>⭐ {teacherAvgRating.toFixed(1)} rating</span>}
                     {teacherSessions > 0 && <span style={{ fontSize:12, color:"#888" }}>🎓 {teacherSessions} sessions</span>}
                     {teacherTotalRatings > 0 && <span style={{ fontSize:12, color:"#888" }}>💬 {teacherTotalRatings} reviews</span>}
@@ -633,14 +670,13 @@ export default function ListingDetailPage() {
               </div>
             </div>
 
-            {/* REVIEWS — fix #7 */}
+            {/* REVIEWS */}
             <ReviewsSection teacherId={listing.teacher_id} avgRating={teacherAvgRating} totalRatings={teacherTotalRatings} />
           </div>
 
-          {/* ── RIGHT: STICKY BOOKING CARD — fix #10 — desktop only ── */}
+          {/* ── RIGHT: STICKY BOOKING CARD — desktop only ── */}
           <div className="detail-sidebar" style={{ position:"sticky", top:76 }}>
             <div style={{ background:"#fff", borderRadius:20, border:"1.5px solid #e8e2d9", padding:24, boxShadow:"0 4px 24px rgba(0,0,0,.07)" }}>
-              {/* Price */}
               <div style={{ textAlign:"center", marginBottom:18, paddingBottom:18, borderBottom:"1px solid #f0ece4" }}>
                 <p style={{ fontSize:11, color:"#aaa", fontWeight:600, marginBottom:4 }}>Session price</p>
                 <p style={{ fontFamily:"'Fraunces',serif", fontSize:44, fontWeight:900, color:"#2d6a4f", lineHeight:1, marginBottom:3 }}>{listing.credit_price}</p>
@@ -651,7 +687,6 @@ export default function ListingDetailPage() {
                   </div>
                 )}
               </div>
-              {/* Session facts */}
               <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
                 {[
                   { icon:fmt.icon, text:`${fmt.label} session` },
@@ -667,7 +702,6 @@ export default function ListingDetailPage() {
                   </div>
                 ))}
               </div>
-              {/* Primary CTA — fix #1 */}
               {isOwnListing ? (
                 <div style={{ background:"#fafaf8", borderRadius:14, padding:14, textAlign:"center" }}>
                   <p style={{ fontSize:13, color:"#aaa" }}>This is your own listing</p>
@@ -692,7 +726,7 @@ export default function ListingDetailPage() {
         </div>
       </div>
 
-      {/* MOBILE STICKY BOTTOM BAR — fix mobile CTA, fix #4 */}
+      {/* MOBILE STICKY BOTTOM BAR */}
       <div className="mobile-sticky-bar" style={{ position:"fixed", bottom:0, left:0, right:0, background:"rgba(255,255,255,.97)", backdropFilter:"blur(12px)", borderTop:"1.5px solid #e8e2d9", padding:"12px 20px", zIndex:50, alignItems:"center", gap:14, boxShadow:"0 -4px 20px rgba(0,0,0,.08)" }}>
         <div>
           <div style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#2d6a4f", lineHeight:1 }}>{listing.credit_price} cr</div>
@@ -702,12 +736,10 @@ export default function ListingDetailPage() {
           {isOwnListing ? (
             <div style={{ fontSize:12, color:"#aaa", textAlign:"center" }}>Your listing</div>
           ) : currentUser ? (
-            <>
-              <button onClick={openBookModal}
-                style={{ width:"100%", padding:"13px", background:canAfford?"#2d6a4f":"#e8e2d9", color:canAfford?"#fff":"#aaa", borderRadius:14, fontFamily:"'Fraunces',serif", fontSize:15, fontWeight:900, border:"none", cursor:canAfford?"pointer":"not-allowed", minHeight:48 }}>
-                {canAfford ? "Book Session →" : "Insufficient credits"}
-              </button>
-            </>
+            <button onClick={openBookModal}
+              style={{ width:"100%", padding:"13px", background:canAfford?"#2d6a4f":"#e8e2d9", color:canAfford?"#fff":"#aaa", borderRadius:14, fontFamily:"'Fraunces',serif", fontSize:15, fontWeight:900, border:"none", cursor:canAfford?"pointer":"not-allowed", minHeight:48 }}>
+              {canAfford ? "Book Session →" : "Insufficient credits"}
+            </button>
           ) : (
             <a href="/login" style={{ display:"block", padding:"13px", background:"#2d6a4f", color:"#fff", borderRadius:14, fontFamily:"'Fraunces',serif", fontSize:15, fontWeight:900, textAlign:"center", minHeight:48 }}>
               Log in to Book

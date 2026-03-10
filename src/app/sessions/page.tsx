@@ -2,22 +2,22 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+// ─── TYPES ────────────────────────────────────────────────────────────────────
+type SessionProfile = {
+  id: string; full_name: string; username: string; level: string;
+  avatar_url?: string | null; xp_multiplier?: number; champion_title?: string | null;
+  teaching_title?: string | null; teaching_title_ends_at?: string | null;
+  rating_title?: string | null; rating_title_ends_at?: string | null;
+};
+
 type Session = {
-  id: string;
-  listing_id: string;
-  teacher_id: string;
-  learner_id: string;
-  proposed_time: string;
-  confirmed_time: string | null;
-  status: string;
-  learner_note: string | null;
-  credit_amount: number;
-  teacher_completed: boolean;
-  learner_completed: boolean;
-  created_at: string;
+  id: string; listing_id: string; teacher_id: string; learner_id: string;
+  proposed_time: string; confirmed_time: string | null; status: string;
+  learner_note: string | null; credit_amount: number;
+  teacher_completed: boolean; learner_completed: boolean; created_at: string;
   listing?: { title: string; format: string; description?: string; meeting_link?: string | null };
-  teacher?: { id: string; full_name: string; username: string; level: string; avatar_url?: string | null; xp_multiplier?: number; champion_title?: string | null };
-  learner?:  { id: string; full_name: string; username: string; level: string; avatar_url?: string | null; xp_multiplier?: number; champion_title?: string | null };
+  teacher?: SessionProfile;
+  learner?: SessionProfile;
 };
 
 type Profile = {
@@ -30,22 +30,26 @@ type RatingForm = {
   preparedness: number; respectfulness: number; review: string;
 };
 
-const STATUS_CONFIG: Record<string, { label: string; dot: string; textColor: string; badgeBg: string; badgeText: string }> = {
-  pending:   { label: "Pending",   dot: "#f59e0b", textColor: "#92400e", badgeBg: "#fef3c7", badgeText: "#92400e" },
-  confirmed: { label: "Upcoming",  dot: "#3b82f6", textColor: "#1e40af", badgeBg: "#dbeafe", badgeText: "#1e40af" },
-  completed: { label: "Completed", dot: "#22c55e", textColor: "#166534", badgeBg: "#dcfce7", badgeText: "#166534" },
-  cancelled: { label: "Cancelled", dot: "#ef4444", textColor: "#991b1b", badgeBg: "#fee2e2", badgeText: "#991b1b" },
-  disputed:  { label: "Disputed",  dot: "#a855f7", textColor: "#6d28d9", badgeBg: "#ede9fe", badgeText: "#6d28d9" },
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const STATUS_CONFIG: Record<string, { label: string; dot: string; badgeBg: string; badgeText: string }> = {
+  pending:   { label:"Pending",   dot:"#f59e0b", badgeBg:"#fef3c7", badgeText:"#92400e" },
+  confirmed: { label:"Upcoming",  dot:"#3b82f6", badgeBg:"#dbeafe", badgeText:"#1e40af" },
+  completed: { label:"Completed", dot:"#22c55e", badgeBg:"#dcfce7", badgeText:"#166534" },
+  cancelled: { label:"Cancelled", dot:"#ef4444", badgeBg:"#fee2e2", badgeText:"#991b1b" },
+  disputed:  { label:"Disputed",  dot:"#a855f7", badgeBg:"#ede9fe", badgeText:"#6d28d9" },
 };
-
 const FORMAT_LABELS: Record<string, string> = { video:"Video", chat:"Chat", docs:"Docs", mixed:"Mixed" };
 const LEVEL_COLORS: Record<string, string> = {
   Seedling:"#2d6a4f", Learner:"#1d4ed8", Contributor:"#7c3aed",
   Skilled:"#b45309", Expert:"#dc2626", Master:"#0891b2", Legend:"#d97706",
 };
 
+// Fields to select for teacher/learner FK joins
+const PROFILE_FIELDS = "id,full_name,username,level,avatar_url,xp_multiplier,champion_title,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at";
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
 function getInitials(name: string) {
-  return name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?";
+  return name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0,2) || "?";
 }
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("en-PH", { weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit", hour12:true });
@@ -63,8 +67,43 @@ function getRank(xp_multiplier?: number): 0|1|2|3 {
   if (xp_multiplier >= 1.15) return 2;
   return 3;
 }
+function isActiveTitle(endsAt?: string | null) {
+  if (!endsAt) return false;
+  return new Date(endsAt) > new Date();
+}
 
-// ── PREMIUM AVATAR ────────────────────────────────────────────────────────────
+// ─── PERK BADGES ─────────────────────────────────────────────────────────────
+function PerkBadges({ p }: { p: SessionProfile }) {
+  const rank = getRank(p.xp_multiplier);
+  const hasTeaching = p.teaching_title && isActiveTitle(p.teaching_title_ends_at);
+  const hasRating   = p.rating_title   && isActiveTitle(p.rating_title_ends_at);
+  if (!rank && !hasTeaching && !hasRating) return null;
+  return (
+    <>
+      {rank > 0 && p.champion_title && (
+        <span style={{ fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999,
+          color:rank===1?"#b8860b":rank===2?"#888":"#a0522d",
+          background:rank===1?"rgba(255,215,0,.15)":rank===2?"rgba(192,192,192,.15)":"rgba(205,127,50,.15)" }}>
+          {rank===1?"👑":rank===2?"🥈":"🥉"} {p.champion_title}
+        </span>
+      )}
+      {hasTeaching && (
+        <span style={{ fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999,
+          background:"#eef6f2", color:"#2d6a4f", border:"1px solid #c6e8d4" }}>
+          🎓 {p.teaching_title}
+        </span>
+      )}
+      {hasRating && (
+        <span style={{ fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999,
+          background:"#fefce8", color:"#92400e", border:"1px solid #fde68a" }}>
+          ⭐ {p.rating_title}
+        </span>
+      )}
+    </>
+  );
+}
+
+// ─── PREMIUM AVATAR ───────────────────────────────────────────────────────────
 function PremiumAvatar({ profile, size = 40, statusDot }: {
   profile: { full_name: string; level: string; avatar_url?: string | null; xp_multiplier?: number };
   size?: number; statusDot?: string;
@@ -86,35 +125,27 @@ function PremiumAvatar({ profile, size = 40, statusDot }: {
         {profile.avatar_url
           ? <img src={profile.avatar_url} alt={profile.full_name} style={{ width:"100%", height:"100%", objectFit:"cover" }}
               onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
-          : getInitials(profile.full_name)
-        }
+          : getInitials(profile.full_name)}
       </div>
-      {statusDot && (
-        <div style={{ position:"absolute", bottom:-1, right:-1, width:size*.3, height:size*.3,
-          borderRadius:"50%", background:statusDot, border:"2px solid #fff", zIndex:3 }} />
-      )}
-      {badge && !statusDot && (
-        <span style={{ position:"absolute", bottom:-3, right:-5, fontSize:size*0.38, lineHeight:1,
-          filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.5))", zIndex:2 }}>{badge}</span>
-      )}
+      {statusDot && <div style={{ position:"absolute", bottom:-1, right:-1, width:size*.3, height:size*.3, borderRadius:"50%", background:statusDot, border:"2px solid #fff", zIndex:3 }} />}
+      {badge && !statusDot && <span style={{ position:"absolute", bottom:-3, right:-5, fontSize:size*0.38, lineHeight:1, filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.5))", zIndex:2 }}>{badge}</span>}
     </div>
   );
 }
 
+// ─── STAR PICKER ─────────────────────────────────────────────────────────────
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const [hover, setHover] = useState(0);
   return (
     <div className="flex gap-1">
       {[1,2,3,4,5].map(i => (
-        <button key={i} onClick={() => onChange(i)}
-          onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(0)}
+        <button key={i} onClick={() => onChange(i)} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(0)}
           className="bg-transparent border-0 cursor-pointer p-0.5 text-3xl leading-none transition-transform hover:scale-110"
           style={{ color:(hover||value)>=i?"#f59e0b":"#e5e7eb" }}>★</button>
       ))}
     </div>
   );
 }
-
 function Stars({ value }: { value: number }) {
   return <span>{[1,2,3,4,5].map(i => <span key={i} className="text-sm" style={{ color:i<=Math.round(value)?"#f59e0b":"#e5e7eb" }}>★</span>)}</span>;
 }
@@ -132,6 +163,7 @@ const LEARNER_RATES_TEACHER = [
   { key:"punctuality",   label:"Punctuality",        hint:"Did they show up on time?"         },
 ];
 
+// ─── MEETING LINK ─────────────────────────────────────────────────────────────
 function MeetingLinkButton({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
   const icon  = url.includes("meet.google")?"🎥":url.includes("zoom.us")?"💙":url.includes("discord.gg")?"💜":url.includes("teams.micro")?"🔵":"🔗";
@@ -158,6 +190,7 @@ function MeetingLinkButton({ url }: { url: string }) {
   );
 }
 
+// ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function SessionsPage() {
   const [profile,           setProfile]           = useState<Profile | null>(null);
   const [sessions,          setSessions]          = useState<Session[]>([]);
@@ -186,18 +219,16 @@ export default function SessionsPage() {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { window.location.href = "/login"; return; }
-
     const [profRes, sessRes, ratingsRes] = await Promise.all([
       supabase.from("profiles").select("*,xp_multiplier").eq("id", user.id).single(),
       supabase.from("sessions")
         .select(`*, listing:listings(title,format,description,meeting_link),
-          teacher:profiles!sessions_teacher_id_fkey(id,full_name,username,level,avatar_url,xp_multiplier,champion_title),
-          learner:profiles!sessions_learner_id_fkey(id,full_name,username,level,avatar_url,xp_multiplier,champion_title)`)
+          teacher:profiles!sessions_teacher_id_fkey(${PROFILE_FIELDS}),
+          learner:profiles!sessions_learner_id_fkey(${PROFILE_FIELDS})`)
         .or(`teacher_id.eq.${user.id},learner_id.eq.${user.id}`)
         .order("created_at", { ascending: false }),
       supabase.from("ratings").select("session_id").eq("rater_id", user.id),
     ]);
-
     if (profRes.data) setProfile(profRes.data);
     setSessions(sessRes.data || []);
     setAlreadyRated(new Set((ratingsRes.data||[]).map((r: any) => r.session_id).filter(Boolean)));
@@ -279,8 +310,8 @@ export default function SessionsPage() {
       showToast(`Session complete! ${session.credit_amount} cr released.`);
       const { data: completedSession } = await supabase.from("sessions")
         .select(`*, listing:listings(title,format,description,meeting_link),
-          teacher:profiles!sessions_teacher_id_fkey(id,full_name,username,level,avatar_url,xp_multiplier,champion_title),
-          learner:profiles!sessions_learner_id_fkey(id,full_name,username,level,avatar_url,xp_multiplier,champion_title)`)
+          teacher:profiles!sessions_teacher_id_fkey(${PROFILE_FIELDS}),
+          learner:profiles!sessions_learner_id_fkey(${PROFILE_FIELDS})`)
         .eq("id",session.id).single();
       await loadData(); setActionLoading(null);
       if (completedSession) {
@@ -411,7 +442,7 @@ export default function SessionsPage() {
           </a>
         </div>
         <div className="flex gap-0.5">
-          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
+          {[["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
             <a key={l} href={h} className={`navlink${h==="/sessions"?" active":""}`}>{l}</a>
           ))}
         </div>
@@ -502,32 +533,32 @@ export default function SessionsPage() {
             const isExpanded = expandedId === session.id;
             const hasRated   = alreadyRated.has(session.id);
             const meetingLink = session.listing?.meeting_link;
-            const otherRank  = getRank(other?.xp_multiplier);
 
             return (
-              <div key={session.id} className="session-card bg-white rounded-2xl border border-stone-200 overflow-visible fade-up" style={{ animationDelay:`${idx*.04}s`, borderLeft:`3px solid ${cfg.dot}` }}>
+              <div key={session.id} className="session-card bg-white rounded-2xl border border-stone-200 overflow-visible fade-up"
+                style={{ animationDelay:`${idx*.04}s`, borderLeft:`3px solid ${cfg.dot}` }}>
 
-                <div className="px-5 py-4 flex items-center gap-4">
+                <div className="px-5 py-4 flex items-start gap-4">
                   {other && <PremiumAvatar profile={other} size={40} statusDot={cfg.dot} />}
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    {/* Name + role row */}
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-sm font-800 text-stone-900">{other?.full_name||"Unknown"}</span>
                       <span className="text-xs text-stone-400">@{other?.username}</span>
-                      {other?.champion_title && otherRank > 0 && (
-                        <span style={{ fontSize:10, fontWeight:800,
-                          color:otherRank===1?"#b8860b":otherRank===2?"#888":"#a0522d",
-                          background:otherRank===1?"rgba(255,215,0,0.15)":otherRank===2?"rgba(192,192,192,0.15)":"rgba(205,127,50,0.15)",
-                          padding:"1px 7px", borderRadius:999 }}>
-                          {otherRank===1?"👑":otherRank===2?"🥈":"🥉"} {other.champion_title}
-                        </span>
-                      )}
                       <span className={`text-xs font-700 px-2 py-0.5 rounded-full ${isTeacher?"bg-blue-50 text-blue-600":"bg-green-50 text-green-700"}`}>
                         {isTeacher?"Learner":"Teacher"}
                       </span>
                     </div>
+                    {/* Perk badges row — champion + teaching + rating */}
+                    {other && (
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                        <PerkBadges p={other} />
+                      </div>
+                    )}
                     <p className="text-xs font-600 text-stone-500 truncate max-w-xs">{session.listing?.title||"Untitled Session"}</p>
                   </div>
+
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="text-xs text-stone-400 font-500">{FORMAT_LABELS[session.listing?.format||"mixed"]}</span>
                     <div className="text-right">
@@ -630,10 +661,10 @@ export default function SessionsPage() {
                   </div>
                 </div>
 
-                {(session.status==="confirmed" || session.status==="upcoming") && meetingLink && (
+                {(session.status==="confirmed"||session.status==="upcoming") && meetingLink && (
                   <div className="px-5 pb-4"><MeetingLinkButton url={meetingLink} /></div>
                 )}
-                {(session.status==="confirmed" || session.status==="upcoming") && !meetingLink && isTeacher && (
+                {(session.status==="confirmed"||session.status==="upcoming") && !meetingLink && isTeacher && (
                   <div className="px-5 pb-4">
                     <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
                       <span className="text-lg">💡</span>
@@ -648,7 +679,7 @@ export default function SessionsPage() {
                     </div>
                   </div>
                 )}
-                {(session.status==="confirmed" || session.status==="upcoming") && !meetingLink && !isTeacher && (
+                {(session.status==="confirmed"||session.status==="upcoming") && !meetingLink && !isTeacher && (
                   <div className="px-5 pb-4">
                     <div className="flex items-center gap-3 px-4 py-3 bg-stone-50 border border-stone-200 rounded-2xl">
                       <span className="text-lg">⏳</span>
