@@ -107,10 +107,6 @@ function groupByDate(messages: Message[]) {
   });
   return groups;
 }
-function getRoomName(idA: string, idB: string) {
-  const slug = [idA, idB].sort().join("").replace(/-/g, "").slice(0, 20);
-  return `skillcredit-${slug}`;
-}
 function getChampionRank(xp_multiplier?: number): number {
   if (!xp_multiplier) return 0;
   if (xp_multiplier >= 1.25) return 1;
@@ -187,6 +183,72 @@ function CreditTransferBubble({ payload, isMe, senderName }: { payload: CreditTr
       {payload.note && <div style={{ fontSize: 12, color: isMe ? "rgba(255,255,255,0.75)" : "#666", fontStyle: "italic", marginBottom: 6 }}>"{payload.note}"</div>}
       <div style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.45)" : "#bbb" }}>
         {isMe ? "You sent" : `${senderName} sent you`} {payload.amount} credits
+      </div>
+    </div>
+  );
+}
+
+// ─── CANCELLATION BUBBLE ──────────────────────────────────────────────────────
+function parseCancellation(content: string): { name: string; action: string; title: string; reason: string } | null {
+  const m = content.match(/^(.+?) (cancelled|declined) the session for "(.+?)": (.+)$/);
+  if (!m) return null;
+  return { name: m[1], action: m[2], title: m[3], reason: m[4] };
+}
+
+function CancellationBubble({ content, isMe }: { content: string; isMe: boolean }) {
+  const info = parseCancellation(content);
+  if (!info) return null;
+  const isDecline = info.action === "declined";
+  const accentColor = isDecline ? "#dc2626" : "#ea580c";
+  const accentBg    = isDecline
+    ? "linear-gradient(135deg,#dc2626,#b91c1c)"
+    : "linear-gradient(135deg,#ea580c,#c2410c)";
+
+  return (
+    <div style={{
+      maxWidth: 300,
+      borderRadius: 16,
+      overflow: "hidden",
+      border: `1.5px solid ${isDecline ? "#fecaca" : "#fed7aa"}`,
+      boxShadow: `0 3px 16px ${isDecline ? "rgba(239,68,68,0.10)" : "rgba(234,88,12,0.10)"}`,
+      background: "#fff",
+    }}>
+      {/* Coloured header strip */}
+      <div style={{ background: accentBg, padding: "10px 14px", display: "flex", alignItems: "center", gap: 9 }}>
+        <div style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>
+          {isDecline ? "❌" : "🚫"}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.7)", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 1 }}>
+            Session {isDecline ? "Declined" : "Cancelled"}
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {info.title}
+          </div>
+        </div>
+      </div>
+
+      {/* Reason body */}
+      <div style={{ padding: "11px 14px 13px" }}>
+        <div style={{ fontSize: 9, fontWeight: 800, color: "#bbb", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 7 }}>
+          Reason
+        </div>
+        <div style={{
+          fontSize: 12.5,
+          color: "#444",
+          lineHeight: 1.6,
+          background: isDecline ? "#fef2f2" : "#fff7ed",
+          borderRadius: 10,
+          padding: "8px 11px",
+          borderLeft: `3px solid ${accentColor}`,
+          fontStyle: "italic",
+        }}>
+          "{info.reason}"
+        </div>
+        <div style={{ fontSize: 10.5, color: "#bbb", marginTop: 9, fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ width: 5, height: 5, borderRadius: "50%", background: accentColor, display: "inline-block", flexShrink: 0 }} />
+          {isMe ? "You" : info.name} {info.action} this session · credits refunded
+        </div>
       </div>
     </div>
   );
@@ -329,7 +391,15 @@ export default function MessagesPage() {
       if (!op) continue;
       const last = ms[0];
       const unread = ms.filter(m => m.receiver_id === userId && !m.is_read && !m.is_deleted).length;
-      const lastText = last.is_deleted ? "🚫 Deleted" : last.message_type === "image" ? "📷 Photo" : last.message_type === "session_call" ? "📹 Video session" : last.message_type === "credit_transfer" ? "💰 Credits sent" : last.message_type === "file" ? "📎 File" : last.content;
+      // Pretty label for cancellation messages in sidebar preview
+      const isCancelMsg = parseCancellation(last.content);
+      const lastText = last.is_deleted ? "🚫 Deleted"
+        : last.message_type === "image" ? "📷 Photo"
+        : last.message_type === "session_call" ? "📹 Video session"
+        : last.message_type === "credit_transfer" ? "💰 Credits sent"
+        : last.message_type === "file" ? "📎 File"
+        : isCancelMsg ? `🚫 Session ${isCancelMsg.action}`
+        : last.content;
       convos.push({ other_user: op, last_message: lastText, last_time: last.created_at, unread_count: unread });
     }
     setConversations(convos);
@@ -573,7 +643,6 @@ export default function MessagesPage() {
 
         {/* ── SIDEBAR ── */}
         <div style={{ background: "#fff", borderRight: "1px solid #ebebef", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {/* Sidebar header */}
           <div style={{ padding: "16px 16px 10px", borderBottom: "1px solid #f2f2f5", flexShrink: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 900, color: "#1a1a1a", display: "flex", alignItems: "center", gap: 8 }}>
@@ -587,7 +656,6 @@ export default function MessagesPage() {
               style={{ width: "100%", padding: "8px 12px", borderRadius: 9, border: "1.5px solid #ebebef", background: "#F8F9FB", color: "#333", fontSize: 13, fontFamily: "'DM Sans', sans-serif" }} />
           </div>
 
-          {/* Filter tabs */}
           <div style={{ padding: "8px 12px", borderBottom: "1px solid #f2f2f5", display: "flex", gap: 4, flexShrink: 0 }}>
             {(["all", "teachers", "students"] as const).map(tab => (
               <button key={tab} className={`filter-tab ${convoFilter === tab ? "active" : ""}`} onClick={() => setConvoFilter(tab)}>
@@ -596,7 +664,6 @@ export default function MessagesPage() {
             ))}
           </div>
 
-          {/* Conversation list */}
           <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
             {filteredConvos.length === 0 ? (
               <div style={{ textAlign: "center", padding: "44px 20px", color: "#ccc" }}>
@@ -641,7 +708,6 @@ export default function MessagesPage() {
         {/* ── MAIN PANEL ── */}
         <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", background: "#F8F9FB" }}>
 
-          {/* New chat search */}
           {showNewChat && (
             <div style={{ display: "flex", flexDirection: "column", height: "100%", animation: "fadeIn 0.15s ease", background: "#fff" }}>
               <div style={{ padding: "20px 24px", borderBottom: "1px solid #f2f2f5", flexShrink: 0 }}>
@@ -680,7 +746,6 @@ export default function MessagesPage() {
             </div>
           )}
 
-          {/* Empty state */}
           {!showNewChat && !activeConvo && (
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 14 }}>
               <div style={{ width: 68, height: 68, borderRadius: "50%", background: "#eef6f2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>💬</div>
@@ -692,7 +757,6 @@ export default function MessagesPage() {
             </div>
           )}
 
-          {/* ── ACTIVE CONVERSATION ── */}
           {activeConvo && !showNewChat && (
             <>
               {/* Chat header */}
@@ -731,7 +795,6 @@ export default function MessagesPage() {
                       )}
                     </div>
                   </div>
-                  {/* ── ACTIONS: Send Credits + Sessions (no video session) ── */}
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <button onClick={() => setShowCreditModal(true)} className="action-btn"
                       style={{ background: "#fef9ec", color: "#92400e", border: "1.5px solid #fbbf24" }}>
@@ -757,7 +820,6 @@ export default function MessagesPage() {
 
                 {grouped.map(group => (
                   <div key={group.date}>
-                    {/* Date divider */}
                     <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0 14px" }}>
                       <div style={{ flex: 1, height: 1, background: "#ebebef" }} />
                       <span style={{ fontSize: 11, color: "#bbb", fontWeight: 600, letterSpacing: 0.4 }}>{group.date}</span>
@@ -780,6 +842,18 @@ export default function MessagesPage() {
                         return (
                           <div key={msg.id} className="msg-in" style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", marginBottom: 12 }}>
                             <CreditTransferBubble payload={payload} isMe={isMe} senderName={activeConvo.full_name} />
+                          </div>
+                        );
+                      }
+
+                      // ── Cancellation system message ──
+                      if (!msg.is_deleted && parseCancellation(msg.content)) {
+                        return (
+                          <div key={msg.id} className="msg-in" style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", marginBottom: 16 }}>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", gap: 4 }}>
+                              <CancellationBubble content={msg.content} isMe={isMe} />
+                              <div style={{ fontSize: 10, color: "#bbb", paddingLeft: 2, paddingRight: 2 }}>{formatTime(msg.created_at)}</div>
+                            </div>
                           </div>
                         );
                       }
@@ -886,7 +960,6 @@ export default function MessagesPage() {
                   </div>
                 ))}
 
-                {/* Typing indicator */}
                 {typingUsers.length > 0 && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0 10px", animation: "fadeIn 0.2s ease" }}>
                     <Avatar profile={activeConvo} size={28} />
@@ -902,7 +975,6 @@ export default function MessagesPage() {
                 <div ref={bottomRef} />
               </div>
 
-              {/* Reply bar */}
               {replyingTo && (
                 <div style={{ padding: "8px 18px", background: "#f0fdf6", borderTop: "1px solid #c6e8d4", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                   <div style={{ width: 3, height: 36, borderRadius: 3, background: "#2d6a4f", flexShrink: 0 }} />
@@ -914,7 +986,6 @@ export default function MessagesPage() {
                 </div>
               )}
 
-              {/* Image preview */}
               {imagePreview && (
                 <div style={{ padding: "10px 18px", background: "#f0fdf6", borderTop: "1px solid #c6e8d4", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
                   <img src={imagePreview} alt="preview" style={{ height: 50, width: 50, objectFit: "cover", borderRadius: 8, border: "1.5px solid #c6e8d4" }} />
@@ -926,7 +997,6 @@ export default function MessagesPage() {
                 </div>
               )}
 
-              {/* File preview */}
               {attachFile && (
                 <div style={{ padding: "10px 18px", background: "#f5f5ff", borderTop: "1px solid #c7d2fe", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
                   <span style={{ fontSize: 26 }}>📎</span>
@@ -938,7 +1008,6 @@ export default function MessagesPage() {
                 </div>
               )}
 
-              {/* Upload progress */}
               {uploading && uploadProgress > 0 && (
                 <div style={{ padding: "8px 18px", background: "#fff", borderTop: "1px solid #ebebef", flexShrink: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#888", marginBottom: 4 }}>
@@ -950,7 +1019,6 @@ export default function MessagesPage() {
                 </div>
               )}
 
-              {/* Emoji picker */}
               {showEmoji && (
                 <div style={{ padding: "10px 14px 8px", background: "#fff", borderTop: "1px solid #ebebef", display: "flex", flexWrap: "wrap", gap: 2, animation: "slideUp 0.12s ease", flexShrink: 0 }}>
                   {EMOJI_LIST.map(emoji => (
@@ -959,7 +1027,7 @@ export default function MessagesPage() {
                 </div>
               )}
 
-              {/* ── INPUT BAR ── */}
+              {/* Input bar */}
               <div style={{ padding: "10px 16px 12px", borderTop: "1px solid #ebebef", background: "#fff", display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0 }}>
                 <button className="input-tool" onClick={() => attachInputRef.current?.click()} title="Attach file" style={{ width: 36, height: 36, borderRadius: 10, background: "#f5f5f8", border: "1.5px solid #ebebef", fontSize: 18 }}>+</button>
                 <input ref={attachInputRef} type="file" accept="*/*" style={{ display: "none" }} onChange={handleAttachSelect} />
@@ -991,7 +1059,7 @@ export default function MessagesPage() {
         </div>
       </div>
 
-      {/* ── LIGHTBOX ── */}
+      {/* Lightbox */}
       {lightboxImg && (
         <div onClick={() => setLightboxImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, cursor: "zoom-out", animation: "fadeIn 0.15s ease" }}>
           <img src={lightboxImg} alt="full" style={{ maxWidth: "88vw", maxHeight: "88vh", objectFit: "contain", borderRadius: 12 }} onClick={e => e.stopPropagation()} />
@@ -999,7 +1067,7 @@ export default function MessagesPage() {
         </div>
       )}
 
-      {/* ── CONTEXT MENU ── */}
+      {/* Context menu */}
       {contextMenu && (
         <div onClick={e => e.stopPropagation()} style={{ position: "fixed", top: contextMenu.y, left: contextMenu.x, background: "#fff", borderRadius: 12, border: "1px solid #ebebef", boxShadow: "0 8px 30px rgba(0,0,0,0.12)", zIndex: 200, padding: 6, minWidth: 160, animation: "slideUp 0.1s ease" }}>
           <div className="ctx-item" onClick={() => { const m = messages.find(m => m.id === contextMenu.msgId); if (m) { setReplyingTo(m); textareaRef.current?.focus(); } setContextMenu(null); }}>↩ Reply</div>
@@ -1007,7 +1075,7 @@ export default function MessagesPage() {
         </div>
       )}
 
-      {/* ── CREDIT MODAL ── */}
+      {/* Credit modal */}
       {showCreditModal && activeConvo && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20, animation: "fadeIn 0.15s ease" }}>
           <div style={{ background: "#fff", borderRadius: 22, width: "100%", maxWidth: 400, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.16)" }}>

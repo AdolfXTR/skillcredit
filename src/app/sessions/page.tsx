@@ -30,6 +30,12 @@ type RatingForm = {
   preparedness: number; respectfulness: number; review: string;
 };
 
+// cancel modal context
+type CancelContext = {
+  session: Session;
+  mode: "cancel" | "decline"; // cancel = learner cancels pending, decline = teacher declines
+};
+
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; dot: string; badgeBg: string; badgeText: string }> = {
   pending:   { label:"Pending",   dot:"#f59e0b", badgeBg:"#fef3c7", badgeText:"#92400e" },
@@ -43,9 +49,23 @@ const LEVEL_COLORS: Record<string, string> = {
   Seedling:"#2d6a4f", Learner:"#1d4ed8", Contributor:"#7c3aed",
   Skilled:"#b45309", Expert:"#dc2626", Master:"#0891b2", Legend:"#d97706",
 };
-
-// Fields to select for teacher/learner FK joins
 const PROFILE_FIELDS = "id,full_name,username,level,avatar_url,xp_multiplier,champion_title,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at";
+
+// Quick-pick cancel reasons
+const CANCEL_REASONS_LEARNER = [
+  "Schedule conflict — can't make it",
+  "Found another teacher",
+  "Need to reschedule instead",
+  "Personal emergency",
+  "Made a booking mistake",
+];
+const CANCEL_REASONS_TEACHER = [
+  "I'm unavailable at this time",
+  "Topic is outside my expertise",
+  "Personal emergency",
+  "Please rebook at a different time",
+  "Technical issues on my end",
+];
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 function getInitials(name: string) {
@@ -190,6 +210,135 @@ function MeetingLinkButton({ url }: { url: string }) {
   );
 }
 
+// ─── CANCEL MODAL ─────────────────────────────────────────────────────────────
+function CancelModal({
+  ctx, profile, onClose, onConfirm, loading,
+}: {
+  ctx: CancelContext;
+  profile: Profile;
+  onClose: () => void;
+  onConfirm: (reason: string) => Promise<void>;
+  loading: boolean;
+}) {
+  const [reason, setReason] = useState("");
+  const isDecline = ctx.mode === "decline";
+  const other = isDecline ? ctx.session.learner : ctx.session.teacher;
+  const quickReasons = isDecline ? CANCEL_REASONS_TEACHER : CANCEL_REASONS_LEARNER;
+  const canSubmit = reason.trim().length >= 5;
+
+  return (
+    <div className="overlay-anim fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5 backdrop-blur-sm">
+      <div className="modal-anim bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+
+        {/* Header */}
+        <div style={{ background: isDecline ? "linear-gradient(135deg,#fef2f2,#fff)" : "linear-gradient(135deg,#fff7ed,#fff)", borderBottom:"1px solid #f0ece4" }}
+          className="px-7 py-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-900 text-stone-900 mb-1" style={{ fontFamily:"'Fraunces',serif", fontSize:20 }}>
+              {isDecline ? "❌ Decline Session" : "🚫 Cancel Booking"}
+            </h2>
+            <p className="text-xs text-stone-500 font-500 leading-relaxed">
+              {isDecline
+                ? `Your reason will be sent as a message to ${other?.full_name || "the learner"} and they'll be refunded.`
+                : `Your reason will be sent as a message to ${other?.full_name || "the teacher"} and your credits will be refunded.`}
+            </p>
+          </div>
+          <button onClick={onClose}
+            className="w-8 h-8 shrink-0 rounded-full bg-stone-100 flex items-center justify-center text-stone-400 hover:bg-stone-200 transition-colors text-sm">✕</button>
+        </div>
+
+        <div className="px-7 py-6 flex flex-col gap-5">
+
+          {/* Session info pill */}
+          <div className="flex items-center gap-3 bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3">
+            {other && <PremiumAvatar profile={other} size={32} />}
+            <div className="min-w-0">
+              <p className="text-xs font-800 text-stone-800 truncate">{ctx.session.listing?.title || "Untitled Session"}</p>
+              <p className="text-xs text-stone-400 font-500">with {other?.full_name} · {ctx.session.credit_amount} cr</p>
+            </div>
+          </div>
+
+          {/* Quick reason chips */}
+          <div>
+            <p className="text-xs font-700 text-stone-500 uppercase tracking-wider mb-3">Quick reasons</p>
+            <div className="flex flex-wrap gap-2">
+              {quickReasons.map(r => (
+                <button key={r} onClick={() => setReason(r)}
+                  className="text-xs font-600 px-3 py-1.5 rounded-full border transition-all cursor-pointer"
+                  style={{
+                    background: reason === r ? (isDecline ? "#fef2f2" : "#fff7ed") : "#f5f2ec",
+                    borderColor: reason === r ? (isDecline ? "#fecaca" : "#fed7aa") : "#e8e0d0",
+                    color: reason === r ? (isDecline ? "#dc2626" : "#c2410c") : "#666",
+                  }}>
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom reason textarea */}
+          <div>
+            <p className="text-xs font-700 text-stone-500 uppercase tracking-wider mb-2">Or write your own</p>
+            <textarea
+              value={reason}
+              onChange={e => setReason(e.target.value.slice(0, 300))}
+              placeholder={isDecline
+                ? "Let the learner know why you're declining…"
+                : "Let the teacher know why you're cancelling…"}
+              className="w-full min-h-24 p-3.5 rounded-xl border text-sm resize-none outline-none transition-colors"
+              style={{
+                fontFamily:"'DM Sans',sans-serif",
+                borderColor: reason.trim().length >= 5 ? "#2d6a4f" : "#e8e0d0",
+                boxShadow: reason.trim().length >= 5 ? "0 0 0 3px rgba(45,106,79,.08)" : "none",
+              }}
+            />
+            <div className="flex justify-between items-center mt-1">
+              <p className="text-xs font-600" style={{ color: canSubmit ? "#2d6a4f" : "#f59e0b" }}>
+                {!canSubmit ? `${Math.max(0, 5 - reason.trim().length)} more characters needed` : "✓ Ready to send"}
+              </p>
+              <p className="text-xs text-stone-300">{reason.length}/300</p>
+            </div>
+          </div>
+
+          {/* Message preview */}
+          {canSubmit && (
+            <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
+              <p className="text-xs font-800 text-green-700 mb-1.5">📨 Message preview</p>
+              <p className="text-xs text-green-800 leading-relaxed italic">
+                "{profile.full_name} {isDecline ? "declined" : "cancelled"} the session for <strong>{ctx.session.listing?.title}</strong>:{" "}
+                {reason.trim()}"
+              </p>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-2 pt-1">
+            <button onClick={onClose}
+              className="flex-1 py-3 rounded-xl bg-stone-100 text-stone-600 font-700 text-sm hover:bg-stone-200 transition-colors">
+              Keep Session
+            </button>
+            <button
+              onClick={() => onConfirm(reason.trim())}
+              disabled={!canSubmit || loading}
+              className="py-3 px-6 rounded-xl font-800 text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                flex: 2,
+                background: canSubmit ? (isDecline ? "linear-gradient(135deg,#dc2626,#b91c1c)" : "linear-gradient(135deg,#ea580c,#c2410c)") : "#e5e7eb",
+                color: canSubmit ? "#fff" : "#9ca3af",
+              }}>
+              {loading
+                ? "Processing…"
+                : isDecline
+                ? "❌ Decline & Notify"
+                : "🚫 Cancel & Notify"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function SessionsPage() {
   const [profile,           setProfile]           = useState<Profile | null>(null);
@@ -209,6 +358,7 @@ export default function SessionsPage() {
   const [disputeReason,     setDisputeReason]     = useState("");
   const [rescheduleSession, setRescheduleSession] = useState<Session | null>(null);
   const [newTime,           setNewTime]           = useState("");
+  const [cancelCtx,         setCancelCtx]         = useState<CancelContext | null>(null);
 
   const minRescheduleTime = new Date().toISOString().slice(0,16);
   const showToast = (msg: string, type: "success"|"error"="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),4000); };
@@ -240,6 +390,21 @@ export default function SessionsPage() {
     window.location.href = "/messages";
   }
 
+  // Send a system message to the other party in the messages table
+  async function sendCancellationMessage(session: Session, reason: string, isDecline: boolean) {
+    if (!profile) return;
+    const recipientId = isDecline ? session.learner_id : session.teacher_id;
+    const senderId    = profile.id;
+    const text = `${profile.full_name} ${isDecline ? "declined" : "cancelled"} the session for "${session.listing?.title}": ${reason}`;
+    try {
+      await supabase.from("messages").insert({
+        sender_id:   senderId,
+        receiver_id: recipientId,
+        content:     text,
+      });
+    } catch (_) {}
+  }
+
   async function safeIncrementCredits(userId: string, amount: number) {
     const { error } = await supabase.rpc("increment_credits", { user_id: userId, amount });
     if (error) {
@@ -256,31 +421,59 @@ export default function SessionsPage() {
     await loadData(); setActionLoading(null);
   }
 
-  async function handleDecline(session: Session) {
-    setActionLoading(session.id+"-decline");
-    await safeIncrementCredits(session.learner_id, session.credit_amount);
-    await supabase.from("sessions").update({ status:"cancelled" }).eq("id",session.id);
-    await supabase.from("escrow").update({ status:"refunded" }).eq("session_id",session.id);
-    try {
-      await supabase.from("credit_transactions").insert({ user_id:session.learner_id, amount:session.credit_amount, type:"session_refund", reference_id:session.id, description:"Session declined — credits refunded" });
-      await supabase.from("notifications").insert({ user_id:session.learner_id, type:"session", title:"Session Declined", body:`${session.credit_amount} credits refunded.`, link:"/sessions" });
-    } catch(_){}
-    showToast(`Session declined. ${session.credit_amount} cr refunded.`);
-    await loadData(); setActionLoading(null);
+  // Teacher declines — opens cancel modal
+  function openDeclineModal(session: Session) {
+    setCancelCtx({ session, mode: "decline" });
   }
 
-  async function handleCancelPending(session: Session) {
-    if (!profile) return;
-    setActionLoading(session.id+"-cancel");
+  // Learner cancels pending — opens cancel modal
+  function openCancelModal(session: Session) {
+    setCancelCtx({ session, mode: "cancel" });
+  }
+
+  // Shared confirm handler used by cancel modal
+  async function handleCancelConfirm(reason: string) {
+    if (!cancelCtx || !profile) return;
+    const { session, mode } = cancelCtx;
+    const isDecline = mode === "decline";
+    setActionLoading(session.id + (isDecline ? "-decline" : "-cancel"));
+
+    // Refund learner
     await safeIncrementCredits(session.learner_id, session.credit_amount);
-    await supabase.from("sessions").update({ status:"cancelled" }).eq("id",session.id);
-    await supabase.from("escrow").update({ status:"refunded" }).eq("session_id",session.id);
+    await supabase.from("sessions").update({ status:"cancelled" }).eq("id", session.id);
+    await supabase.from("escrow").update({ status:"refunded" }).eq("session_id", session.id);
+
+    // Send reason as a message to the other party
+    await sendCancellationMessage(session, reason, isDecline);
+
     try {
-      await supabase.from("credit_transactions").insert({ user_id:session.learner_id, amount:session.credit_amount, type:"session_refund", reference_id:session.id, description:"Session cancelled by learner — credits refunded" });
-      await supabase.from("notifications").insert({ user_id:session.teacher_id, type:"session", title:"Session Cancelled", body:`${profile.full_name} cancelled their booking for "${session.listing?.title}".`, link:"/sessions" });
-    } catch(_){}
-    showToast(`Booking cancelled. ${session.credit_amount} cr refunded.`);
-    await loadData(); setActionLoading(null);
+      await supabase.from("credit_transactions").insert({
+        user_id: session.learner_id,
+        amount: session.credit_amount,
+        type: "session_refund",
+        reference_id: session.id,
+        description: isDecline
+          ? `Session declined by teacher — credits refunded`
+          : `Session cancelled by learner — credits refunded`,
+      });
+
+      const notifTarget  = isDecline ? session.learner_id : session.teacher_id;
+      const notifTitle   = isDecline ? "Session Declined" : "Session Cancelled";
+      const notifBody    = isDecline
+        ? `${profile.full_name} declined your booking. ${session.credit_amount} credits refunded.`
+        : `${profile.full_name} cancelled their booking for "${session.listing?.title}".`;
+
+      await supabase.from("notifications").insert({
+        user_id: notifTarget, type:"session", title: notifTitle, body: notifBody, link:"/sessions",
+      });
+    } catch (_) {}
+
+    setCancelCtx(null);
+    showToast(isDecline
+      ? `Session declined. ${session.credit_amount} cr refunded & reason sent.`
+      : `Booking cancelled. ${session.credit_amount} cr refunded & reason sent.`);
+    await loadData();
+    setActionLoading(null);
   }
 
   async function handleMarkComplete(session: Session) {
@@ -540,9 +733,7 @@ export default function SessionsPage() {
 
                 <div className="px-5 py-4 flex items-start gap-4">
                   {other && <PremiumAvatar profile={other} size={40} statusDot={cfg.dot} />}
-
                   <div className="flex-1 min-w-0">
-                    {/* Name + role row */}
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-sm font-800 text-stone-900">{other?.full_name||"Unknown"}</span>
                       <span className="text-xs text-stone-400">@{other?.username}</span>
@@ -550,7 +741,6 @@ export default function SessionsPage() {
                         {isTeacher?"Learner":"Teacher"}
                       </span>
                     </div>
-                    {/* Perk badges row — champion + teaching + rating */}
                     {other && (
                       <div className="flex items-center gap-1.5 flex-wrap mb-1">
                         <PerkBadges p={other} />
@@ -598,23 +788,25 @@ export default function SessionsPage() {
                   <div className="flex gap-2 items-center flex-wrap pt-3">
                     <button onClick={() => openMessageWith(otherId)} className="px-3.5 py-1.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-700 hover:bg-stone-200 transition-colors border border-stone-200">Message</button>
 
+                    {/* Teacher: Accept / Decline (with reason modal) */}
                     {session.status==="pending" && isTeacher && (<>
                       <button onClick={() => handleAccept(session)} disabled={!!actionLoading}
                         className="px-4 py-1.5 rounded-xl bg-[#2d6a4f] text-white text-xs font-800 hover:bg-[#1a4a36] transition-colors disabled:opacity-50">
                         {actionLoading===session.id+"-accept"?"…":"Accept"}
                       </button>
-                      <button onClick={() => handleDecline(session)} disabled={!!actionLoading}
-                        className="px-3.5 py-1.5 rounded-xl bg-red-50 text-red-600 text-xs font-700 hover:bg-red-100 transition-colors border border-red-200">
-                        {actionLoading===session.id+"-decline"?"…":"Decline"}
+                      <button onClick={() => openDeclineModal(session)} disabled={!!actionLoading}
+                        className="px-3.5 py-1.5 rounded-xl bg-red-50 text-red-600 text-xs font-700 hover:bg-red-100 transition-colors border border-red-200 disabled:opacity-50">
+                        Decline
                       </button>
                     </>)}
 
+                    {/* Learner: Awaiting + Cancel (with reason modal) */}
                     {session.status==="pending" && !isTeacher && (
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-600 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">Awaiting teacher</span>
-                        <button onClick={() => handleCancelPending(session)} disabled={!!actionLoading}
+                        <button onClick={() => openCancelModal(session)} disabled={!!actionLoading}
                           className="px-3.5 py-1.5 rounded-xl bg-red-50 text-red-600 text-xs font-700 hover:bg-red-100 transition-colors border border-red-200 disabled:opacity-50">
-                          {actionLoading===session.id+"-cancel"?"…":"Cancel"}
+                          Cancel
                         </button>
                       </div>
                     )}
@@ -727,6 +919,17 @@ export default function SessionsPage() {
           })}
         </div>
       </div>
+
+      {/* ── CANCEL / DECLINE MODAL ── */}
+      {cancelCtx && profile && (
+        <CancelModal
+          ctx={cancelCtx}
+          profile={profile}
+          onClose={() => setCancelCtx(null)}
+          onConfirm={handleCancelConfirm}
+          loading={!!actionLoading}
+        />
+      )}
 
       {/* RATING MODAL */}
       {ratingSession && (
