@@ -11,39 +11,25 @@ type Profile = {
 };
 
 const TX_CONFIG: Record<string, { icon: string; label: string; tw: string }> = {
-  signup_bonus:  { icon: "🎁", label: "Signup Bonus",   tw: "bg-emerald-50" },
-  session_earn:  { icon: "📚", label: "Session Earned", tw: "bg-emerald-50" },
-  session_spend: { icon: "📖", label: "Session Booked", tw: "bg-red-50" },
-  bounty_earn:   { icon: "🏆", label: "Bounty Won",     tw: "bg-emerald-50" },
-  bounty_spend:  { icon: "🎯", label: "Bounty Posted",  tw: "bg-red-50" },
-  topup:         { icon: "💳", label: "Top Up",         tw: "bg-sky-50" },
-  forum_earn:    { icon: "💬", label: "Forum Answer",   tw: "bg-emerald-50" },
-  refund:        { icon: "↩️", label: "Refund",         tw: "bg-violet-50" },
-  default:       { icon: "💰", label: "Transaction",    tw: "bg-stone-50" },
+  signup_bonus:    { icon: "🎁", label: "Signup Bonus",     tw: "bg-emerald-50" },
+  session_earn:    { icon: "📚", label: "Session Earned",   tw: "bg-emerald-50" },
+  session_spend:   { icon: "📖", label: "Session Booked",   tw: "bg-red-50" },
+  session_refund:  { icon: "↩️", label: "Session Refund",   tw: "bg-violet-50" },
+  bounty_earn:     { icon: "🏆", label: "Bounty Won",       tw: "bg-emerald-50" },
+  bounty_spend:    { icon: "🎯", label: "Bounty Posted",    tw: "bg-red-50" },
+  topup:           { icon: "💳", label: "Top Up",           tw: "bg-sky-50" },
+  forum_earn:      { icon: "💬", label: "Forum Answer",     tw: "bg-emerald-50" },
+  refund:          { icon: "↩️", label: "Refund",           tw: "bg-violet-50" },
+  credit_transfer: { icon: "💸", label: "Credit Transfer",  tw: "bg-amber-50" },
+  default:         { icon: "💰", label: "Transaction",      tw: "bg-stone-50" },
 };
 
-const PACKAGES = [
-  { credits: 50,  price: 500,  label: "Starter", bonus: 0,   popular: false },
-  { credits: 120, price: 1000, label: "Popular",  bonus: 20,  popular: true  },
-  { credits: 260, price: 2000, label: "Value",    bonus: 60,  popular: false },
-  { credits: 550, price: 4000, label: "Pro",      bonus: 150, popular: false },
-];
-
-const PAYMENT_METHODS = [
-  { key: "gcash", label: "GCash",       icon: "📱" },
-  { key: "maya",  label: "Maya",        icon: "💚" },
-  { key: "card",  label: "Credit Card", icon: "💳" },
-];
-
 export default function WalletPage() {
-  const [profile, setProfile]         = useState<Profile | null>(null);
+  const [profile, setProfile]           = useState<Profile | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [activeTab, setActiveTab]     = useState<"overview" | "topup" | "history">("overview");
-  const [selectedPkg, setSelectedPkg] = useState(1);
-  const [paymentMethod, setPaymentMethod] = useState("gcash");
-  const [processing, setProcessing]   = useState(false);
-  const [success, setSuccess]         = useState(false);
+  const [loading, setLoading]           = useState(true);
+  const [activeTab, setActiveTab]       = useState<"overview" | "topup" | "history">("overview");
+  const [notifyDone, setNotifyDone]     = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -51,36 +37,17 @@ export default function WalletPage() {
       if (!user) { window.location.href = "/login"; return; }
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (prof) setProfile(prof);
-      const { data: txns } = await supabase.from("credit_transactions").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(50);
+      const { data: txns } = await supabase.from("credit_transactions")
+        .select("*").eq("user_id", user.id)
+        .order("created_at", { ascending: false }).limit(50);
       if (txns) setTransactions(txns);
       setLoading(false);
     };
     init();
   }, []);
 
-  const handleTopUp = async () => {
-    if (!profile) return;
-    setProcessing(true);
-    const pkg = PACKAGES[selectedPkg];
-    const total = pkg.credits + pkg.bonus;
-    await new Promise(r => setTimeout(r, 2000));
-    await supabase.from("profiles").update({ credits: (profile.credits || 0) + total }).eq("id", profile.id);
-    await supabase.from("credit_transactions").insert({
-      user_id: profile.id, amount: total, type: "topup",
-      description: `Top up — ${pkg.label} (${pkg.credits}+${pkg.bonus} bonus) via ${paymentMethod.toUpperCase()}`,
-    });
-    setProfile(p => p ? { ...p, credits: p.credits + total } : p);
-    setTransactions(prev => [{
-      id: Date.now().toString(), amount: total, type: "topup",
-      description: `Top up — ${pkg.label} package`, created_at: new Date().toISOString()
-    }, ...prev]);
-    setProcessing(false);
-    setSuccess(true);
-  };
-
   const totalEarned = transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const totalSpent  = transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-  const pkg = PACKAGES[selectedPkg];
 
   if (loading) return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center">
@@ -97,16 +64,18 @@ export default function WalletPage() {
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
         .font-fraunces { font-family: 'Fraunces', serif; }
         body { font-family: 'DM Sans', sans-serif; }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+        .fade-up { animation: fadeUp .3s ease both; }
       `}</style>
 
-      {/* ── NAVBAR ── */}
+      {/* NAVBAR */}
       <nav className="bg-white border-b border-stone-200 sticky top-0 z-50 px-6 h-14 flex items-center justify-between shadow-sm">
         <a href="/dashboard" className="flex items-center no-underline">
           <span className="font-fraunces text-xl font-black text-emerald-700">Skill</span>
           <span className="font-fraunces text-xl font-black text-stone-900">Credit</span>
         </a>
         <div className="flex items-center gap-1">
-          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
+          {[["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
             <a key={l} href={h} className="px-3 py-1.5 rounded-lg text-stone-500 text-sm font-semibold hover:bg-stone-100 transition-colors no-underline">{l}</a>
           ))}
         </div>
@@ -122,27 +91,24 @@ export default function WalletPage() {
 
       <div className="max-w-4xl mx-auto px-5 py-8">
 
-        {/* ── HEADER ── */}
-        <div className="mb-6">
+        {/* HEADER */}
+        <div className="mb-6 fade-up">
           <h1 className="font-fraunces text-4xl font-black text-stone-900 mb-1">My Wallet</h1>
-          <p className="text-stone-400 text-sm">Manage your credits and top up anytime</p>
+          <p className="text-stone-400 text-sm">Track your credits and transaction history</p>
         </div>
 
-        {/* ── BALANCE CARD ── */}
-        <div className="relative bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-700 rounded-3xl p-8 mb-5 overflow-hidden shadow-xl">
-          {/* Decorative circles */}
+        {/* BALANCE CARD */}
+        <div className="relative bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-700 rounded-3xl p-8 mb-5 overflow-hidden shadow-xl fade-up">
           <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-white/5" />
           <div className="absolute -bottom-8 -left-8 w-36 h-36 rounded-full bg-white/5" />
-
           <p className="text-emerald-200 text-sm font-semibold mb-1">Available Balance</p>
           <div className="flex items-end gap-3 mb-1">
             <p className="font-fraunces text-6xl font-black text-white leading-none">{profile?.credits}</p>
             <p className="text-emerald-300 text-lg font-bold mb-2">credits</p>
           </div>
           <p className="text-emerald-300/70 text-sm mb-7">≈ ₱{((profile?.credits || 0) * 10).toLocaleString()} equivalent</p>
-
           <div className="flex gap-3">
-            <button onClick={() => { setActiveTab("topup"); setSuccess(false); }}
+            <button onClick={() => setActiveTab("topup")}
               className="flex items-center gap-2 px-5 py-2.5 bg-white text-emerald-800 rounded-xl font-bold text-sm hover:bg-emerald-50 transition-colors border-0 cursor-pointer">
               + Top Up Credits
             </button>
@@ -153,11 +119,11 @@ export default function WalletPage() {
           </div>
         </div>
 
-        {/* ── STATS ── */}
-        <div className="grid grid-cols-3 gap-4 mb-5">
+        {/* STATS */}
+        <div className="grid grid-cols-3 gap-4 mb-5 fade-up">
           {[
             { icon: "⬆️", label: "Total Earned", value: `+${totalEarned}`, tw: "text-emerald-700", bg: "bg-emerald-50" },
-            { icon: "⬇️", label: "Total Spent",  value: `-${totalSpent}`,  tw: "text-red-600",     bg: "bg-red-50" },
+            { icon: "⬇️", label: "Total Spent",  value: `-${totalSpent}`,  tw: "text-red-600",    bg: "bg-red-50" },
             { icon: "🔁", label: "Transactions", value: transactions.length.toString(), tw: "text-sky-700", bg: "bg-sky-50" },
           ].map(s => (
             <div key={s.label} className="bg-white rounded-2xl p-5 border border-stone-200 hover:shadow-sm transition-shadow">
@@ -168,34 +134,37 @@ export default function WalletPage() {
           ))}
         </div>
 
-        {/* ── TABS ── */}
+        {/* TABS */}
         <div className="flex gap-1 bg-stone-100 rounded-xl p-1 w-fit mb-5">
           {[
             { key: "overview", label: "📊 Overview" },
             { key: "topup",    label: "💳 Top Up" },
             { key: "history",  label: "📋 History" },
           ].map(t => (
-            <button key={t.key} onClick={() => { setActiveTab(t.key as typeof activeTab); setSuccess(false); }}
+            <button key={t.key} onClick={() => setActiveTab(t.key as typeof activeTab)}
               className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border-0 cursor-pointer ${
                 activeTab === t.key ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700 bg-transparent"
               }`}>
               {t.label}
+              {t.key === "topup" && (
+                <span className="ml-1.5 text-[9px] font-black bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full align-middle">SOON</span>
+              )}
             </button>
           ))}
         </div>
 
         {/* ── OVERVIEW ── */}
         {activeTab === "overview" && (
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-2 gap-5 fade-up">
             <div className="bg-white rounded-2xl p-6 border border-stone-200">
               <h3 className="font-fraunces text-lg font-black text-stone-900 mb-4">How to earn credits 💡</h3>
               <div className="flex flex-col gap-0">
                 {[
-                  { icon: "🎓", action: "Teach a session",      credits: "+session price" },
-                  { icon: "🏆", action: "Win a bounty (1st)",   credits: "+60% of reward" },
-                  { icon: "💬", action: "Answer forum question", credits: "+2 credits" },
-                  { icon: "📅", action: "Daily challenges",      credits: "+3–5 credits" },
-                  { icon: "🎁", action: "Signup bonus",          credits: "+20 credits" },
+                  { icon: "🎓", action: "Teach a session",       credits: "+session price" },
+                  { icon: "🏆", action: "Win a bounty (1st)",    credits: "+60% of reward" },
+                  { icon: "💬", action: "Answer forum question",  credits: "+2 credits" },
+                  { icon: "📅", action: "Daily challenges",       credits: "+3–5 credits" },
+                  { icon: "🎁", action: "Signup bonus",           credits: "+20 credits" },
                 ].map((item, i, arr) => (
                   <div key={item.action} className={`flex justify-between items-center py-3 ${i < arr.length - 1 ? "border-b border-stone-100" : ""}`}>
                     <div className="flex gap-3 items-center">
@@ -240,104 +209,79 @@ export default function WalletPage() {
           </div>
         )}
 
-        {/* ── TOP UP ── */}
+        {/* ── TOP UP — COMING SOON ── */}
         {activeTab === "topup" && (
-          success ? (
-            <div className="bg-white rounded-3xl p-16 text-center border border-stone-200 shadow-sm">
-              <div className="text-6xl mb-5">🎉</div>
-              <h2 className="font-fraunces text-3xl font-black text-stone-900 mb-3">Credits Added!</h2>
-              <p className="text-stone-400 text-sm mb-5">Your wallet has been topped up successfully.</p>
-              <div className="inline-block bg-emerald-50 border border-emerald-200 rounded-2xl px-6 py-3 mb-8">
-                <p className="text-emerald-700 font-bold text-sm">💰 New balance: <strong className="font-fraunces text-lg">{profile?.credits} credits</strong></p>
-              </div>
-              <div className="flex gap-3 justify-center max-w-sm mx-auto">
-                <a href="/listings" className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm text-center no-underline hover:bg-emerald-700 transition-colors">Browse Skills →</a>
-                <button onClick={() => setSuccess(false)} className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl font-bold text-sm border-0 cursor-pointer hover:bg-stone-200 transition-colors">Top up more</button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-[1fr_320px] gap-5">
-              <div>
-                <h3 className="font-fraunces text-lg font-black text-stone-900 mb-4">Choose a Package</h3>
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                  {PACKAGES.map((p, i) => (
-                    <div key={i} onClick={() => setSelectedPkg(i)}
-                      className={`relative rounded-2xl p-5 border-2 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 ${
-                        selectedPkg === i ? "border-emerald-500 bg-emerald-50 shadow-md" : "border-stone-200 bg-white hover:border-stone-300"
-                      }`}>
-                      {p.popular && (
-                        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-[10px] font-black px-3 py-0.5 rounded-full whitespace-nowrap">
-                          MOST POPULAR
-                        </span>
-                      )}
-                      <p className="text-xs font-bold text-stone-400 mb-1">{p.label}</p>
-                      <p className="font-fraunces text-3xl font-black text-stone-900 mb-0.5">{p.credits} <span className="text-base font-semibold text-stone-500">cr</span></p>
-                      {p.bonus > 0 && <p className="text-xs font-bold text-emerald-600 mb-2">+ {p.bonus} bonus! 🎁</p>}
-                      <p className="text-lg font-black text-amber-600">₱{p.price.toLocaleString()}</p>
-                    </div>
-                  ))}
-                </div>
+          <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden fade-up">
+            {/* decorative top bar */}
+            <div className="h-1.5 w-full bg-gradient-to-r from-emerald-400 via-teal-400 to-sky-400" />
 
-                <h3 className="font-fraunces text-lg font-black text-stone-900 mb-3">Payment Method</h3>
-                <div className="grid grid-cols-3 gap-3">
-                  {PAYMENT_METHODS.map(m => (
-                    <div key={m.key} onClick={() => setPaymentMethod(m.key)}
-                      className={`rounded-xl p-4 border-2 cursor-pointer transition-all text-center ${
-                        paymentMethod === m.key ? "border-emerald-500 bg-emerald-50" : "border-stone-200 bg-white hover:border-stone-300"
-                      }`}>
-                      <div className="text-3xl mb-1">{m.icon}</div>
-                      <p className="text-sm font-bold text-stone-700">{m.label}</p>
-                    </div>
-                  ))}
+            <div className="flex flex-col items-center text-center px-12 py-16">
+              {/* animated coin */}
+              <div className="relative mb-8">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 flex items-center justify-center text-5xl shadow-xl shadow-amber-200"
+                  style={{ animation: "fadeUp .4s ease" }}>
+                  💳
+                </div>
+                <div className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-amber-100 border-2 border-amber-300 flex items-center justify-center text-xs font-black text-amber-600">
+                  ⏳
                 </div>
               </div>
 
-              {/* Order summary */}
-              <div className="bg-white rounded-2xl p-6 border border-stone-200 h-fit shadow-sm">
-                <h3 className="font-fraunces text-lg font-black text-stone-900 mb-5">Order Summary</h3>
-                <div className="flex flex-col gap-3 mb-5">
-                  {[
-                    { label: "Package",  value: pkg.label },
-                    { label: "Credits",  value: `${pkg.credits} cr` },
-                    ...(pkg.bonus > 0 ? [{ label: "🎁 Bonus credits", value: `+${pkg.bonus} cr`, green: true }] : []),
-                    { label: "Payment",  value: paymentMethod.toUpperCase() },
-                  ].map(row => (
-                    <div key={row.label} className="flex justify-between items-center">
-                      <span className={`text-sm ${(row as any).green ? "text-emerald-600 font-semibold" : "text-stone-500"}`}>{row.label}</span>
-                      <span className={`text-sm font-bold ${(row as any).green ? "text-emerald-600" : "text-stone-800"}`}>{row.value}</span>
-                    </div>
-                  ))}
-                  <div className="border-t border-stone-100 pt-3 mt-1">
-                    <div className="flex justify-between items-center mb-1.5">
-                      <span className="text-sm font-bold text-stone-700">You pay</span>
-                      <span className="font-fraunces text-xl font-black text-amber-600">₱{pkg.price.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-bold text-stone-700">You get</span>
-                      <span className="font-fraunces text-xl font-black text-emerald-600">{pkg.credits + pkg.bonus} cr</span>
+              <span className="text-xs font-black tracking-widest text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full mb-4 uppercase">
+                Coming Soon
+              </span>
+
+              <h2 className="font-fraunces text-3xl font-black text-stone-900 mb-3 leading-tight">
+                Credit Top-Up<br />is on its way
+              </h2>
+              <p className="text-stone-400 text-sm leading-relaxed max-w-sm mb-8">
+                We're integrating GCash, Maya, and card payments so you can top up instantly.
+                For now, earn credits by teaching sessions, answering bounties, and helping the community!
+              </p>
+
+              {/* Ways to earn callout */}
+              <div className="w-full max-w-sm bg-emerald-50 border border-emerald-200 rounded-2xl p-5 mb-8 text-left">
+                <p className="text-xs font-black text-emerald-700 uppercase tracking-wider mb-3">Earn credits for free right now</p>
+                {[
+                  ["🎓", "Teach a skill session", "earn the session price"],
+                  ["🏆", "Answer a bounty",        "earn up to 60% of reward"],
+                  ["💬", "Help on the forum",      "+2 credits per answer"],
+                ].map(([icon, action, reward]) => (
+                  <div key={action} className="flex items-center gap-3 py-2 border-b border-emerald-100 last:border-0">
+                    <span className="text-lg">{icon}</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-stone-700">{action}</p>
+                      <p className="text-xs text-emerald-600 font-medium">{reward}</p>
                     </div>
                   </div>
-                </div>
+                ))}
+              </div>
 
-                <button onClick={handleTopUp} disabled={processing}
-                  className={`w-full py-3.5 rounded-xl text-sm font-black border-0 cursor-pointer transition-all font-sans ${
-                    processing ? "bg-stone-200 text-stone-400 cursor-not-allowed" : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm hover:shadow-md"
-                  }`}>
-                  {processing ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <span className="animate-spin">⟳</span> Processing...
-                    </span>
-                  ) : `Pay ₱${pkg.price.toLocaleString()} →`}
+              {/* Notify me */}
+              {!notifyDone ? (
+                <button
+                  onClick={() => setNotifyDone(true)}
+                  className="px-8 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-colors border-0 cursor-pointer shadow-sm">
+                  🔔 Notify me when it's live
                 </button>
-                <p className="text-[10px] text-stone-300 text-center mt-3 font-medium">Secured by PayMongo · GCash · Maya</p>
+              ) : (
+                <div className="flex items-center gap-2 px-6 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <span className="text-emerald-600 font-black text-sm">✓ We'll let you know!</span>
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-5">
+                <a href="/listings" className="text-sm font-semibold text-emerald-600 hover:underline no-underline">Browse skills →</a>
+                <span className="text-stone-200">·</span>
+                <a href="/bounties" className="text-sm font-semibold text-emerald-600 hover:underline no-underline">View bounties →</a>
               </div>
             </div>
-          )
+          </div>
         )}
 
         {/* ── HISTORY ── */}
         {activeTab === "history" && (
-          <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
+          <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm fade-up">
             <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
               <h3 className="font-fraunces text-lg font-black text-stone-900">Transaction History</h3>
               <span className="text-xs font-bold text-stone-400 bg-stone-100 px-3 py-1 rounded-full">{transactions.length} total</span>

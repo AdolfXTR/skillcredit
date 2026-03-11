@@ -213,7 +213,6 @@ function CancellationBubble({ content, isMe }: { content: string; isMe: boolean 
       boxShadow: `0 3px 16px ${isDecline ? "rgba(239,68,68,0.10)" : "rgba(234,88,12,0.10)"}`,
       background: "#fff",
     }}>
-      {/* Coloured header strip */}
       <div style={{ background: accentBg, padding: "10px 14px", display: "flex", alignItems: "center", gap: 9 }}>
         <div style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>
           {isDecline ? "❌" : "🚫"}
@@ -228,7 +227,6 @@ function CancellationBubble({ content, isMe }: { content: string; isMe: boolean 
         </div>
       </div>
 
-      {/* Reason body */}
       <div style={{ padding: "11px 14px 13px" }}>
         <div style={{ fontSize: 9, fontWeight: 800, color: "#bbb", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 7 }}>
           Reason
@@ -391,7 +389,6 @@ export default function MessagesPage() {
       if (!op) continue;
       const last = ms[0];
       const unread = ms.filter(m => m.receiver_id === userId && !m.is_read && !m.is_deleted).length;
-      // Pretty label for cancellation messages in sidebar preview
       const isCancelMsg = parseCancellation(last.content);
       const lastText = last.is_deleted ? "🚫 Deleted"
         : last.message_type === "image" ? "📷 Photo"
@@ -562,7 +559,7 @@ export default function MessagesPage() {
   });
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#F8F9FB", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#F5F3F0", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap'); @keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <div style={{ textAlign: "center" }}>
         <div style={{ width: 32, height: 32, border: "3px solid #2d6a4f", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
@@ -572,7 +569,7 @@ export default function MessagesPage() {
   );
 
   return (
-    <div style={{ height: "100vh", background: "#F8F9FB", fontFamily: "'DM Sans', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ height: "100vh", background: "#F5F3F0", fontFamily: "'DM Sans', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -614,11 +611,11 @@ export default function MessagesPage() {
         .action-btn { display: flex; align-items: center; gap: 6px; padding: 7px 15px; border-radius: 9px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1.5px solid transparent; transition: all 0.12s; font-family: 'DM Sans', sans-serif; text-decoration: none; }
         .action-btn:hover { filter: brightness(0.96); }
         .input-tool { width: 34px; height: 34px; border-radius: 9px; border: none; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 17px; transition: background 0.1s; flex-shrink: 0; color: #888; }
-        .input-tool:hover { background: #f0f0f5; }
+        .input-tool:hover { background: #ede9e4; }
       `}</style>
 
       {/* ── NAVBAR ── */}
-      <nav style={{ background: "#fff", borderBottom: "1px solid #ebebef", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, zIndex: 10 }}>
+      <nav style={{ background: "#fff", borderBottom: "1px solid #E7E3DD", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, zIndex: 10 }}>
         <a href="/dashboard">
           <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
           <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
@@ -631,7 +628,7 @@ export default function MessagesPage() {
             </a>
           ))}
         </div>
-        <a href="/profile" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 12px", borderRadius: 10, background: "#f5f5f8", textDecoration: "none" }}>
+        <a href="/profile" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 12px", borderRadius: 10, background: "#F5F3F0", textDecoration: "none" }}>
           {profile && <Avatar profile={profile} size={26} />}
           <span style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>@{profile?.username}</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: "#2d6a4f", background: "#eef6f2", padding: "2px 8px", borderRadius: 20 }}>{profile?.credits} cr</span>
@@ -642,7 +639,7 @@ export default function MessagesPage() {
       <div style={{ flex: 1, display: "grid", gridTemplateColumns: "300px 1fr", overflow: "hidden" }}>
 
         {/* ── SIDEBAR ── */}
-        <div style={{ background: "#fff", borderRight: "1px solid #ebebef", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ background: "#fff", borderRight: "1px solid #E7E3DD", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ padding: "16px 16px 10px", borderBottom: "1px solid #f2f2f5", flexShrink: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 900, color: "#1a1a1a", display: "flex", alignItems: "center", gap: 8 }}>
@@ -653,7 +650,7 @@ export default function MessagesPage() {
                 style={{ width: 28, height: 28, borderRadius: "50%", background: "#2d6a4f", color: "#fff", border: "none", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, lineHeight: 1 }}>+</button>
             </div>
             <input placeholder="Search conversations…"
-              style={{ width: "100%", padding: "8px 12px", borderRadius: 9, border: "1.5px solid #ebebef", background: "#F8F9FB", color: "#333", fontSize: 13, fontFamily: "'DM Sans', sans-serif" }} />
+              style={{ width: "100%", padding: "8px 12px", borderRadius: 9, border: "1.5px solid #E7E3DD", background: "#F5F3F0", color: "#333", fontSize: 13, fontFamily: "'DM Sans', sans-serif" }} />
           </div>
 
           <div style={{ padding: "8px 12px", borderBottom: "1px solid #f2f2f5", display: "flex", gap: 4, flexShrink: 0 }}>
@@ -706,15 +703,15 @@ export default function MessagesPage() {
         </div>
 
         {/* ── MAIN PANEL ── */}
-        <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", background: "#F8F9FB" }}>
+        <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", background: "#F5F3F0" }}>
 
           {showNewChat && (
             <div style={{ display: "flex", flexDirection: "column", height: "100%", animation: "fadeIn 0.15s ease", background: "#fff" }}>
               <div style={{ padding: "20px 24px", borderBottom: "1px solid #f2f2f5", flexShrink: 0 }}>
                 <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a", marginBottom: 14 }}>New Message</div>
                 <input value={searchUser} onChange={e => handleSearchUsers(e.target.value)} placeholder="Search by name or @username…" autoFocus
-                  style={{ width: "100%", padding: "11px 15px", borderRadius: 11, border: "1.5px solid #ebebef", background: "#F8F9FB", color: "#333", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }}
-                  onFocus={e => e.target.style.borderColor = "#2d6a4f"} onBlur={e => e.target.style.borderColor = "#ebebef"} />
+                  style={{ width: "100%", padding: "11px 15px", borderRadius: 11, border: "1.5px solid #E7E3DD", background: "#F5F3F0", color: "#333", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }}
+                  onFocus={e => e.target.style.borderColor = "#2d6a4f"} onBlur={e => e.target.style.borderColor = "#E7E3DD"} />
               </div>
               <div style={{ flex: 1, overflowY: "auto", padding: "10px 16px" }}>
                 {searching && <div style={{ textAlign: "center", padding: 24, color: "#ccc", fontSize: 13 }}>Searching…</div>}
@@ -760,7 +757,7 @@ export default function MessagesPage() {
           {activeConvo && !showNewChat && (
             <>
               {/* Chat header */}
-              <div style={{ padding: "14px 20px", borderBottom: "1px solid #ebebef", background: "#fff", flexShrink: 0 }}>
+              <div style={{ padding: "14px 20px", borderBottom: "1px solid #E7E3DD", background: "#fff", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
                   <Avatar profile={activeConvo} size={40} online />
                   <div style={{ flex: 1 }}>
@@ -821,9 +818,9 @@ export default function MessagesPage() {
                 {grouped.map(group => (
                   <div key={group.date}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0 14px" }}>
-                      <div style={{ flex: 1, height: 1, background: "#ebebef" }} />
+                      <div style={{ flex: 1, height: 1, background: "#E7E3DD" }} />
                       <span style={{ fontSize: 11, color: "#bbb", fontWeight: 600, letterSpacing: 0.4 }}>{group.date}</span>
-                      <div style={{ flex: 1, height: 1, background: "#ebebef" }} />
+                      <div style={{ flex: 1, height: 1, background: "#E7E3DD" }} />
                     </div>
 
                     {group.messages.map((msg, i) => {
@@ -846,7 +843,6 @@ export default function MessagesPage() {
                         );
                       }
 
-                      // ── Cancellation system message ──
                       if (!msg.is_deleted && parseCancellation(msg.content)) {
                         return (
                           <div key={msg.id} className="msg-in" style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", marginBottom: 16 }}>
@@ -871,7 +867,7 @@ export default function MessagesPage() {
 
                           <div style={{ maxWidth: "62%", display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
                             {msg.reply_to && (
-                              <div style={{ marginBottom: 4, padding: "5px 10px", borderRadius: 8, background: "#f0f0f5", borderLeft: `2px solid ${isMe ? "#86efac" : "#2d6a4f"}`, fontSize: 11, color: "#999", maxWidth: "100%" }}>
+                              <div style={{ marginBottom: 4, padding: "5px 10px", borderRadius: 8, background: "#ede9e4", borderLeft: `2px solid ${isMe ? "#86efac" : "#2d6a4f"}`, fontSize: 11, color: "#999", maxWidth: "100%" }}>
                                 <div style={{ fontWeight: 700, color: "#666", marginBottom: 1, fontSize: 10 }}>
                                   {msg.reply_to.sender_id === profile?.id ? "You" : activeConvo.full_name}
                                 </div>
@@ -887,7 +883,7 @@ export default function MessagesPage() {
 
                             {msg.message_type === "image" && msg.image_url && !msg.is_deleted && (
                               <img src={msg.image_url} alt="img" className="img-msg" onClick={() => setLightboxImg(msg.image_url!)}
-                                style={{ maxWidth: 220, maxHeight: 260, objectFit: "cover", display: "block", borderRadius: isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px", marginBottom: msg.content && msg.content !== "" ? 3 : 0, border: "1px solid #e4e4ed" }} />
+                                style={{ maxWidth: 220, maxHeight: 260, objectFit: "cover", display: "block", borderRadius: isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px", marginBottom: msg.content && msg.content !== "" ? 3 : 0, border: "1px solid #E7E3DD" }} />
                             )}
 
                             {msg.message_type !== "file" && (msg.content || msg.is_deleted) && (
@@ -896,13 +892,13 @@ export default function MessagesPage() {
                                 borderRadius: isMe
                                   ? (isFirstInGroup ? "18px 18px 4px 18px" : isLastInGroup ? "4px 18px 18px 18px" : "4px 18px 18px 4px")
                                   : (isFirstInGroup ? "18px 18px 18px 4px" : isLastInGroup ? "18px 4px 18px 18px" : "18px 4px 4px 18px"),
-                                background: msg.is_deleted ? "#f5f5f8" : isMe ? "#2d6a4f" : "#fff",
+                                background: msg.is_deleted ? "#ede9e4" : isMe ? "#2d6a4f" : "#fff",
                                 color: msg.is_deleted ? "#bbb" : isMe ? "#fff" : "#1a1a1a",
                                 fontSize: msg.is_deleted ? 12 : 14,
                                 lineHeight: 1.55,
                                 wordBreak: "break-word",
-                                border: isMe ? "none" : "1px solid #ebebef",
-                                boxShadow: isMe ? "0 1px 4px rgba(45,106,79,0.18)" : "0 1px 3px rgba(0,0,0,0.05)",
+                                border: isMe ? "none" : "1px solid #E7E3DD",
+                                boxShadow: isMe ? "0 1px 4px rgba(45,106,79,0.18)" : "0 1px 3px rgba(0,0,0,0.04)",
                                 fontStyle: msg.is_deleted ? "italic" : "normal",
                               }}>
                                 {msg.is_deleted ? "🚫 Message deleted" : msg.content}
@@ -932,9 +928,9 @@ export default function MessagesPage() {
                             <div className="msg-actions" style={{ display: "flex", alignItems: "center", gap: 2, alignSelf: "center", flexDirection: isMe ? "row" : "row-reverse" }}>
                               <div style={{ position: "relative" }}>
                                 <button onClick={e => { e.stopPropagation(); setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id); }}
-                                  style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "1px solid #ebebef", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>😊</button>
+                                  style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "1px solid #E7E3DD", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>😊</button>
                                 {showReactionPicker === msg.id && (
-                                  <div onClick={e => e.stopPropagation()} style={{ position: "absolute", [isMe ? "right" : "left"]: 0, bottom: 30, background: "#fff", borderRadius: 12, border: "1px solid #ebebef", padding: "6px 8px", display: "flex", gap: 4, boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 10, animation: "slideUp 0.1s ease" }}>
+                                  <div onClick={e => e.stopPropagation()} style={{ position: "absolute", [isMe ? "right" : "left"]: 0, bottom: 30, background: "#fff", borderRadius: 12, border: "1px solid #E7E3DD", padding: "6px 8px", display: "flex", gap: 4, boxShadow: "0 4px 20px rgba(0,0,0,0.10)", zIndex: 10, animation: "slideUp 0.1s ease" }}>
                                     {QUICK_REACTIONS.map(emoji => (
                                       <button key={emoji} onClick={() => toggleReaction(msg.id, emoji)}
                                         style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", fontSize: 19, cursor: "pointer", transition: "transform 0.1s" }}
@@ -947,10 +943,10 @@ export default function MessagesPage() {
                                 )}
                               </div>
                               <button onClick={() => { setReplyingTo(msg); textareaRef.current?.focus(); }}
-                                style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "1px solid #ebebef", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>↩</button>
+                                style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "1px solid #E7E3DD", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>↩</button>
                               {isMe && (
                                 <button onClick={e => { e.stopPropagation(); setContextMenu({ msgId: msg.id, x: e.clientX, y: e.clientY }); }}
-                                  style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "1px solid #ebebef", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", color: "#999", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>⋯</button>
+                                  style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "1px solid #E7E3DD", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", color: "#999", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>⋯</button>
                               )}
                             </div>
                           )}
@@ -963,7 +959,7 @@ export default function MessagesPage() {
                 {typingUsers.length > 0 && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0 10px", animation: "fadeIn 0.2s ease" }}>
                     <Avatar profile={activeConvo} size={28} />
-                    <div style={{ background: "#fff", border: "1px solid #ebebef", borderRadius: "4px 14px 14px 14px", padding: "8px 14px", display: "flex", gap: 3, alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                    <div style={{ background: "#fff", border: "1px solid #E7E3DD", borderRadius: "4px 14px 14px 14px", padding: "8px 14px", display: "flex", gap: 3, alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
                       {[0, 1, 2].map(i => (
                         <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#bbb", animation: `typingBounce 1.2s ease ${i * 0.2}s infinite` }} />
                       ))}
@@ -1009,18 +1005,18 @@ export default function MessagesPage() {
               )}
 
               {uploading && uploadProgress > 0 && (
-                <div style={{ padding: "8px 18px", background: "#fff", borderTop: "1px solid #ebebef", flexShrink: 0 }}>
+                <div style={{ padding: "8px 18px", background: "#fff", borderTop: "1px solid #E7E3DD", flexShrink: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#888", marginBottom: 4 }}>
                     <span>Uploading…</span><span>{uploadProgress}%</span>
                   </div>
-                  <div style={{ height: 4, borderRadius: 99, background: "#ebebef", overflow: "hidden" }}>
+                  <div style={{ height: 4, borderRadius: 99, background: "#ede9e4", overflow: "hidden" }}>
                     <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg,#2d6a4f,#4ade80)", width: `${uploadProgress}%`, transition: "width 0.3s ease" }} />
                   </div>
                 </div>
               )}
 
               {showEmoji && (
-                <div style={{ padding: "10px 14px 8px", background: "#fff", borderTop: "1px solid #ebebef", display: "flex", flexWrap: "wrap", gap: 2, animation: "slideUp 0.12s ease", flexShrink: 0 }}>
+                <div style={{ padding: "10px 14px 8px", background: "#fff", borderTop: "1px solid #E7E3DD", display: "flex", flexWrap: "wrap", gap: 2, animation: "slideUp 0.12s ease", flexShrink: 0 }}>
                   {EMOJI_LIST.map(emoji => (
                     <span key={emoji} className="emoji-btn" onClick={() => { setNewMsg(prev => prev + emoji); textareaRef.current?.focus(); }}>{emoji}</span>
                   ))}
@@ -1028,14 +1024,14 @@ export default function MessagesPage() {
               )}
 
               {/* Input bar */}
-              <div style={{ padding: "10px 16px 12px", borderTop: "1px solid #ebebef", background: "#fff", display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0 }}>
-                <button className="input-tool" onClick={() => attachInputRef.current?.click()} title="Attach file" style={{ width: 36, height: 36, borderRadius: 10, background: "#f5f5f8", border: "1.5px solid #ebebef", fontSize: 18 }}>+</button>
+              <div style={{ padding: "10px 16px 12px", borderTop: "1px solid #E7E3DD", background: "#fff", display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0 }}>
+                <button className="input-tool" onClick={() => attachInputRef.current?.click()} title="Attach file" style={{ width: 36, height: 36, borderRadius: 10, background: "#F5F3F0", border: "1.5px solid #E7E3DD", fontSize: 18 }}>+</button>
                 <input ref={attachInputRef} type="file" accept="*/*" style={{ display: "none" }} onChange={handleAttachSelect} />
                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageSelect} />
 
-                <div style={{ flex: 1, display: "flex", alignItems: "flex-end", background: "#F8F9FB", borderRadius: 14, border: "1.5px solid #ebebef", padding: "2px 10px 2px 14px", transition: "border-color 0.15s" }}
+                <div style={{ flex: 1, display: "flex", alignItems: "flex-end", background: "#F5F3F0", borderRadius: 14, border: "1.5px solid #E7E3DD", padding: "2px 10px 2px 14px", transition: "border-color 0.15s" }}
                   onFocusCapture={e => (e.currentTarget.style.borderColor = "#2d6a4f")}
-                  onBlurCapture={e => (e.currentTarget.style.borderColor = "#ebebef")}>
+                  onBlurCapture={e => (e.currentTarget.style.borderColor = "#E7E3DD")}>
                   <textarea ref={textareaRef} value={newMsg}
                     onChange={e => { handleTyping(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 110) + "px"; }}
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
@@ -1069,7 +1065,7 @@ export default function MessagesPage() {
 
       {/* Context menu */}
       {contextMenu && (
-        <div onClick={e => e.stopPropagation()} style={{ position: "fixed", top: contextMenu.y, left: contextMenu.x, background: "#fff", borderRadius: 12, border: "1px solid #ebebef", boxShadow: "0 8px 30px rgba(0,0,0,0.12)", zIndex: 200, padding: 6, minWidth: 160, animation: "slideUp 0.1s ease" }}>
+        <div onClick={e => e.stopPropagation()} style={{ position: "fixed", top: contextMenu.y, left: contextMenu.x, background: "#fff", borderRadius: 12, border: "1px solid #E7E3DD", boxShadow: "0 8px 30px rgba(0,0,0,0.10)", zIndex: 200, padding: 6, minWidth: 160, animation: "slideUp 0.1s ease" }}>
           <div className="ctx-item" onClick={() => { const m = messages.find(m => m.id === contextMenu.msgId); if (m) { setReplyingTo(m); textareaRef.current?.focus(); } setContextMenu(null); }}>↩ Reply</div>
           <div className="ctx-item danger" onClick={() => deleteMessage(contextMenu.msgId)}>🗑️ Delete for everyone</div>
         </div>
@@ -1091,18 +1087,18 @@ export default function MessagesPage() {
               <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
                 {[5, 10, 20, 50].map(amt => (
                   <button key={amt} onClick={() => setCreditAmount(String(amt))}
-                    style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: `1.5px solid ${creditAmount === String(amt) ? "#2d6a4f" : "#ebebef"}`, background: creditAmount === String(amt) ? "#eef6f2" : "#F8F9FB", color: creditAmount === String(amt) ? "#2d6a4f" : "#555", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.12s" }}>
+                    style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: `1.5px solid ${creditAmount === String(amt) ? "#2d6a4f" : "#E7E3DD"}`, background: creditAmount === String(amt) ? "#eef6f2" : "#F5F3F0", color: creditAmount === String(amt) ? "#2d6a4f" : "#555", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.12s" }}>
                     {amt}
                   </button>
                 ))}
               </div>
               <input value={creditAmount} onChange={e => setCreditAmount(e.target.value.replace(/\D/g, ""))} placeholder="Custom amount…"
-                style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid #ebebef", background: "#F8F9FB", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }} />
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid #E7E3DD", background: "#F5F3F0", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }} />
             </div>
             <div style={{ marginBottom: 20 }}>
               <label style={{ fontSize: 11, fontWeight: 700, color: "#999", display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>Note (optional)</label>
               <input value={creditNote} onChange={e => setCreditNote(e.target.value)} placeholder="e.g. Thanks for the session!"
-                style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid #ebebef", background: "#F8F9FB", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }} />
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid #E7E3DD", background: "#F5F3F0", color: "#1a1a1a", fontSize: 14, fontFamily: "'DM Sans', sans-serif" }} />
             </div>
             {creditAmount && parseInt(creditAmount) > (profile?.credits || 0) && (
               <div style={{ marginBottom: 14, padding: "9px 12px", borderRadius: 9, background: "#fef2f2", border: "1px solid #fca5a5", fontSize: 12, color: "#ef4444", fontWeight: 600 }}>
@@ -1110,7 +1106,7 @@ export default function MessagesPage() {
               </div>
             )}
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowCreditModal(false)} style={{ flex: 1, padding: "12px", borderRadius: 11, border: "1.5px solid #ebebef", background: "transparent", color: "#999", fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
+              <button onClick={() => setShowCreditModal(false)} style={{ flex: 1, padding: "12px", borderRadius: 11, border: "1.5px solid #E7E3DD", background: "transparent", color: "#999", fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
               <button onClick={handleSendCredits} disabled={sendingCredits || !creditAmount || parseInt(creditAmount) <= 0 || parseInt(creditAmount) > (profile?.credits || 0)}
                 style={{ flex: 2, padding: "12px", borderRadius: 11, border: "none", background: creditAmount && parseInt(creditAmount) > 0 && parseInt(creditAmount) <= (profile?.credits || 0) ? "#2d6a4f" : "#e8e8ef", color: creditAmount && parseInt(creditAmount) > 0 ? "#fff" : "#bbb", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.15s" }}>
                 {sendingCredits ? "Sending…" : `💰 Send ${creditAmount || "0"} Credits`}
