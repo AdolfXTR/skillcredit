@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import Navbar from "@/components/Navbar";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -20,6 +21,7 @@ type ListingForm = {
   skill_id: string;
   is_active: boolean;
   meeting_link: string;
+  experience: string; // ← NEW
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -42,6 +44,45 @@ const CATEGORY_ICONS: Record<string, string> = {
   Arts:"🎭", Media:"🎬", Science:"🔬", Sports:"⚽", Lifestyle:"✨", Other:"💡",
 };
 
+// ── CREDIT BAND SYSTEM (mirrors create/page.tsx — keep these in sync) ──────
+const CATEGORY_CREDIT_BANDS: Record<string, { min: number; max: number }> = {
+  "Sports":    { min: 9,  max: 19 },
+  "Lifestyle": { min: 9,  max: 19 },
+  "Academic":  { min: 24, max: 38 },
+  "Language":  { min: 33, max: 42 },
+  "Music":     { min: 19, max: 58 },
+  "Arts":      { min: 17, max: 38 },
+  "Media":     { min: 23, max: 56 },
+  "Design":    { min: 17, max: 66 },
+  "Programming": { min: 31, max: 75 },
+  "Science":     { min: 38, max: 75 },
+  "Other":     { min: 9,  max: 75 },
+};
+const SKILL_CREDIT_BANDS: Record<string, { min: number; max: number }> = {
+  "UI/UX Design":    { min: 38, max: 100 },
+  "Graphic Design":  { min: 17, max: 66 },
+  "Math Tutoring":   { min: 24, max: 38 },
+  "English Writing": { min: 33, max: 42 },
+  "Photography":     { min: 19, max: 42 },
+  "Video Editing":   { min: 23, max: 56 },
+  "Guitar":          { min: 19, max: 58 },
+};
+const EXPERIENCE_LEVELS = [
+  { id: "fresh",        label: "Fresh",        desc: "0–2 years",  range: [0, 0.33]    as [number, number] },
+  { id: "intermediate", label: "Intermediate", desc: "3–5 years",  range: [0.33, 0.66] as [number, number] },
+  { id: "expert",       label: "Expert",       desc: "6+ years",   range: [0.66, 1.0]  as [number, number] },
+];
+function getCreditBand(skillName: string, category: string, experience: string) {
+  const base = SKILL_CREDIT_BANDS[skillName] ?? CATEGORY_CREDIT_BANDS[category] ?? CATEGORY_CREDIT_BANDS["Other"];
+  const expLevel = EXPERIENCE_LEVELS.find(e => e.id === experience) ?? EXPERIENCE_LEVELS[0];
+  const [lo, hi] = expLevel.range;
+  const span = base.max - base.min;
+  return {
+    min: Math.round(base.min + span * lo),
+    max: Math.round(base.min + span * hi) || Math.round(base.min + span * 0.33),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────
@@ -54,12 +95,14 @@ export default function EditListingPage() {
     title: "", description: "", credit_price: 10, format: "video",
     duration: 60, difficulty: "beginner", prerequisites: "",
     outcomes: "", materials: "", skill_id: "", is_active: true, meeting_link: "",
+    experience: "fresh", // ← NEW
   });
   const [skills, setSkills]         = useState<Skill[]>([]);
   const [skillSearch, setSkillSearch] = useState("");
   const [filteredSkills, setFilteredSkills] = useState<Skill[]>([]);
   const [showSkillDropdown, setShowSkillDropdown] = useState(false);
   const [selectedSkillName, setSelectedSkillName] = useState("");
+  const [selectedSkillObj, setSelectedSkillObj] = useState<Skill | null>(null); // ← NEW: needed for band lookup (category)
   const [thumbnail, setThumbnail]   = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [existingThumbnail, setExistingThumbnail] = useState<string | null>(null);
@@ -112,9 +155,11 @@ export default function EditListingPage() {
       skill_id:     data.skill_id     || "",
       is_active:    data.is_active    ?? true,
       meeting_link: data.meeting_link || "",
+      experience:   data.experience   || "fresh", // ← NEW: reconstruct the band from the saved tier
     });
     if (data.skills) {
       setSelectedSkillName(`${data.skills.name} (${data.skills.category})`);
+      setSelectedSkillObj(data.skills); // ← NEW
     }
     if (data.thumbnail_url) {
       setExistingThumbnail(data.thumbnail_url);
@@ -154,6 +199,16 @@ export default function EditListingPage() {
     if (!form.description.trim()) { setError("Description is required."); setActiveSection("basics"); return; }
     if (!form.skill_id)           { setError("Please select a skill."); setActiveSection("basics"); return; }
 
+    // ── NEW: enforce the credit band on save ──────────────────────────────
+    const skillNameForBand = selectedSkillObj?.name ?? "";
+    const categoryForBand  = selectedSkillObj?.category ?? "Other";
+    const band = getCreditBand(skillNameForBand, categoryForBand, form.experience);
+    if (form.credit_price < band.min || form.credit_price > band.max) {
+      setError(`Price must be between ${band.min} cr and ${band.max} cr for this skill & experience level.`);
+      setActiveSection("details");
+      return;
+    }
+
     setSaving(true);
     let thumbnailUrl = existingThumbnail;
     if (thumbnail) {
@@ -168,6 +223,8 @@ export default function EditListingPage() {
       description: form.description.trim(),
       format:      form.format,
       skill_id:    form.skill_id,
+      credit_price: form.credit_price,   // ← NEW: price is now editable
+      experience:   form.experience,     // ← NEW: persist the tier alongside price
       is_active:   form.is_active,
       ...(thumbnailUrl ? { thumbnail_url: thumbnailUrl } : {}),
     };
@@ -270,20 +327,7 @@ export default function EditListingPage() {
       `}</style>
 
       {/* NAVBAR */}
-      <nav style={{ background:"rgba(255,255,255,.97)", backdropFilter:"blur(12px)", borderBottom:"1.5px solid #e8e2d9", padding:"0 28px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:40 }}>
-        <a href="/dashboard" style={{ fontFamily:"'Fraunces',serif" }}>
-          <span style={{ fontSize:20, fontWeight:900, color:"#2d6a4f" }}>Skill</span>
-          <span style={{ fontSize:20, fontWeight:900, color:"#1a1a1a" }}>Credit</span>
-        </a>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          <a href={`/listings/${id}`} style={{ padding:"7px 14px", borderRadius:9, color:"#555", fontSize:13, fontWeight:600, background:"#f5f0e8" }}>
-            👁 Preview
-          </a>
-          <a href="/listings" style={{ padding:"7px 14px", borderRadius:9, color:"#555", fontSize:13, fontWeight:600 }}>
-            ← My Listings
-          </a>
-        </div>
-      </nav>
+      <Navbar />
 
       <div style={{ maxWidth:720, margin:"0 auto", padding:"28px 20px" }}>
         {/* Header */}
@@ -366,7 +410,7 @@ export default function EditListingPage() {
               </label>
               <div style={{ position:"relative" }}>
                 <input value={skillSearch || selectedSkillName}
-                  onChange={e => { setSkillSearch(e.target.value); setSelectedSkillName(""); set("skill_id",""); setShowSkillDropdown(true); }}
+                  onChange={e => { setSkillSearch(e.target.value); setSelectedSkillName(""); setSelectedSkillObj(null); set("skill_id",""); setShowSkillDropdown(true); }}
                   onFocus={() => setShowSkillDropdown(true)}
                   placeholder="Search skills (e.g. Python, Guitar, Spanish)…"
                   style={{ width:"100%", padding:"11px 14px", borderRadius:12, border:`1.5px solid ${form.skill_id?"#2d6a4f":"#e8e2d9"}`, fontSize:14, fontFamily:"'DM Sans',sans-serif", background:"#fafaf8", color:"#1a1a1a" }}
@@ -380,7 +424,14 @@ export default function EditListingPage() {
                         </div>
                         {filteredSkills.filter(s => s.category === cat).map(skill => (
                           <div key={skill.id} className="skill-item"
-                            onClick={() => { set("skill_id", skill.id); setSelectedSkillName(`${skill.name} (${skill.category})`); setSkillSearch(""); setShowSkillDropdown(false); }}>
+                            onClick={() => {
+                              set("skill_id", skill.id);
+                              setSelectedSkillObj(skill); // ← NEW: keep category around for band lookup
+                              // Snap price back into the new skill's band so we never carry over a stale, invalid price
+                              const band = getCreditBand(skill.name, skill.category, form.experience);
+                              setForm(f => ({ ...f, skill_id: skill.id, credit_price: Math.min(Math.max(f.credit_price, band.min), band.max) }));
+                              setSelectedSkillName(`${skill.name} (${skill.category})`); setSkillSearch(""); setShowSkillDropdown(false);
+                            }}>
                             <span style={{ fontSize:13, fontWeight:600, color:"#1a1a1a" }}>{skill.name}</span>
                           </div>
                         ))}
@@ -470,6 +521,61 @@ export default function EditListingPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* ── NEW: Experience & Credit Price ── */}
+            <div style={{ background:"#fff", borderRadius:18, border:"1.5px solid #e8e2d9", padding:22 }}>
+              <label style={{ fontSize:11, fontWeight:800, color:"#aaa", letterSpacing:".07em", textTransform:"uppercase" as const, display:"block", marginBottom:12 }}>
+                Your Experience Level
+              </label>
+              <div style={{ display:"flex", gap:8, marginBottom:18 }}>
+                {EXPERIENCE_LEVELS.map(exp => {
+                  const selected = form.experience === exp.id;
+                  return (
+                    <button key={exp.id} className={`diff-btn ${selected ? "active" : ""}`}
+                      onClick={() => {
+                        const category = selectedSkillObj?.category ?? "Other";
+                        const band = getCreditBand(selectedSkillObj?.name ?? "", category, exp.id);
+                        setForm(f => ({ ...f, experience: exp.id, credit_price: band.min }));
+                      }}>
+                      {exp.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {(() => {
+                const skillName = selectedSkillObj?.name ?? "";
+                const category  = selectedSkillObj?.category ?? "Other";
+                const band = getCreditBand(skillName, category, form.experience);
+                const priceOk = form.credit_price >= band.min && form.credit_price <= band.max;
+                return (
+                  <>
+                    <label style={{ fontSize:11, fontWeight:800, color:"#aaa", letterSpacing:".07em", textTransform:"uppercase" as const, display:"block", marginBottom:8 }}>
+                      Credit Price <span style={{ fontWeight:500, textTransform:"none" as const, color:"#bbb" }}>= ₱{form.credit_price * 10}</span>
+                    </label>
+                    <div style={{ borderRadius:10, padding:"10px 14px", marginBottom:12, fontSize:12, fontWeight:600, background: priceOk?"#f0fdf4":"#fef2f2", color: priceOk?"#15803d":"#dc2626", border:`1.5px solid ${priceOk?"#86efac":"#fca5a5"}` }}>
+                      {priceOk
+                        ? `✅ Fair range for ${skillName || "this skill"}: ${band.min}–${band.max} cr`
+                        : `⚠️ Must be between ${band.min} cr and ${band.max} cr`}
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
+                      <button onClick={() => set("credit_price", Math.max(band.min, form.credit_price - 1))}
+                        style={{ width:36, height:36, borderRadius:10, border:"1.5px solid #e8e2d9", background:"#fff", fontSize:18, fontWeight:700, cursor:"pointer" }}>−</button>
+                      <input type="range" min={band.min} max={band.max} step={1} value={form.credit_price}
+                        onChange={e => set("credit_price", parseInt(e.target.value))}
+                        style={{ flex:1, accentColor:"#2d6a4f" }} />
+                      <button onClick={() => set("credit_price", Math.min(band.max, form.credit_price + 1))}
+                        style={{ width:36, height:36, borderRadius:10, border:"1.5px solid #e8e2d9", background:"#fff", fontSize:18, fontWeight:700, cursor:"pointer" }}>+</button>
+                    </div>
+                    <div style={{ display:"flex", justifyContent:"space-between" }}>
+                      <span style={{ fontSize:11, color:"#aaa" }}>{band.min} cr</span>
+                      <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color: priceOk?"#2d6a4f":"#dc2626" }}>{form.credit_price} cr</span>
+                      <span style={{ fontSize:11, color:"#aaa" }}>{band.max} cr</span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Outcomes */}

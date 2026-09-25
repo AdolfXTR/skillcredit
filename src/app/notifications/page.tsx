@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
 
 type Profile = {
   id: string;
@@ -321,24 +322,7 @@ export default function NotificationsPage() {
       )}
 
       {/* NAVBAR */}
-      <nav style={{ background: "#fff", borderBottom: "1.5px solid #e8e2d9", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
-        </a>
-        <div style={{ display: "flex", gap: 2 }}>
-          {[["Browse", "/listings"], ["Bounties", "/bounties"], ["Community", "/community"], ["Sessions", "/sessions"], ["Messages", "/messages"]].map(([l, h]) => (
-            <a key={l} href={h} className="nav-link">{l}</a>
-          ))}
-        </div>
-        <a href="/profile" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 12px", borderRadius: 10, background: "#f5f0e8" }}>
-          <div style={{ width: 26, height: 26, borderRadius: "50%", background: LEVEL_COLORS[profile?.level || "Seedling"], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff" }}>
-            {getInitials(profile?.full_name || "")}
-          </div>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>@{profile?.username}</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#2d6a4f", background: "#e8f4e8", padding: "2px 8px", borderRadius: 20 }}>{profile?.credits} cr</span>
-        </a>
-      </nav>
+      <Navbar />
 
       <div style={{ maxWidth: 740, margin: "0 auto", padding: "32px 20px 60px" }}>
 

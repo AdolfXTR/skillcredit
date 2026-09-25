@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
+import Navbar from "@/components/Navbar";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -386,26 +387,7 @@ export default function BountyDetailPage() {
       )}
 
       {/* NAVBAR */}
-      <nav style={{ background:"rgba(255,255,255,.97)",backdropFilter:"blur(12px)",borderBottom:"1px solid #e8e2d9",padding:"0 28px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100 }}>
-        <a href="/dashboard">
-          <span style={{ fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:900,color:"#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:900,color:"#1a1a1a" }}>Credit</span>
-        </a>
-        <div style={{ display:"flex",gap:2 }}>
-          {[["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
-            <a key={l} href={h} className={`nav-link${h==="/bounties"?" active":""}`}>{l}</a>
-          ))}
-        </div>
-        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          <a href="/bounties" className="btn" style={{ padding:"7px 14px",borderRadius:8,background:"#f5f0e8",color:"#555",fontSize:13,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4 }}>← All Bounties</a>
-          {currentUser && (
-            <a href="/profile" style={{ display:"flex",alignItems:"center",gap:8,padding:"5px 12px 5px 6px",borderRadius:999,background:"#f0fdf4",border:"1.5px solid #86efac" }}>
-              <PremiumAvatar name={currentUser.full_name} level={currentUser.level} avatarUrl={currentUser.avatar_url} xp_multiplier={currentUser.xp_multiplier} size={26} />
-              <span style={{ fontSize:12,fontWeight:800,color:"#2d6a4f" }}>{currentUser.credits} cr</span>
-            </a>
-          )}
-        </div>
-      </nav>
+      <Navbar />
 
       <div style={{ maxWidth:800,margin:"0 auto",padding:"32px 20px" }}>
 

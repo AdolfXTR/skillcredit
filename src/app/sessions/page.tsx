@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 type SessionProfile = {
@@ -625,26 +626,7 @@ export default function SessionsPage() {
       )}
 
       {/* NAVBAR */}
-      <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-stone-200 px-6 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <a href="/dashboard" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 text-xs font-700 text-stone-500 border border-stone-200 hover:bg-stone-200 transition-colors">← Dashboard</a>
-          <div className="w-px h-5 bg-stone-200" />
-          <a href="/dashboard">
-            <span style={{ fontFamily:"'Fraunces',serif",fontSize:19,fontWeight:900,color:"#2d6a4f" }}>Skill</span>
-            <span style={{ fontFamily:"'Fraunces',serif",fontSize:19,fontWeight:900,color:"#1a1a1a" }}>Credit</span>
-          </a>
-        </div>
-        <div className="flex gap-0.5">
-          {[["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
-            <a key={l} href={h} className={`navlink${h==="/sessions"?" active":""}`}>{l}</a>
-          ))}
-        </div>
-        <a href="/profile" className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-stone-50 border border-stone-200 hover:bg-stone-100 transition-colors">
-          {profile && <PremiumAvatar profile={profile} size={28} />}
-          <span className="text-sm font-600 text-stone-700">@{profile?.username}</span>
-          <span className="text-xs font-800 text-[#2d6a4f] bg-green-50 px-2.5 py-0.5 rounded-full border border-green-200">{profile?.credits} cr</span>
-        </a>
-      </nav>
+      <Navbar />
 
       <div className="max-w-4xl mx-auto px-5 py-10 pb-20">
         <div className="flex items-start justify-between gap-4 mb-8 fade-up">

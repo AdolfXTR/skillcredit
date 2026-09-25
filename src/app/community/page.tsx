@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import SharedNavbar from "@/components/Navbar";
 
 // ─────────────────────────────────────────────────────────────
 // TYPES
@@ -265,31 +266,8 @@ function ImageUploader({ onUploaded, label = "📷 Add Photo" }: { onUploaded: (
 }
 
 // ─────────────────────────────────────────────────────────────
-// NAVBAR
+// (local Navbar removed — using shared @/components/Navbar)
 // ─────────────────────────────────────────────────────────────
-function Navbar({ profile }: { profile: Profile | null }) {
-  const links = [["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]];
-  return (
-    <nav style={{ background: "rgba(255,255,255,.96)", backdropFilter: "blur(12px)", borderBottom: "1px solid #e8e2d9", padding: "0 28px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-      <a href="/dashboard"><span style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 900, color: "#2d6a4f" }}>Skill</span><span style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a" }}>Credit</span></a>
-      <div style={{ display: "flex", gap: 2 }}>
-        {links.map(([l, h]) => (
-          <a key={l} href={h} style={{ padding: "7px 13px", borderRadius: 8, fontSize: 13, fontWeight: 600, transition: "all .12s", display: "inline-block", background: h === "/community" ? "#e6f2ec" : "transparent", color: h === "/community" ? "#2d6a4f" : "#666" }}
-            onMouseEnter={e => { if (h !== "/community") { (e.currentTarget as HTMLElement).style.background = "#eee9e0"; (e.currentTarget as HTMLElement).style.color = "#1a1a1a"; } }}
-            onMouseLeave={e => { if (h !== "/community") { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "#666"; } }}
-          >{l}</a>
-        ))}
-      </div>
-      {profile ? (
-        <a href="/profile" style={{ display: "flex", alignItems: "center", gap: 9, padding: "5px 14px 5px 6px", borderRadius: 999, background: "#f5f0e8", border: "1.5px solid #e8e2d9" }}>
-          <PremiumAvatar name={profile.full_name} level={profile.level} avatarUrl={profile.avatar_url} size={28} xp_multiplier={profile.xp_multiplier} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>@{profile.username}</span>
-          <span style={{ fontSize: 12, fontWeight: 800, color: "#2d6a4f" }}>{profile.credits} cr</span>
-        </a>
-      ) : <a href="/login" style={{ padding: "8px 20px", borderRadius: 999, background: "#2d6a4f", color: "#fff", fontSize: 13, fontWeight: 700 }}>Sign in</a>}
-    </nav>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────
 // CHAMPION PODIUM
@@ -1079,7 +1057,7 @@ export default function CommunityPage() {
         </div>
       )}
 
-      <Navbar profile={profile} />
+      <SharedNavbar />
 
       {openPost ? (
         <PostDetail post={openPost} profile={profile} onBack={() => { setOpenPost(null); loadPosts(); }} />

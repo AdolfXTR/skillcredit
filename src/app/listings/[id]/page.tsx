@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState, useRef } from "react";
+import Navbar from "@/components/Navbar";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { bayesianAvg } from "@/lib/ratings";
@@ -496,20 +497,7 @@ export default function ListingDetailPage() {
       )}
 
       {/* NAVBAR */}
-      <nav style={{ background:"rgba(255,255,255,.96)", backdropFilter:"blur(12px)", borderBottom:"1px solid #e8e2d9", padding:"0 28px", height:58, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:40 }}>
-        <a href="/dashboard" style={{ fontFamily:"'Fraunces',serif" }}>
-          <span style={{ fontSize:20, fontWeight:900, color:"#2d6a4f" }}>Skill</span>
-          <span style={{ fontSize:20, fontWeight:900, color:"#1a1a1a" }}>Credit</span>
-        </a>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <a href="/listings" style={{ padding:"7px 14px", borderRadius:9, color:"#555", fontSize:13, fontWeight:600, transition:"background .12s" }}
-            onMouseOver={e => (e.currentTarget.style.background="#f0ece4")}
-            onMouseOut={e  => (e.currentTarget.style.background="transparent")}>
-            ← All Listings
-          </a>
-          {currentUser && <span style={{ background:"#f0fdf4", color:"#15803d", fontSize:13, fontWeight:800, padding:"6px 14px", borderRadius:999, border:"1px solid #86efac" }}>💰 {currentUser.credits} cr</span>}
-        </div>
-      </nav>
+      <Navbar />
 
       <div style={{ maxWidth:1020, margin:"0 auto", padding: isMobile ? "0 0 20px" : "28px 24px" }}>
         <div className="detail-grid" style={{ display:"grid", gridTemplateColumns:"1fr 320px", gap:24, alignItems:"start" }}>

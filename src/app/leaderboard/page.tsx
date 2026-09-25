@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
 import { bayesianAvg } from "@/lib/ratings";
 
 type LeaderboardUser = {
@@ -312,18 +313,7 @@ export default function LeaderboardPage() {
       `}</style>
 
       {/* NAVBAR */}
-      <nav style={{ background:"rgba(255,255,255,.97)",backdropFilter:"blur(16px)",borderBottom:"1.5px solid #e8e2d9",padding:"0 24px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100 }}>
-        <a href="/dashboard">
-          <span style={{ fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:900,color:"#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:900,color:"#1a1a1a" }}>Credit</span>
-        </a>
-        <div style={{ display:"flex",gap:4,flexWrap:"wrap" }}>
-          {[["Dashboard","/dashboard"],["Browse","/listings"],["Bounties","/bounties"],["Sessions","/sessions"],["Community","/community"]].map(([l,h])=>(
-            <a key={l} href={h} className="navlink">{l}</a>
-          ))}
-        </div>
-        <a href="/profile" style={{ padding:"6px 14px",borderRadius:10,background:"#f5f0e8",fontSize:13,fontWeight:700,color:"#333",whiteSpace:"nowrap" }}>My Profile →</a>
-      </nav>
+      <Navbar />
 
       <div style={{ maxWidth:860,margin:"0 auto",padding:"36px 24px 80px" }}>
 

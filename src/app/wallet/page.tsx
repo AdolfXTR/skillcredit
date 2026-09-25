@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
 
 type Transaction = {
   id: string; amount: number; type: string;
@@ -69,25 +70,7 @@ export default function WalletPage() {
       `}</style>
 
       {/* NAVBAR */}
-      <nav className="bg-white border-b border-stone-200 sticky top-0 z-50 px-6 h-14 flex items-center justify-between shadow-sm">
-        <a href="/dashboard" className="flex items-center no-underline">
-          <span className="font-fraunces text-xl font-black text-emerald-700">Skill</span>
-          <span className="font-fraunces text-xl font-black text-stone-900">Credit</span>
-        </a>
-        <div className="flex items-center gap-1">
-          {[["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
-            <a key={l} href={h} className="px-3 py-1.5 rounded-lg text-stone-500 text-sm font-semibold hover:bg-stone-100 transition-colors no-underline">{l}</a>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
-            💰 {profile?.credits} cr
-          </span>
-          <a href="/profile" className="px-3 py-1.5 rounded-lg bg-stone-100 text-stone-700 text-sm font-semibold hover:bg-stone-200 transition-colors no-underline">
-            👤 Profile
-          </a>
-        </div>
-      </nav>
+      <Navbar />
 
       <div className="max-w-4xl mx-auto px-5 py-8">
 

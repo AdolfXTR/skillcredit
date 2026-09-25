@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
 
 type Profile = {
   id: string;
@@ -615,25 +616,7 @@ export default function MessagesPage() {
       `}</style>
 
       {/* ── NAVBAR ── */}
-      <nav style={{ background: "#fff", borderBottom: "1px solid #E7E3DD", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, zIndex: 10 }}>
-        <a href="/dashboard">
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 900, color: "#1a1a1a" }}>Credit</span>
-        </a>
-        <div style={{ display: "flex", gap: 2 }}>
-          {[["Bounties", "/bounties"], ["Community", "/community"], ["Sessions", "/sessions"], ["Messages", "/messages"]].map(([l, h]) => (
-            <a key={l} href={h} className={`nav-link ${h === "/messages" ? "active" : ""}`} style={{ position: "relative" }}>
-              {l}
-              {l === "Messages" && totalUnread > 0 && <span style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: "50%", background: "#ef4444", border: "1.5px solid #fff" }} />}
-            </a>
-          ))}
-        </div>
-        <a href="/profile" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 12px", borderRadius: 10, background: "#F5F3F0", textDecoration: "none" }}>
-          {profile && <Avatar profile={profile} size={26} />}
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>@{profile?.username}</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#2d6a4f", background: "#eef6f2", padding: "2px 8px", borderRadius: 20 }}>{profile?.credits} cr</span>
-        </a>
-      </nav>
+      <Navbar />
 
       {/* ── LAYOUT ── */}
       <div style={{ flex: 1, display: "grid", gridTemplateColumns: "300px 1fr", overflow: "hidden" }}>

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 import { bayesianAvg } from "@/lib/ratings";
 
@@ -276,55 +277,7 @@ export default function Dashboard() {
       `}</style>
 
       {/* ── NAVBAR ── */}
-      <nav style={{background:"rgba(255,255,255,.97)",backdropFilter:"blur(16px)",borderBottom:"1px solid #EAECF0",padding:"0 32px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
-        <a href="/dashboard">
-          <span style={{fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:900,color:"#16a34a"}}>Skill</span>
-          <span style={{fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:900,color:"#101828"}}>Credit</span>
-        </a>
-        <div className="nav-links" style={{display:"flex",gap:2}}>
-          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"],["People","/people"]].map(([l,h])=>(
-            <a key={l} href={h} className="nav-a">{l}</a>
-          ))}
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <a href="/wallet" style={{display:"flex",alignItems:"center",gap:5,padding:"6px 14px",borderRadius:999,background:"#F0FDF4",border:"1px solid #BBF7D0",fontSize:13,fontWeight:700,color:"#16a34a"}}>
-            💰 {profile.credits} cr
-          </a>
-          <a href="/notifications" style={{position:"relative",width:36,height:36,borderRadius:"50%",background:"#F2F4F7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>
-            🔔
-            {unread>0&&<span style={{position:"absolute",top:-2,right:-2,minWidth:16,height:16,borderRadius:"50%",background:"#ef4444",color:"#fff",fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",border:"2px solid white"}}>{unread}</span>}
-          </a>
-          <div style={{position:"relative"}} onClick={e=>{e.stopPropagation();setShowMenu(m=>!m);}}>
-            <div className={rankFromTitle===1?"gold-avatar":rankFromTitle===2?"silver-avatar":rankFromTitle===3?"bronze-avatar":""}
-              style={{width:36,height:36,borderRadius:"50%",overflow:"hidden",cursor:"pointer",
-                background:avatarUrl?"transparent":levelInfo.color,display:"flex",alignItems:"center",justifyContent:"center",
-                boxShadow:rankBorderColor?undefined:`0 0 0 2px white,0 0 0 3.5px ${levelInfo.color}`}}>
-              {avatarUrl?<img src={avatarUrl} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{color:"#fff",fontSize:12,fontWeight:900}}>{initials}</span>}
-            </div>
-            {showMenu&&(
-              <div style={{position:"absolute",right:0,top:44,background:"#fff",border:"1px solid #EAECF0",borderRadius:18,padding:8,width:210,boxShadow:"0 16px 48px rgba(0,0,0,.12)",zIndex:200}}>
-                <div style={{padding:"10px 12px 12px",borderBottom:"1px solid #F2F4F7",marginBottom:6}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:32,height:32,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:avatarUrl?"transparent":levelInfo.color,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      {avatarUrl?<img src={avatarUrl} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{color:"#fff",fontSize:11,fontWeight:900}}>{initials}</span>}
-                    </div>
-                    <div>
-                      <div style={{fontSize:13,fontWeight:800,color:"#101828"}}>{profile.full_name}</div>
-                      <div style={{fontSize:11,color:"#98A2B3"}}>@{profile.username} · <span style={{color:badge.color,fontWeight:700}}>{badge.emoji} {badge.name}</span></div>
-                    </div>
-                  </div>
-                </div>
-                {[["👤","My Profile","/profile"],["👥","People","/people"],["📋","Create Listing","/listings/create"],["✅","Get Verified","/verify"],["⭐","My Ratings","/ratings"],["💰","Wallet","/wallet"],["🏆","Leaderboard","/leaderboard"],["🔔","Notifications","/notifications"]].map(([icon,label,href])=>(
-                  <a key={label} href={href} className="menu-item">{icon} {label}</a>
-                ))}
-                <div style={{borderTop:"1px solid #F2F4F7",marginTop:6,paddingTop:6}}>
-                  <button onClick={handleLogout} className="menu-item" style={{width:"100%",background:"none",border:"none",color:"#ef4444",fontFamily:"'DM Sans',sans-serif"}}>🚪 Log out</button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       <div style={{maxWidth:1180,margin:"0 auto",padding:"28px 24px"}}>
 

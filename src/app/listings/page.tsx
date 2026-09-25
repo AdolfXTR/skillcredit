@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 import { bayesianAvg } from "@/lib/ratings";
 
@@ -328,6 +329,7 @@ export default function ListingsPage() {
   const [category, setCategory]       = useState("All");
   const [format, setFormat]           = useState("All");
   const [sortBy, setSortBy]           = useState("newest");
+  const [minPrice, setMinPrice]       = useState(0);   // ← NEW
   const [maxPrice, setMaxPrice]       = useState(100);
   const [maxDuration, setMaxDuration] = useState("all");
   const [difficulty, setDifficulty]   = useState("all");
@@ -404,19 +406,20 @@ export default function ListingsPage() {
   const activeFilters: { label: string; clear: () => void }[] = [];
   if (category !== "All")    activeFilters.push({ label:`📂 ${category}`, clear: () => setCategory("All") });
   if (format !== "All")      activeFilters.push({ label:`${FORMAT_CONFIG[format]?.icon} ${format}`, clear: () => setFormat("All") });
+  if (minPrice > 0)          activeFilters.push({ label:`💰 ≥${minPrice} cr`, clear: () => setMinPrice(0) });   // ← NEW
   if (maxPrice < 100)        activeFilters.push({ label:`💰 ≤${maxPrice} cr`, clear: () => setMaxPrice(100) });
   if (maxDuration !== "all") activeFilters.push({ label:`⏱ ${maxDuration}`, clear: () => setMaxDuration("all") });
   if (difficulty !== "all")  activeFilters.push({ label:`📊 ${difficulty}`, clear: () => setDifficulty("all") });
   if (search)                activeFilters.push({ label:`🔍 "${search}"`, clear: () => setSearch("") });
 
-  const clearAll = () => { setSearch(""); setCategory("All"); setFormat("All"); setMaxPrice(100); setMaxDuration("all"); setDifficulty("all"); setSortBy("newest"); };
+  const clearAll = () => { setSearch(""); setCategory("All"); setFormat("All"); setMinPrice(0); setMaxPrice(100); setMaxDuration("all"); setDifficulty("all"); setSortBy("newest"); };
 
   const filtered = listings.filter(l => {
     const q = search.toLowerCase();
     const matchSearch = !search || l.title?.toLowerCase().includes(q) || l.description?.toLowerCase().includes(q) || l.profiles?.full_name?.toLowerCase().includes(q) || l.skills?.name?.toLowerCase().includes(q);
     const matchCat   = category === "All" || l.skills?.category === category;
     const matchFmt   = format === "All" || l.format === format;
-    const matchPrice = l.credit_price <= maxPrice;
+    const matchPrice = l.credit_price >= minPrice && l.credit_price <= maxPrice;   // ← UPDATED
     const matchDur   = maxDuration==="all"?true:maxDuration==="30min"?l.duration<=30:maxDuration==="1hr"?l.duration<=60:maxDuration==="2hr"?l.duration<=120:true;
     const matchDiff  = difficulty === "all" || l.difficulty === difficulty;
     return matchSearch && matchCat && matchFmt && matchPrice && matchDur && matchDiff;
@@ -482,12 +485,23 @@ export default function ListingsPage() {
         </div>
       </FilterBlock>
 
-      <FilterBlock title="Max Price">
+      {/* ── NEW: Min/Max Price block (was Max Price only) ── */}
+      <FilterBlock title="Price Range">
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:7 }}>
-          <span style={{ fontSize:12, color:"#888" }}>0 cr</span>
+          <span style={{ fontSize:12, color:"#888" }}>Min</span>
+          <span style={{ fontSize:13, fontWeight:800, color:"#2d6a4f" }}>{minPrice === 0 ? "Any" : `≥ ${minPrice} cr`}</span>
+        </div>
+        <input type="range" min={0} max={100} step={5} value={minPrice}
+          onChange={e => setMinPrice(Math.min(Number(e.target.value), maxPrice))}
+          style={{ width:"100%", marginBottom:16 }} />
+
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:7 }}>
+          <span style={{ fontSize:12, color:"#888" }}>Max</span>
           <span style={{ fontSize:13, fontWeight:800, color:"#2d6a4f" }}>{maxPrice === 100 ? "Any" : `≤ ${maxPrice} cr`}</span>
         </div>
-        <input type="range" min={5} max={100} step={5} value={maxPrice} onChange={e => setMaxPrice(Number(e.target.value))} style={{ width:"100%" }} />
+        <input type="range" min={0} max={100} step={5} value={maxPrice}
+          onChange={e => setMaxPrice(Math.max(Number(e.target.value), minPrice))} style={{ width:"100%" }} />
+
         <div style={{ display:"flex", gap:4, marginTop:8 }}>
           {[10,25,50,100].map(p => (
             <button key={p} onClick={() => setMaxPrice(p)}
@@ -565,33 +579,7 @@ export default function ListingsPage() {
       </div>
 
       {/* NAVBAR */}
-      <nav style={{ background:"rgba(255,255,255,.97)", backdropFilter:"blur(16px)", borderBottom:"1.5px solid #e8e2d9", padding:"0 32px", height:58, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100 }}>
-        <a href="/dashboard">
-          <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#1a1a1a" }}>Credit</span>
-        </a>
-        <div style={{ display:"flex", gap:2, alignItems:"center" }}>
-          <a href="/dashboard" className="nav-a">🏠</a>
-          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"]].map(([l,h])=>(
-            <a key={l} href={h} className={`nav-a${h==="/listings"?" active":""}`}>{l}</a>
-          ))}
-        </div>
-        {profile ? (
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <a href="/listings/create" style={{ padding:"8px 16px", borderRadius:10, background:"#2d6a4f", color:"#fff", fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}>+ Create</a>
-            <a href="/profile" style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 12px 5px 6px", borderRadius:10, background:"#f5f0e8" }}>
-              <PremiumAvatar name={profile.full_name} xp={profile.xp||0} xp_multiplier={profile.xp_multiplier} avatar_url={profile.avatar_url} size={28} />
-              <span style={{ fontSize:13, fontWeight:600, color:"#333" }}>@{profile.username}</span>
-              <span style={{ fontSize:12, fontWeight:800, color:"#2d6a4f", background:"#e8f4e8", padding:"2px 9px", borderRadius:20 }}>{profile.credits} cr</span>
-            </a>
-          </div>
-        ) : (
-          <div style={{ display:"flex", gap:8 }}>
-            <a href="/login" style={{ padding:"7px 14px", borderRadius:8, color:"#555", fontSize:13, fontWeight:600 }}>Log in</a>
-            <a href="/signup" style={{ padding:"8px 18px", borderRadius:10, background:"#2d6a4f", color:"#fff", fontSize:13, fontWeight:700 }}>Sign up free</a>
-          </div>
-        )}
-      </nav>
+      <Navbar />
 
       <div style={{ maxWidth:1200, margin:"0 auto", padding:"24px 24px" }}>
         {/* Header */}

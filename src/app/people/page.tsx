@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
 
 type BadgeTier = { name: string; emoji: string; color: string; bg: string; border: string };
 function getBadgeTier(xp: number, sessions: number): BadgeTier {
@@ -466,21 +467,7 @@ export default function PeoplePage() {
       `}</style>
 
       {/* NAVBAR */}
-      <nav style={{ background:"rgba(255,255,255,0.97)", backdropFilter:"blur(12px)", borderBottom:"1.5px solid #e8e2d9", padding:"0 28px", height:58, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100 }}>
-        <a href="/dashboard">
-          <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#1a1a1a" }}>Credit</span>
-        </a>
-        <div style={{ display:"flex", gap:2 }}>
-          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"],["People","/people"]].map(([l,h]) => (
-            <a key={l} href={h} className={`nav-link ${h==="/people"?"active":""}`}>{l}</a>
-          ))}
-        </div>
-        <a href="/profile" style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 12px 5px 6px", borderRadius:999, background:"#f5f0e8", border:"1.5px solid #e8e2d9" }}>
-          <PremiumAvatar name={currentUser?.full_name||""} level={currentUser?.level||"Seedling"} avatarUrl={currentUser?.avatar_url} size={28} radius={999} rank={currentUserRank} />
-          <span style={{ fontSize:13, fontWeight:600, color:"#333" }}>@{currentUser?.username}</span>
-        </a>
-      </nav>
+      <Navbar />
 
       {/* HERO */}
       <div style={{ background:"linear-gradient(135deg,#152b1e 0%,#2d6a4f 55%,#1e4a38 100%)", padding:"44px 28px 40px", position:"relative", overflow:"hidden" }}>

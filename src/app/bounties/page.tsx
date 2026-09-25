@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState, useRef } from "react";
+import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
 type Bounty = {
@@ -263,29 +264,7 @@ export default function BountiesPage() {
       )}
 
       {/* NAVBAR */}
-      <nav style={{ background:"rgba(255,255,255,.97)",backdropFilter:"blur(14px)",borderBottom:"1px solid #e8e2d9",padding:"0 32px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100 }}>
-        <a href="/dashboard">
-          <span style={{ fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:900,color:"#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:900,color:"#1a1a1a" }}>Credit</span>
-        </a>
-        <div style={{ display:"flex",gap:2 }}>
-          {[["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h]) => (
-            <a key={l} href={h} className={`nav-a${h==="/bounties"?" active":""}`}>{l}</a>
-          ))}
-        </div>
-        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          <button onClick={() => user ? setShowPostModal(true) : (window.location.href="/login")} className="btn"
-            style={{ padding:"8px 18px",borderRadius:999,background:"linear-gradient(135deg,#2d6a4f,#1a4a36)",color:"#fff",fontSize:13,fontWeight:700,boxShadow:"0 4px 16px rgba(45,106,79,.3)" }}>
-            + Post Bounty
-          </button>
-          {user && (
-            <a href="/profile" style={{ display:"flex",alignItems:"center",gap:8,padding:"5px 12px 5px 6px",borderRadius:999,background:"#f0fdf4",border:"1.5px solid #86efac" }}>
-              <PremiumAvatar name={user.full_name} level={user.level} avatarUrl={user.avatar_url} xp_multiplier={user.xp_multiplier} size={28} />
-              <span style={{ fontSize:12,fontWeight:800,color:"#2d6a4f" }}>{user.credits} cr</span>
-            </a>
-          )}
-        </div>
-      </nav>
+      <Navbar />
 
       <div style={{ maxWidth:1100,margin:"0 auto",padding:"36px 24px" }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:32,flexWrap:"wrap",gap:16 }}>

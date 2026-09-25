@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
+import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
 type Skill = { id: string; name: string; category: string };
@@ -216,6 +217,54 @@ const MEETING_PLATFORMS = [
 const OTHER_SKILL_ID = "__other__";
 const CATEGORIES = ["Programming","Design","Language","Academic","Music","Arts","Media","Science","Sports","Lifestyle","Other"];
 
+// ── CREDIT BAND SYSTEM ────────────────────────────────────────────────────────
+// Based on Salary-Anchored Credit Band System (1 Credit = PHP 10)
+const CATEGORY_CREDIT_BANDS: Record<string, { min: number; max: number }> = {
+  // Tier 1 — Practical / Lifestyle (1.0x)
+  "Sports":    { min: 9,  max: 19 },
+  "Lifestyle": { min: 9,  max: 19 },
+  // Tier 2 — Creative / Academic (1.5x)
+  "Academic":  { min: 24, max: 38 },
+  "Language":  { min: 33, max: 42 },
+  "Music":     { min: 19, max: 58 },
+  "Arts":      { min: 17, max: 38 },
+  "Media":     { min: 23, max: 56 },
+  "Design":    { min: 17, max: 66 },
+  // Tier 3 — Technical / Professional (2.0x)
+  "Programming": { min: 31, max: 75 },
+  "Science":     { min: 38, max: 75 },
+  // Fallback for "Other" or custom skills
+  "Other":     { min: 9,  max: 75 },
+};
+
+// Skill-level overrides for more specific sub-skills
+const SKILL_CREDIT_BANDS: Record<string, { min: number; max: number }> = {
+  "UI/UX Design":    { min: 38, max: 100 },
+  "Graphic Design":  { min: 17, max: 66 },
+  "Math Tutoring":   { min: 24, max: 38 },
+  "English Writing": { min: 33, max: 42 },
+  "Photography":     { min: 19, max: 42 },
+  "Video Editing":   { min: 23, max: 56 },
+  "Guitar":          { min: 19, max: 58 },
+};
+
+const EXPERIENCE_LEVELS = [
+  { id: "fresh",        label: "Fresh",        desc: "0–2 years",  range: [0, 0.33]  as [number, number] },
+  { id: "intermediate", label: "Intermediate", desc: "3–5 years",  range: [0.33, 0.66] as [number, number] },
+  { id: "expert",       label: "Expert",       desc: "6+ years",   range: [0.66, 1.0]  as [number, number] },
+];
+
+function getCreditBand(skillName: string, category: string, experience: string) {
+  const base = SKILL_CREDIT_BANDS[skillName] ?? CATEGORY_CREDIT_BANDS[category] ?? CATEGORY_CREDIT_BANDS["Other"];
+  const expLevel = EXPERIENCE_LEVELS.find(e => e.id === experience) ?? EXPERIENCE_LEVELS[0];
+  const [lo, hi] = expLevel.range;
+  const span = base.max - base.min;
+  return {
+    min: Math.round(base.min + span * lo),
+    max: Math.round(base.min + span * hi) || Math.round(base.min + span * 0.33),
+  };
+}
+
 export default function CreateListingPage() {
   const [step, setStep]             = useState(0);
   const [skills, setSkills]         = useState<Skill[]>([]);
@@ -236,7 +285,7 @@ export default function CreateListingPage() {
     skill_id: "", title: "", description: "",
     prerequisites: "", outcomes: "", materials: "",
     format: "", duration: 60, credit_price: 10,
-    meeting_link: "",   // ← NEW
+    meeting_link: "", experience: "fresh",
   });
 
   useEffect(() => {
@@ -266,7 +315,13 @@ export default function CreateListingPage() {
       const skillOk = isCustomSkill ? customSkillName.trim().length >= 2 : !!form.skill_id;
       return skillOk && form.title.length >= 5 && form.description.length >= 20;
     }
-    if (step === 1) return !!form.format && !!form.duration && form.credit_price >= 5 && meetingLinkValid;
+    if (step === 1) {
+      const skillName = isCustomSkill ? customSkillName : (selectedSkill?.name ?? "");
+      const category  = isCustomSkill ? (customSkillCat || "Other") : (selectedSkill?.category ?? "Other");
+      const band = getCreditBand(skillName, category, form.experience);
+      const priceOk = form.credit_price >= band.min && form.credit_price <= band.max;
+      return !!form.format && !!form.duration && priceOk && meetingLinkValid;
+    }
     return true;
   };
 
@@ -276,7 +331,9 @@ export default function CreateListingPage() {
       setForm(p => ({ ...p, skill_id: OTHER_SKILL_ID }));
     } else {
       setIsCustomSkill(false); setCustomSkillName(""); setCustomSkillCat("");
-      setForm(p => ({ ...p, skill_id: val }));
+      const skill = skills.find(s => s.id === val);
+      const band = skill ? getCreditBand(skill.name, skill.category, form.experience) : { min: 9, max: 75 };
+      setForm(p => ({ ...p, skill_id: val, credit_price: band.min }));
     }
   };
 
@@ -308,7 +365,8 @@ export default function CreateListingPage() {
       format:        form.format,
       duration:      form.duration,
       credit_price:  form.credit_price,
-      meeting_link:  form.meeting_link.trim() || null,  // ← NEW
+      experience:    form.experience,         // ← NEW: persist experience tier so edit page can reconstruct the band
+      meeting_link:  form.meeting_link.trim() || null,
       is_active:     true,
       thumbnail_url: thumbnailUrl || null,
     }).select().single();
@@ -337,7 +395,7 @@ export default function CreateListingPage() {
   const resetForm = () => {
     setDone(false); setStep(0); setThumbnailUrl(null); setPortfolioItems([]);
     setIsCustomSkill(false); setCustomSkillName(""); setCustomSkillCat("");
-    setForm({ skill_id: "", title: "", description: "", prerequisites: "", outcomes: "", materials: "", format: "", duration: 60, credit_price: 10, meeting_link: "" });
+    setForm({ skill_id: "", title: "", description: "", prerequisites: "", outcomes: "", materials: "", format: "", duration: 60, credit_price: 10, meeting_link: "", experience: "fresh" });
     setError("");
   };
 
@@ -369,16 +427,7 @@ export default function CreateListingPage() {
         .font-fraunces{font-family:'Fraunces',serif} body{font-family:'DM Sans',sans-serif}
       `}</style>
 
-      <nav className="bg-white border-b border-stone-200 sticky top-0 z-50 px-8 h-14 flex items-center justify-between shadow-sm">
-        <a href="/dashboard" className="flex no-underline">
-          <span className="font-fraunces text-xl font-black text-emerald-700">Skill</span>
-          <span className="font-fraunces text-xl font-black text-stone-900">Credit</span>
-        </a>
-        <div className="flex gap-2">
-          <a href="/listings" className="px-3 py-1.5 rounded-lg text-stone-500 text-sm font-semibold hover:bg-stone-100 transition-colors no-underline">Browse Skills</a>
-          <a href="/profile"  className="px-3 py-1.5 rounded-lg text-stone-500 text-sm font-semibold hover:bg-stone-100 transition-colors no-underline">My Profile</a>
-        </div>
-      </nav>
+      <Navbar />
 
       <div className="max-w-2xl mx-auto px-6 py-10">
         <div className="mb-8">
@@ -530,24 +579,67 @@ export default function CreateListingPage() {
 
               <div>
                 <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-3">
-                  Credit Price per Session * <span className="font-normal text-stone-300 normal-case">= ₱{form.credit_price * 10}</span>
+                  Your Experience Level *
                 </label>
-                <div className="flex items-center gap-4 mb-3">
-                  <button onClick={() => setForm(p => ({ ...p, credit_price: Math.max(5, p.credit_price - 5) }))}
-                    className="w-10 h-10 rounded-xl border border-stone-200 bg-white text-xl cursor-pointer hover:bg-stone-50 transition-colors flex items-center justify-center font-bold border-0">−</button>
-                  <div className="flex-1 text-center">
-                    <p className="font-fraunces text-4xl font-black text-emerald-700">{form.credit_price}</p>
-                    <p className="text-xs text-stone-400">credits · ₱{form.credit_price * 10}</p>
-                  </div>
-                  <button onClick={() => setForm(p => ({ ...p, credit_price: Math.min(100, p.credit_price + 5) }))}
-                    className="w-10 h-10 rounded-xl border border-stone-200 bg-white text-xl cursor-pointer hover:bg-stone-50 transition-colors flex items-center justify-center font-bold border-0">+</button>
+                <div className="flex gap-3">
+                  {EXPERIENCE_LEVELS.map(exp => {
+                    const selected = form.experience === exp.id;
+                    return (
+                      <div key={exp.id} onClick={() => {
+                        const skillName = isCustomSkill ? customSkillName : (selectedSkill?.name ?? "");
+                        const category  = isCustomSkill ? (customSkillCat || "Other") : (selectedSkill?.category ?? "Other");
+                        const band = getCreditBand(skillName, category, exp.id);
+                        setForm(p => ({ ...p, experience: exp.id, credit_price: band.min }));
+                      }}
+                        className={`flex-1 p-4 rounded-2xl cursor-pointer text-center border-2 transition-all ${selected ? "bg-emerald-50 border-emerald-400" : "bg-white border-stone-200 hover:border-stone-300"}`}>
+                        <p className={`font-fraunces text-base font-black mb-0.5 ${selected ? "text-emerald-700" : "text-stone-800"}`}>{exp.label}</p>
+                        <p className="text-xs text-stone-400">{exp.desc}</p>
+                      </div>
+                    );
+                  })}
                 </div>
-                <input type="range" min={5} max={100} step={5} value={form.credit_price}
-                  onChange={e => setForm(p => ({ ...p, credit_price: parseInt(e.target.value) }))}
-                  className="w-full accent-emerald-600" />
-                <div className="flex justify-between text-[10px] text-stone-300 mt-1">
-                  <span>5 cr (₱50)</span><span>50 cr (₱500)</span><span>100 cr (₱1,000)</span>
-                </div>
+              </div>
+
+              <div>
+                {(() => {
+                  const skillName = isCustomSkill ? customSkillName : (selectedSkill?.name ?? "");
+                  const category  = isCustomSkill ? (customSkillCat || "Other") : (selectedSkill?.category ?? "Other");
+                  const band = getCreditBand(skillName, category, form.experience);
+                  const priceOk = form.credit_price >= band.min && form.credit_price <= band.max;
+                  return (
+                    <>
+                      <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-3">
+                        Credit Price per Session * <span className="font-normal text-stone-300 normal-case">= ₱{form.credit_price * 10}</span>
+                      </label>
+
+                      {/* Band info banner */}
+                      <div className={`rounded-xl px-4 py-2.5 mb-4 border text-xs font-semibold ${priceOk ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-600"}`}>
+                        {priceOk
+                          ? `✅ Fair range for ${skillName || "this skill"} (${EXPERIENCE_LEVELS.find(e=>e.id===form.experience)?.label}): ${band.min}–${band.max} cr (₱${band.min*10}–₱${band.max*10})`
+                          : `⚠️ Price must be between ${band.min} cr and ${band.max} cr for this skill & experience level`}
+                      </div>
+
+                      <div className="flex items-center gap-4 mb-3">
+                        <button onClick={() => setForm(p => ({ ...p, credit_price: Math.max(band.min, p.credit_price - 1) }))}
+                          className="w-10 h-10 rounded-xl border border-stone-200 bg-white text-xl cursor-pointer hover:bg-stone-50 transition-colors flex items-center justify-center font-bold border-0">−</button>
+                        <div className="flex-1 text-center">
+                          <p className={`font-fraunces text-4xl font-black ${priceOk ? "text-emerald-700" : "text-red-500"}`}>{form.credit_price}</p>
+                          <p className="text-xs text-stone-400">credits · ₱{form.credit_price * 10}</p>
+                        </div>
+                        <button onClick={() => setForm(p => ({ ...p, credit_price: Math.min(band.max, p.credit_price + 1) }))}
+                          className="w-10 h-10 rounded-xl border border-stone-200 bg-white text-xl cursor-pointer hover:bg-stone-50 transition-colors flex items-center justify-center font-bold border-0">+</button>
+                      </div>
+                      <input type="range" min={band.min} max={band.max} step={1} value={form.credit_price}
+                        onChange={e => setForm(p => ({ ...p, credit_price: parseInt(e.target.value) }))}
+                        className="w-full accent-emerald-600" />
+                      <div className="flex justify-between text-[10px] text-stone-300 mt-1">
+                        <span>{band.min} cr (₱{band.min*10})</span>
+                        <span>{Math.round((band.min+band.max)/2)} cr (₱{Math.round((band.min+band.max)/2)*10})</span>
+                        <span>{band.max} cr (₱{band.max*10})</span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* ── MEETING LINK ── */}

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
 
 type Profile = {
   id: string; full_name: string; username: string; bio: string;
@@ -309,17 +310,7 @@ export default function ProfilePage(){
         </div>
       )}
 
-      {/* NAVBAR */}
-      <nav style={{position:"sticky",top:0,zIndex:40,background:"rgba(255,255,255,.95)",backdropFilter:"blur(12px)",borderBottom:"1px solid #e8e2d9",padding:"0 24px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <a href="/dashboard"><span style={{fontFamily:"'Fraunces',serif",fontWeight:900,fontSize:19,color:"#2d6a4f"}}>Skill</span><span style={{fontFamily:"'Fraunces',serif",fontWeight:900,fontSize:19,color:"#1a1a1a"}}>Credit</span></a>
-        <div style={{display:"flex",gap:2}}>
-          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"]].map(([l,h])=><a key={l} href={h} className="navlink">{l}</a>)}
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <a href="/wallet" style={{fontSize:12,fontWeight:800,color:"#2d6a4f",background:"#e8f4e8",padding:"6px 14px",borderRadius:999,border:"1px solid #b7e4c7"}}>💰 {profile.credits} cr</a>
-          <button onClick={async()=>{await supabase.auth.signOut();window.location.href="/";}} style={{fontSize:12,fontWeight:600,color:"#dc2626",background:"#fef2f2",padding:"6px 14px",borderRadius:999,border:"1px solid #fecaca",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Log out</button>
-        </div>
-      </nav>
+      <Navbar />
 
       <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 28px 80px"}}>
 

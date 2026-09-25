@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
 
 // ─────────────────────────────────────────────────────────────
 // TYPES
@@ -326,73 +327,7 @@ export default function RatingsPage() {
         </div>
       )}
 
-      {/* ── NAVBAR — matches dashboard exactly ── */}
-      <nav style={{ background:"rgba(255,255,255,.96)", backdropFilter:"blur(16px)", borderBottom:"1px solid #e8e2d9", padding:"0 32px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100 }}>
-        <a href="/dashboard">
-          <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#1a1a1a" }}>Credit</span>
-        </a>
-        <div className="nav-links" style={{ display:"flex", gap:2 }}>
-          {[["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"],["Messages","/messages"],["People","/people"]].map(([l,h]) => (
-            <a key={l} href={h} className="nav-a">{l}</a>
-          ))}
-        </div>
-        {user ? (
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <a href="/wallet" style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 14px", borderRadius:999, background:"linear-gradient(135deg,#f0fdf4,#dcfce7)", border:"1.5px solid #86efac", fontSize:13, fontWeight:800, color:"#2d6a4f" }}>
-              💰 {user.credits} cr
-            </a>
-            <a href="/notifications" style={{ position:"relative", width:36, height:36, borderRadius:"50%", background:"#f5f0e8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>
-              🔔
-              {unread > 0 && (
-                <span style={{ position:"absolute", top:-2, right:-2, minWidth:16, height:16, borderRadius:"50%", background:"#ef4444", color:"#fff", fontSize:9, fontWeight:900, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 3px", border:"2px solid white" }}>
-                  {unread}
-                </span>
-              )}
-            </a>
-            <div style={{ position:"relative" }} onClick={e => { e.stopPropagation(); setShowMenu(m => !m); }}>
-              <div className={rankFromTitle===1?"gold-avatar":rankFromTitle===2?"silver-avatar":rankFromTitle===3?"bronze-avatar":""}
-                style={{ width:36, height:36, borderRadius:"50%", overflow:"hidden", cursor:"pointer", background:avatarUrl?"transparent":levelColor, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:rankBorderColor?undefined:`0 0 0 2px white, 0 0 0 3.5px ${levelColor}` }}>
-                {avatarUrl
-                  ? <img src={avatarUrl} alt="avatar" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-                  : <span style={{ color:"#fff", fontSize:12, fontWeight:900 }}>{userInitials}</span>
-                }
-              </div>
-              {showMenu && (
-                <div style={{ position:"absolute", right:0, top:44, background:"#fff", border:"1.5px solid #e8e2d9", borderRadius:18, padding:8, width:210, boxShadow:"0 16px 48px rgba(0,0,0,.15)", zIndex:200 }}>
-                  <div style={{ padding:"10px 12px 12px", borderBottom:"1px solid #f0ece4", marginBottom:6 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                      <div style={{ width:32, height:32, borderRadius:"50%", overflow:"hidden", flexShrink:0, background:avatarUrl?"transparent":levelColor, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                        {avatarUrl
-                          ? <img src={avatarUrl} alt="avatar" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-                          : <span style={{ color:"#fff", fontSize:11, fontWeight:900 }}>{userInitials}</span>
-                        }
-                      </div>
-                      <div>
-                        <div style={{ fontSize:13, fontWeight:800, color:"#1a1a1a" }}>{user.full_name}</div>
-                        <div style={{ fontSize:11, color:"#aaa" }}>@{user.username} · <span style={{ color:badge.color, fontWeight:700 }}>{badge.emoji} {badge.name}</span></div>
-                      </div>
-                    </div>
-                  </div>
-                  {[["👤","My Profile","/profile"],["👥","People","/people"],["📋","Create Listing","/listings/create"],["✅","Get Verified","/verify"],["⭐","My Ratings","/ratings"],["💰","Wallet","/wallet"],["🏆","Leaderboard","/leaderboard"],["🔔","Notifications","/notifications"]].map(([icon,label,href]) => (
-                    <a key={label} href={href} className="menu-item">{icon} {label}</a>
-                  ))}
-                  <div style={{ borderTop:"1px solid #f0ece4", marginTop:6, paddingTop:6 }}>
-                    <button onClick={handleLogout} className="menu-item" style={{ width:"100%", background:"none", border:"none", color:"#ef4444", fontFamily:"'DM Sans',sans-serif" }}>
-                      🚪 Log out
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div style={{ display:"flex", gap:8 }}>
-            <a href="/login" style={{ padding:"7px 14px", borderRadius:8, color:"#555", fontSize:13, fontWeight:600 }}>Log in</a>
-            <a href="/signup" style={{ padding:"8px 18px", borderRadius:10, background:"#2d6a4f", color:"#fff", fontSize:13, fontWeight:700 }}>Sign up free</a>
-          </div>
-        )}
-      </nav>
+      <Navbar />
 
       {/* ── BODY ── */}
       <div style={{ maxWidth:896, margin:"0 auto", padding:"32px 24px" }}>

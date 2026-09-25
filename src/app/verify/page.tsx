@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
 
 type Skill    = { id: string; name: string; category: string };
 type Question = {
@@ -484,28 +485,7 @@ export default function VerifyPage() {
         </div>
       )}
 
-      {/* ── NAVBAR ── */}
-      <nav style={{ position:"sticky",top:0,zIndex:50,height:58,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 32px",background:"rgba(255,255,255,0.95)",backdropFilter:"blur(12px)",borderBottom:"1px solid #e8e2d9" }}>
-        <a href="/dashboard" style={{ display:"flex",alignItems:"center" }}>
-          <span style={{ fontFamily:"'Fraunces',serif", fontWeight:900,fontSize:20,color:"#2d6a4f" }}>Skill</span>
-          <span style={{ fontFamily:"'Fraunces',serif", fontWeight:900,fontSize:20,color:"#1a1a1a" }}>Credit</span>
-        </a>
-        <div style={{ display:"flex",gap:2 }}>
-          {[["Dashboard","/dashboard"],["Browse","/listings"],["Bounties","/bounties"],["Community","/community"],["Sessions","/sessions"]].map(([l,h])=>(
-            <a key={l} href={h} className="navlink" style={{ padding:"6px 12px",borderRadius:8,fontSize:13,fontWeight:600,color:"#666" }}>{l}</a>
-          ))}
-        </div>
-        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          {profile && (
-            <span style={{ fontSize:12,fontWeight:700,color:"#2d6a4f",background:"#e8f4e8",border:"1px solid #b7dfc8",padding:"5px 13px",borderRadius:99 }}>
-              💰 {profile.credits} cr
-            </span>
-          )}
-          <a href="/profile" style={{ width:34,height:34,borderRadius:"50%",background:"linear-gradient(135deg,#2d6a4f,#1a4a35)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#fff" }}>
-            {profile ? getInitials(profile.full_name || "") : "?"}
-          </a>
-        </div>
-      </nav>
+      <Navbar />
 
       <div style={{ maxWidth:840,margin:"0 auto",padding:"36px 24px 80px" }}>
 
