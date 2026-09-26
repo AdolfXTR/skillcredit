@@ -3,13 +3,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 const ACTIVITY = [
-  { icon: "🔥", text: "Maria earned 12 credits teaching Python" },
-  { icon: "🏆", text: "Alex became this week's champion" },
-  { icon: "🎸", text: "Guitar lesson just completed" },
-  { icon: "🌍", text: "Spanish session booked for tomorrow" },
-  { icon: "💡", text: "Kevin unlocked the Expert level" },
-  { icon: "📚", text: "Calculus session rated 5 stars ⭐" },
-  { icon: "🎨", text: "UI Design bounty was just answered" },
+  { icon: "📅", text: "A session request is waiting for teacher confirmation" },
+  { icon: "🔒", text: "Credits stay in escrow during your session" },
+  { icon: "🤝", text: "Both members confirm when a session is complete" },
+  { icon: "⭐", text: "Leave a review after learning together" },
 ];
 
 export default function LoginPage() {
@@ -48,8 +45,6 @@ export default function LoginPage() {
       .from("profiles").select("role").eq("id", user!.id).single();
     const role = profile?.role;
     if (role === "admin")          window.location.href = "/admin";
-    else if (role === "moderator") window.location.href = "/moderator";
-    else if (role === "support")   window.location.href = "/support";
     else                           window.location.href = "/dashboard";
   }
 

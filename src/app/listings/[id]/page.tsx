@@ -9,7 +9,7 @@ import { bayesianAvg } from "@/lib/ratings";
 // TYPES
 // ─────────────────────────────────────────────────────────────
 type PortfolioItem = { id: string; url: string; type: string; caption: string };
-type Review = { id: string; overall: number; comment?: string; created_at: string; reviewer?: { full_name: string; avatar_url?: string | null } | { full_name: string; avatar_url?: string | null }[] };
+type Review = { id: string; overall: number; review?: string | null; created_at: string; reviewer?: { full_name: string; avatar_url?: string | null } | { full_name: string; avatar_url?: string | null }[] };
 type Listing = {
   id: string; title: string; description: string;
   credit_price: number; format: string; duration: number;
@@ -179,8 +179,8 @@ function ReviewsSection({ teacherId, avgRating, totalRatings }: { teacherId: str
 
   useEffect(() => {
     supabase.from("ratings")
-      .select(`id, overall, comment, created_at, reviewer:profiles!ratings_reviewer_id_fkey(full_name, avatar_url)`)
-      .eq("rated_id", teacherId).order("created_at", { ascending: false }).limit(10)
+      .select(`id, overall, review, created_at, reviewer:profiles!ratings_rater_id_fkey(full_name, avatar_url)`)
+      .eq("rated_id", teacherId).eq("is_flagged", false).order("created_at", { ascending: false }).limit(10)
       .then(({ data }) => { setReviews((data || []) as unknown as Review[]); setLoading(false); });
   }, [teacherId]);
 
@@ -232,7 +232,7 @@ function ReviewsSection({ teacherId, avgRating, totalRatings }: { teacherId: str
                   {new Date(r.created_at).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })}
                 </span>
               </div>
-              {r.comment && <p style={{ fontSize:13, color:"#555", lineHeight:1.65, fontStyle:"italic" }}>"{r.comment}"</p>}
+              {r.review && <p style={{ fontSize:13, color:"#555", lineHeight:1.65, fontStyle:"italic" }}>"{r.review}"</p>}
             </div>
             );
           })}
@@ -251,7 +251,11 @@ function ReviewsSection({ teacherId, avgRating, totalRatings }: { teacherId: str
 // ─────────────────────────────────────────────────────────────
 // PROFILE FIELDS for FK joins
 // ─────────────────────────────────────────────────────────────
-const PROFILE_FIELDS = "id,full_name,username,level,bio,xp,xp_multiplier,champion_title,champion_streak,avatar_url,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at";
+const PROFILE_FIELDS = "id,full_name,username,bio,avatar_url";
+
+function PlainTeacherAvatar({ name, avatar_url, size }: { name: string; avatar_url?: string | null; size: number }) {
+  return <div style={{ width:size, height:size, flexShrink:0, borderRadius:"50%", overflow:"hidden", display:"grid", placeItems:"center", background:"#e7f1e9", color:"#214c39", fontWeight:800 }}>{avatar_url ? <img src={avatar_url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : getInitials(name)}</div>;
+}
 
 // ─────────────────────────────────────────────────────────────
 // MAIN PAGE
@@ -306,7 +310,7 @@ export default function ListingDetailPage() {
       const tid = data.teacher_id;
       const [{ count: sCount }, { data: ratingData }] = await Promise.all([
         supabase.from("sessions").select("*",{count:"exact",head:true}).eq("teacher_id",tid).eq("status","completed"),
-        supabase.from("ratings").select("overall").eq("rated_id", tid),
+        supabase.from("ratings").select("overall").eq("rated_id", tid).eq("is_flagged", false),
       ]);
       setTeacherSessions(sCount || 0);
       if (ratingData?.length) {
@@ -328,19 +332,63 @@ export default function ListingDetailPage() {
     setBooking(true); setBookError("");
     const { data: existing } = await supabase.from("sessions").select("id").eq("listing_id",listing.id).eq("learner_id",currentUser.id).in("status",["pending","confirmed"]).maybeSingle();
     if (existing) { setBookError("You already have an active booking for this listing."); setBooking(false); return; }
+    let deductedCredits: number | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { data: balance, error: balanceError } = await supabase.from("profiles").select("credits").eq("id", currentUser.id).single();
+      if (balanceError || !balance) break;
+      if (balance.credits < listing.credit_price) {
+        setCurrentUser({ ...currentUser, credits: balance.credits });
+        setBookError(`You need ${listing.credit_price} credits but only have ${balance.credits}.`);
+        setBooking(false);
+        return;
+      }
+      const { data: updatedBalance, error: debitError } = await supabase.from("profiles")
+        .update({ credits: balance.credits - listing.credit_price })
+        .eq("id", currentUser.id).eq("credits", balance.credits)
+        .select("credits").maybeSingle();
+      if (!debitError && updatedBalance) { deductedCredits = updatedBalance.credits; break; }
+    }
+    if (deductedCredits === null) {
+      setBookError("Your credit balance changed while booking. Please try again.");
+      setBooking(false);
+      return;
+    }
     const dt = new Date(`${proposedDate}T${proposedTime}`).toISOString();
     const { data: session, error: sessionErr } = await supabase.from("sessions").insert({
       listing_id: listing.id, teacher_id: listing.teacher_id, learner_id: currentUser.id,
       proposed_time: dt, status: "pending", learner_note: note, credit_amount: listing.credit_price,
     }).select().single();
-    if (sessionErr || !session) { setBookError("Failed to create session. Please try again."); setBooking(false); return; }
-    await Promise.all([
-      supabase.from("escrow").insert({ session_id: session.id, amount: listing.credit_price, status: "locked" }),
-      supabase.from("profiles").update({ credits: currentUser.credits - listing.credit_price }).eq("id", currentUser.id),
-      supabase.from("credit_transactions").insert({ user_id: currentUser.id, amount: -listing.credit_price, type: "session_spend", reference_id: session.id, description: `Booked session: ${listing.title}` }),
-      supabase.from("notifications").insert({ user_id: listing.teacher_id, type: "session", title: "New session request!", body: `${currentUser.full_name} wants to book "${listing.title}"`, link: "/sessions" }),
-    ]);
-    setCurrentUser(p => p ? { ...p, credits: p.credits - listing.credit_price } : p);
+    if (sessionErr || !session) {
+      const { error: refundError } = await supabase.rpc("increment_credits", { user_id: currentUser.id, amount: listing.credit_price });
+      setBookError(refundError
+        ? "The session could not be created and automatic credit recovery failed. Please contact an administrator before trying again."
+        : "Failed to create session. Your credits were returned; please try again.");
+      setBooking(false); return;
+    }
+    const { error: escrowError } = await supabase.from("escrow").insert({ session_id: session.id, amount: listing.credit_price, status: "locked" });
+    if (escrowError) {
+      const { error: refundError } = await supabase.rpc("increment_credits", { user_id: currentUser.id, amount: listing.credit_price });
+      const { error: cancelError } = await supabase.from("sessions").update({ status: "cancelled" }).eq("id", session.id).eq("status", "pending");
+      setBookError(refundError || cancelError
+        ? "Escrow setup failed and the automatic rollback was incomplete. Please contact an administrator before booking again."
+        : "Could not lock credits for this session. Your credits were returned.");
+      setBooking(false); return;
+    }
+    const { error: transactionError } = await supabase.from("credit_transactions").insert({ user_id: currentUser.id, amount: -listing.credit_price, type: "session_spend", reference_id: session.id, description: `Booked session: ${listing.title}` });
+    if (transactionError) {
+      const { data: refundedEscrow, error: escrowRollbackError } = await supabase.from("escrow").update({ status: "refunded" }).eq("session_id", session.id).eq("status", "locked").select("id").maybeSingle();
+      const { error: creditRollbackError } = await supabase.rpc("increment_credits", { user_id: currentUser.id, amount: listing.credit_price });
+      const { error: sessionRollbackError } = await supabase.from("sessions").update({ status: "cancelled" }).eq("id", session.id).eq("status", "pending");
+      const { error: refundLedgerError } = refundedEscrow && !escrowRollbackError && !creditRollbackError
+        ? await supabase.from("credit_transactions").insert({ user_id: currentUser.id, amount: listing.credit_price, type: "session_refund", reference_id: session.id, description: `Booking rollback: ${listing.title}` })
+        : { error: new Error("Credit recovery incomplete") };
+      setBookError(escrowRollbackError || !refundedEscrow || creditRollbackError || sessionRollbackError || refundLedgerError
+        ? "Booking failed and automatic rollback was incomplete. Please contact an administrator before trying again."
+        : "Could not record this booking. Your credits were returned.");
+      setBooking(false); return;
+    }
+    await supabase.from("notifications").insert({ user_id: listing.teacher_id, type: "session", title: "New session request!", body: `${currentUser.full_name} wants to book "${listing.title}"`, link: "/sessions" });
+    setCurrentUser(p => p ? { ...p, credits: deductedCredits! } : p);
     setBooking(false); setBookingStep("success");
   };
 
@@ -349,7 +397,6 @@ export default function ListingDetailPage() {
   const fmt          = FORMAT_INFO[listing?.format || "mixed"] || FORMAT_INFO.mixed;
   const cat          = CATEGORY_CONFIG[listing?.skills?.category || ""] || CATEGORY_CONFIG.Other;
   const diff         = listing?.difficulty ? DIFFICULTY_CONFIG[listing.difficulty] : null;
-  const teacherRank  = getRank(listing?.profiles?.xp_multiplier);
   const tomorrow     = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate      = tomorrow.toISOString().split("T")[0];
 
@@ -461,7 +508,7 @@ export default function ListingDetailPage() {
                 <h2 style={{ fontFamily:"'Fraunces',serif", fontSize:22, fontWeight:900, marginBottom:4 }}>Confirm Booking 🔒</h2>
                 <p style={{ color:"#aaa", fontSize:13, marginBottom:20 }}>Credits will be held in escrow until session is complete.</p>
                 <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:16 }}>
-                  {[{label:"Session",value:listing.title},{label:"Teacher",value:listing.profiles?.full_name},{label:"Format",value:`${fmt.icon} ${fmt.label}`},{label:"Duration",value:`${listing.duration} minutes`},{label:"Time",value:proposedDate&&proposedTime?new Date(`${proposedDate}T${proposedTime}`).toLocaleDateString("en-PH",{weekday:"short",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):""},{label:"Credits",value:`${listing.credit_price} cr (₱${listing.credit_price*10})`}].map(item=>(
+                  {[{label:"Session",value:listing.title},{label:"Teacher",value:listing.profiles?.full_name},{label:"Format",value:`${fmt.icon} ${fmt.label}`},{label:"Duration",value:`${listing.duration} minutes`},{label:"Time",value:proposedDate&&proposedTime?new Date(`${proposedDate}T${proposedTime}`).toLocaleDateString("en-PH",{weekday:"short",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):""},{label:"Credits",value:`${listing.credit_price} credits`}].map(item=>(
                     <div key={item.label} style={{ display:"flex", justifyContent:"space-between", padding:"9px 12px", background:"#fafaf8", borderRadius:10, fontSize:13 }}>
                       <span style={{ color:"#aaa", fontWeight:600 }}>{item.label}</span>
                       <span style={{ color:"#1a1a1a", fontWeight:700, maxWidth:"55%", textAlign:"right" }}>{item.value}</span>
@@ -621,18 +668,15 @@ export default function ListingDetailPage() {
             <PortfolioGallery items={portfolio} />
 
             {/* TEACHER CARD — with perk badges */}
-            <div style={{ background:"#fff", borderRadius:20, border:`1.5px solid ${teacherRank===1?"rgba(255,215,0,.4)":teacherRank===2?"rgba(170,170,170,.5)":teacherRank===3?"rgba(160,82,45,.4)":"#e8e2d9"}`, padding:22 }}>
-              {teacherRank === 1 && <div style={{ height:2, background:"linear-gradient(90deg,transparent,#ffd700,#e8a800,#ffd700,transparent)", borderRadius:"2px 2px 0 0", margin:"-22px -22px 20px" }} />}
+            <div className="sc-panel" style={{ padding:22 }}>
               <h3 style={{ fontFamily:"'Fraunces',serif", fontSize:15, fontWeight:900, color:"#1a1a1a", marginBottom:16 }}>👤 About the Teacher</h3>
               <div style={{ display:"flex", gap:14, marginBottom:12 }}>
-                <TeacherAvatar name={listing.profiles?.full_name||"?"} xp={listing.profiles?.xp||0} xp_multiplier={listing.profiles?.xp_multiplier} avatar_url={listing.profiles?.avatar_url} size={56} />
+                <PlainTeacherAvatar name={listing.profiles?.full_name||"?"} avatar_url={listing.profiles?.avatar_url} size={56} />
                 <div style={{ flex:1 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:3 }}>
                     <h4 style={{ fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:900, color:"#1a1a1a" }}>{listing.profiles?.full_name}</h4>
                   </div>
-                  <p style={{ fontSize:12, color:"#aaa", marginBottom:6 }}>@{listing.profiles?.username} · {getLevelFromXP(listing.profiles?.xp||0)}</p>
-                  {/* Perk badges row — champion + teaching + rating */}
-                  <PerkBadges profiles={listing.profiles} rank={teacherRank} />
+                  <p style={{ fontSize:12, color:"#68756d", marginBottom:6 }}>@{listing.profiles?.username}</p>
                   {/* Credibility stats */}
                   <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginTop:8 }}>
                     {teacherAvgRating > 0 && <span style={{ fontSize:12, fontWeight:700, color:"#b45309" }}>⭐ {teacherAvgRating.toFixed(1)} rating</span>}
@@ -643,11 +687,10 @@ export default function ListingDetailPage() {
                 </div>
               </div>
               {/* Stat grid */}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, paddingTop:14, borderTop:"1px solid #f0ece4" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10, paddingTop:14, borderTop:"1px solid #f0ece4" }}>
                 {[
                   { icon:"📚", label:"Sessions", value:teacherSessions },
                   { icon:"⭐", label:"Avg Rating", value:teacherAvgRating > 0 ? teacherAvgRating.toFixed(1) : "—" },
-                  { icon:"⚡", label:"XP",         value:(listing.profiles?.xp||0).toLocaleString() },
                 ].map(s => (
                   <div key={s.label} style={{ textAlign:"center", background:"#fafaf8", borderRadius:12, padding:12 }}>
                     <div style={{ fontSize:18, marginBottom:4 }}>{s.icon}</div>
@@ -668,7 +711,6 @@ export default function ListingDetailPage() {
               <div style={{ textAlign:"center", marginBottom:18, paddingBottom:18, borderBottom:"1px solid #f0ece4" }}>
                 <p style={{ fontSize:11, color:"#aaa", fontWeight:600, marginBottom:4 }}>Session price</p>
                 <p style={{ fontFamily:"'Fraunces',serif", fontSize:44, fontWeight:900, color:"#2d6a4f", lineHeight:1, marginBottom:3 }}>{listing.credit_price}</p>
-                <p style={{ fontSize:13, color:"#aaa" }}>credits · ₱{listing.credit_price * 10}</p>
                 {teacherAvgRating > 0 && (
                   <div style={{ marginTop:10, display:"flex", justifyContent:"center" }}>
                     <Stars rating={teacherAvgRating} count={teacherTotalRatings} size={13} />
@@ -701,7 +743,7 @@ export default function ListingDetailPage() {
                   {!canAfford && (
                     <p style={{ fontSize:12, color:"#dc2626", textAlign:"center", marginTop:8 }}>
                       Need {listing.credit_price - (currentUser?.credits||0)} more credits.{" "}
-                      <a href="/wallet" style={{ fontWeight:700, color:"#dc2626" }}>Top up →</a>
+                      <a href="/listings" style={{ fontWeight:700, color:"#a85136" }}>Browse lower-cost sessions →</a>
                     </p>
                   )}
                 </>
@@ -718,7 +760,6 @@ export default function ListingDetailPage() {
       <div className="mobile-sticky-bar" style={{ position:"fixed", bottom:0, left:0, right:0, background:"rgba(255,255,255,.97)", backdropFilter:"blur(12px)", borderTop:"1.5px solid #e8e2d9", padding:"12px 20px", zIndex:50, alignItems:"center", gap:14, boxShadow:"0 -4px 20px rgba(0,0,0,.08)" }}>
         <div>
           <div style={{ fontFamily:"'Fraunces',serif", fontSize:20, fontWeight:900, color:"#2d6a4f", lineHeight:1 }}>{listing.credit_price} cr</div>
-          <div style={{ fontSize:11, color:"#aaa" }}>≈ ₱{listing.credit_price * 10}</div>
         </div>
         <div style={{ flex:1 }}>
           {isOwnListing ? (

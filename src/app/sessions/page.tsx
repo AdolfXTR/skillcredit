@@ -5,10 +5,8 @@ import Navbar from "@/components/Navbar";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 type SessionProfile = {
-  id: string; full_name: string; username: string; level: string;
-  avatar_url?: string | null; xp_multiplier?: number; champion_title?: string | null;
-  teaching_title?: string | null; teaching_title_ends_at?: string | null;
-  rating_title?: string | null; rating_title_ends_at?: string | null;
+  id: string; full_name: string; username: string;
+  avatar_url?: string | null;
 };
 
 type Session = {
@@ -22,14 +20,10 @@ type Session = {
 };
 
 type Profile = {
-  id: string; full_name: string; username: string; credits: number; xp: number;
-  level: string; avatar_url?: string | null; xp_multiplier?: number;
+  id: string; full_name: string; username: string; credits: number;
 };
 
-type RatingForm = {
-  overall: number; knowledge: number; communication: number; punctuality: number;
-  preparedness: number; respectfulness: number; review: string;
-};
+type RatingForm = { overall: number; review: string };
 
 // cancel modal context
 type CancelContext = {
@@ -46,17 +40,12 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string; badgeBg: strin
   disputed:  { label:"Disputed",  dot:"#a855f7", badgeBg:"#ede9fe", badgeText:"#6d28d9" },
 };
 const FORMAT_LABELS: Record<string, string> = { video:"Video", chat:"Chat", docs:"Docs", mixed:"Mixed" };
-const LEVEL_COLORS: Record<string, string> = {
-  Seedling:"#2d6a4f", Learner:"#1d4ed8", Contributor:"#7c3aed",
-  Skilled:"#b45309", Expert:"#dc2626", Master:"#0891b2", Legend:"#d97706",
-};
-const PROFILE_FIELDS = "id,full_name,username,level,avatar_url,xp_multiplier,champion_title,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at";
+const PROFILE_FIELDS = "id,full_name,username,avatar_url";
 
 // Quick-pick cancel reasons
 const CANCEL_REASONS_LEARNER = [
   "Schedule conflict — can't make it",
   "Found another teacher",
-  "Need to reschedule instead",
   "Personal emergency",
   "Made a booking mistake",
 ];
@@ -82,74 +71,22 @@ function timeFromNow(iso: string) {
   if (abs < 86_400_000) return `${past?"":"in "}${Math.round(abs/3_600_000)}h${past?" ago":""}`;
   return `${past?"":"in "}${Math.round(abs/86_400_000)}d${past?" ago":""}`;
 }
-function getRank(xp_multiplier?: number): 0|1|2|3 {
-  if (!xp_multiplier || xp_multiplier < 1.1) return 0;
-  if (xp_multiplier >= 1.25) return 1;
-  if (xp_multiplier >= 1.15) return 2;
-  return 3;
-}
-function isActiveTitle(endsAt?: string | null) {
-  if (!endsAt) return false;
-  return new Date(endsAt) > new Date();
-}
 
-// ─── PERK BADGES ─────────────────────────────────────────────────────────────
-function PerkBadges({ p }: { p: SessionProfile }) {
-  const rank = getRank(p.xp_multiplier);
-  const hasTeaching = p.teaching_title && isActiveTitle(p.teaching_title_ends_at);
-  const hasRating   = p.rating_title   && isActiveTitle(p.rating_title_ends_at);
-  if (!rank && !hasTeaching && !hasRating) return null;
-  return (
-    <>
-      {rank > 0 && p.champion_title && (
-        <span style={{ fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999,
-          color:rank===1?"#b8860b":rank===2?"#888":"#a0522d",
-          background:rank===1?"rgba(255,215,0,.15)":rank===2?"rgba(192,192,192,.15)":"rgba(205,127,50,.15)" }}>
-          {rank===1?"👑":rank===2?"🥈":"🥉"} {p.champion_title}
-        </span>
-      )}
-      {hasTeaching && (
-        <span style={{ fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999,
-          background:"#eef6f2", color:"#2d6a4f", border:"1px solid #c6e8d4" }}>
-          🎓 {p.teaching_title}
-        </span>
-      )}
-      {hasRating && (
-        <span style={{ fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999,
-          background:"#fefce8", color:"#92400e", border:"1px solid #fde68a" }}>
-          ⭐ {p.rating_title}
-        </span>
-      )}
-    </>
-  );
-}
-
-// ─── PREMIUM AVATAR ───────────────────────────────────────────────────────────
-function PremiumAvatar({ profile, size = 40, statusDot }: {
-  profile: { full_name: string; level: string; avatar_url?: string | null; xp_multiplier?: number };
+// ─── AVATAR ───────────────────────────────────────────────────────────────────
+function SessionAvatar({ profile, size = 40, statusDot }: {
+  profile: { full_name: string; avatar_url?: string | null };
   size?: number; statusDot?: string;
 }) {
-  const bg   = LEVEL_COLORS[profile.level] || "#2d6a4f";
-  const rank = getRank(profile.xp_multiplier);
-  const ringStyle: React.CSSProperties = rank === 1
-    ? { outline:"2.5px solid #ffd700", boxShadow:"0 0 0 1px #ffd700, 0 0 10px 2px rgba(255,215,0,0.6)", animation:"goldPulse 2s ease infinite" }
-    : rank === 2
-    ? { outline:"2.5px solid #c0c0c0", boxShadow:"0 0 0 1px #c0c0c0, 0 0 8px 2px rgba(192,192,192,0.5)", animation:"silverPulse 2s ease infinite" }
-    : rank === 3
-    ? { outline:"2.5px solid #cd7f32", boxShadow:"0 0 0 1px #cd7f32, 0 0 8px 2px rgba(205,127,50,0.5)", animation:"bronzePulse 2s ease infinite" }
-    : {};
-  const badge = rank===1?"👑":rank===2?"🥈":rank===3?"🥉":null;
   return (
-    <div style={{ position:"relative", flexShrink:0, width:size, height:size, borderRadius:"50%", ...ringStyle }}>
-      <div style={{ width:size, height:size, borderRadius:"50%", overflow:"hidden", background:bg,
+    <div style={{ position:"relative", flexShrink:0, width:size, height:size, borderRadius:"50%" }}>
+      <div style={{ width:size, height:size, borderRadius:"50%", overflow:"hidden", background:"#2d6a4f",
         display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*.34, fontWeight:800, color:"#fff" }}>
         {profile.avatar_url
           ? <img src={profile.avatar_url} alt={profile.full_name} style={{ width:"100%", height:"100%", objectFit:"cover" }}
               onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
           : getInitials(profile.full_name)}
       </div>
-      {statusDot && <div style={{ position:"absolute", bottom:-1, right:-1, width:size*.3, height:size*.3, borderRadius:"50%", background:statusDot, border:"2px solid #fff", zIndex:3 }} />}
-      {badge && !statusDot && <span style={{ position:"absolute", bottom:-3, right:-5, fontSize:size*0.38, lineHeight:1, filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.5))", zIndex:2 }}>{badge}</span>}
+      {statusDot && <div style={{ position:"absolute", bottom:-1, right:-1, width:size*.3, height:size*.3, borderRadius:"50%", background:statusDot, border:"2px solid #fff" }} />}
     </div>
   );
 }
@@ -170,19 +107,6 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
 function Stars({ value }: { value: number }) {
   return <span>{[1,2,3,4,5].map(i => <span key={i} className="text-sm" style={{ color:i<=Math.round(value)?"#f59e0b":"#e5e7eb" }}>★</span>)}</span>;
 }
-
-const TEACHER_RATES_LEARNER = [
-  { key:"overall",        label:"Overall Experience",  hint:"How was the session overall?"       },
-  { key:"preparedness",   label:"Preparedness",        hint:"Did they come ready to learn?"      },
-  { key:"respectfulness", label:"Respectfulness",      hint:"Were they respectful of your time?" },
-  { key:"communication",  label:"Communication",       hint:"Did they engage clearly?"           },
-];
-const LEARNER_RATES_TEACHER = [
-  { key:"overall",       label:"Overall Experience", hint:"How was the session overall?"      },
-  { key:"knowledge",     label:"Knowledge",          hint:"Did they know their subject well?" },
-  { key:"communication", label:"Communication",      hint:"Were they clear and responsive?"   },
-  { key:"punctuality",   label:"Punctuality",        hint:"Did they show up on time?"         },
-];
 
 // ─── MEETING LINK ─────────────────────────────────────────────────────────────
 function MeetingLinkButton({ url }: { url: string }) {
@@ -231,7 +155,6 @@ function CancelModal({
     <div className="overlay-anim fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5 backdrop-blur-sm">
       <div className="modal-anim bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
 
-        {/* Header */}
         <div style={{ background: isDecline ? "linear-gradient(135deg,#fef2f2,#fff)" : "linear-gradient(135deg,#fff7ed,#fff)", borderBottom:"1px solid #f0ece4" }}
           className="px-7 py-5 flex items-start justify-between gap-4">
           <div>
@@ -250,16 +173,14 @@ function CancelModal({
 
         <div className="px-7 py-6 flex flex-col gap-5">
 
-          {/* Session info pill */}
           <div className="flex items-center gap-3 bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3">
-            {other && <PremiumAvatar profile={other} size={32} />}
+            {other && <SessionAvatar profile={other} size={32} />}
             <div className="min-w-0">
               <p className="text-xs font-800 text-stone-800 truncate">{ctx.session.listing?.title || "Untitled Session"}</p>
               <p className="text-xs text-stone-400 font-500">with {other?.full_name} · {ctx.session.credit_amount} cr</p>
             </div>
           </div>
 
-          {/* Quick reason chips */}
           <div>
             <p className="text-xs font-700 text-stone-500 uppercase tracking-wider mb-3">Quick reasons</p>
             <div className="flex flex-wrap gap-2">
@@ -277,7 +198,6 @@ function CancelModal({
             </div>
           </div>
 
-          {/* Custom reason textarea */}
           <div>
             <p className="text-xs font-700 text-stone-500 uppercase tracking-wider mb-2">Or write your own</p>
             <textarea
@@ -301,7 +221,6 @@ function CancelModal({
             </div>
           </div>
 
-          {/* Message preview */}
           {canSubmit && (
             <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
               <p className="text-xs font-800 text-green-700 mb-1.5">📨 Message preview</p>
@@ -312,7 +231,6 @@ function CancelModal({
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex gap-2 pt-1">
             <button onClick={onClose}
               className="flex-1 py-3 rounded-xl bg-stone-100 text-stone-600 font-700 text-sm hover:bg-stone-200 transition-colors">
@@ -351,17 +269,14 @@ export default function SessionsPage() {
   const [expandedId,        setExpandedId]        = useState<string | null>(null);
   const [toast,             setToast]             = useState<{ msg: string; type: "success"|"error" } | null>(null);
   const [ratingSession,     setRatingSession]     = useState<Session | null>(null);
-  const [ratingForm,        setRatingForm]        = useState<RatingForm>({ overall:0,knowledge:0,communication:0,punctuality:0,preparedness:0,respectfulness:0,review:"" });
+  const [ratingForm,        setRatingForm]        = useState<RatingForm>({ overall:0, review:"" });
   const [ratingSubmitted,   setRatingSubmitted]   = useState(false);
   const [ratingError,       setRatingError]       = useState("");
   const [alreadyRated,      setAlreadyRated]      = useState<Set<string>>(new Set());
   const [disputeSession,    setDisputeSession]    = useState<Session | null>(null);
   const [disputeReason,     setDisputeReason]     = useState("");
-  const [rescheduleSession, setRescheduleSession] = useState<Session | null>(null);
-  const [newTime,           setNewTime]           = useState("");
   const [cancelCtx,         setCancelCtx]         = useState<CancelContext | null>(null);
 
-  const minRescheduleTime = new Date().toISOString().slice(0,16);
   const showToast = (msg: string, type: "success"|"error"="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),4000); };
 
   useEffect(() => { loadData(); }, []);
@@ -371,7 +286,7 @@ export default function SessionsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { window.location.href = "/login"; return; }
     const [profRes, sessRes, ratingsRes] = await Promise.all([
-      supabase.from("profiles").select("*,xp_multiplier").eq("id", user.id).single(),
+      supabase.from("profiles").select("id,full_name,username,credits").eq("id", user.id).single(),
       supabase.from("sessions")
         .select(`*, listing:listings(title,format,description,meeting_link),
           teacher:profiles!sessions_teacher_id_fkey(${PROFILE_FIELDS}),
@@ -391,64 +306,61 @@ export default function SessionsPage() {
     window.location.href = "/messages";
   }
 
-  // Send a system message to the other party in the messages table
   async function sendCancellationMessage(session: Session, reason: string, isDecline: boolean) {
     if (!profile) return;
     const recipientId = isDecline ? session.learner_id : session.teacher_id;
     const senderId    = profile.id;
     const text = `${profile.full_name} ${isDecline ? "declined" : "cancelled"} the session for "${session.listing?.title}": ${reason}`;
     try {
-      await supabase.from("messages").insert({
-        sender_id:   senderId,
-        receiver_id: recipientId,
-        content:     text,
-      });
+      await supabase.from("messages").insert({ sender_id: senderId, receiver_id: recipientId, content: text });
     } catch (_) {}
   }
 
-  async function safeIncrementCredits(userId: string, amount: number) {
+  async function safeIncrementCredits(userId: string, amount: number): Promise<boolean> {
     const { error } = await supabase.rpc("increment_credits", { user_id: userId, amount });
-    if (error) {
-      const { data: p } = await supabase.from("profiles").select("credits").eq("id", userId).single();
-      await supabase.from("profiles").update({ credits: (p?.credits||0) + amount }).eq("id", userId);
-    }
+    return !error;
   }
 
   async function handleAccept(session: Session) {
     setActionLoading(session.id+"-accept");
-    await supabase.from("sessions").update({ status:"confirmed", confirmed_time:session.proposed_time }).eq("id",session.id);
+    const { data, error } = await supabase.from("sessions").update({ status:"confirmed", confirmed_time:session.proposed_time })
+      .eq("id",session.id).eq("teacher_id",profile?.id).eq("status","pending").select("id").maybeSingle();
+    if (error || !data) { showToast("This request is no longer pending. Refresh and try again.","error"); await loadData(); setActionLoading(null); return; }
     try { await supabase.from("notifications").insert({ user_id:session.learner_id, type:"session", title:"Session Confirmed! 🎉", body:`Your session for "${session.listing?.title}" has been confirmed!`, link:"/sessions" }); } catch(_){}
     showToast("Session accepted! Learner notified.");
     await loadData(); setActionLoading(null);
   }
 
-  // Teacher declines — opens cancel modal
-  function openDeclineModal(session: Session) {
-    setCancelCtx({ session, mode: "decline" });
-  }
+  function openDeclineModal(session: Session) { setCancelCtx({ session, mode: "decline" }); }
+  function openCancelModal(session: Session)  { setCancelCtx({ session, mode: "cancel" }); }
 
-  // Learner cancels pending — opens cancel modal
-  function openCancelModal(session: Session) {
-    setCancelCtx({ session, mode: "cancel" });
-  }
-
-  // Shared confirm handler used by cancel modal
   async function handleCancelConfirm(reason: string) {
     if (!cancelCtx || !profile) return;
     const { session, mode } = cancelCtx;
     const isDecline = mode === "decline";
     setActionLoading(session.id + (isDecline ? "-decline" : "-cancel"));
 
-    // Refund learner
-    await safeIncrementCredits(session.learner_id, session.credit_amount);
-    await supabase.from("sessions").update({ status:"cancelled" }).eq("id", session.id);
-    await supabase.from("escrow").update({ status:"refunded" }).eq("session_id", session.id);
+    const { data: escrowRefund, error: escrowError } = await supabase.from("escrow")
+      .update({ status:"refunded" }).eq("session_id", session.id).eq("status","locked").select("id").maybeSingle();
+    if (escrowError || !escrowRefund) { showToast("This session's credits have already been resolved.","error"); await loadData(); setActionLoading(null); return; }
+    if (!await safeIncrementCredits(session.learner_id, session.credit_amount)) {
+      await supabase.from("escrow").update({ status:"locked" }).eq("id", escrowRefund.id).eq("status","refunded");
+      showToast("Could not refund credits. Please retry.","error"); setActionLoading(null); return;
+    }
+    const { data: cancelled, error: cancelError } = await supabase.from("sessions").update({ status:"cancelled" })
+      .eq("id",session.id).in("status",["pending","confirmed"]).select("id").maybeSingle();
+    if (cancelError || !cancelled) {
+      const balanceRestored = await safeIncrementCredits(session.learner_id, -session.credit_amount);
+      if (balanceRestored) await supabase.from("escrow").update({ status:"locked" }).eq("id", escrowRefund.id).eq("status","refunded");
+      showToast(balanceRestored
+        ? "Could not cancel this session. The refund was rolled back; refresh and retry."
+        : "Cancellation failed and the refund could not be rolled back. Contact an administrator.","error");
+      await loadData(); setActionLoading(null); return;
+    }
 
-    // Send reason as a message to the other party
     await sendCancellationMessage(session, reason, isDecline);
 
-    try {
-      await supabase.from("credit_transactions").insert({
+    const { error: transactionError } = await supabase.from("credit_transactions").insert({
         user_id: session.learner_id,
         amount: session.credit_amount,
         type: "session_refund",
@@ -457,7 +369,19 @@ export default function SessionsPage() {
           ? `Session declined by teacher — credits refunded`
           : `Session cancelled by learner — credits refunded`,
       });
+    if (transactionError) {
+      const { error: balanceRollbackError } = await supabase.rpc("increment_credits", { user_id: session.learner_id, amount: -session.credit_amount });
+      if (!balanceRollbackError) {
+        await supabase.from("sessions").update({ status:session.status }).eq("id",session.id).eq("status","cancelled");
+        await supabase.from("escrow").update({ status:"locked" }).eq("id", escrowRefund.id).eq("status","refunded");
+      }
+      showToast(balanceRollbackError
+        ? "Credits were refunded, but the refund history could not be recorded or rolled back. Contact an administrator."
+        : "Could not record the refund. The change was rolled back; please retry.","error");
+      await loadData(); setActionLoading(null); return;
+    }
 
+    try {
       const notifTarget  = isDecline ? session.learner_id : session.teacher_id;
       const notifTitle   = isDecline ? "Session Declined" : "Session Cancelled";
       const notifBody    = isDecline
@@ -478,24 +402,42 @@ export default function SessionsPage() {
   }
 
   async function handleMarkComplete(session: Session) {
+    if (!profile) return;
     setActionLoading(session.id+"-complete");
-    const isTeacher = profile?.id === session.teacher_id;
+    const isTeacher = profile.id === session.teacher_id;
     const { data: updated, error } = await supabase.from("sessions")
       .update(isTeacher ? { teacher_completed:true } : { learner_completed:true })
-      .eq("id",session.id).select().single();
+      .eq("id",session.id).eq(isTeacher ? "teacher_id" : "learner_id",profile.id).eq("status","confirmed").select().maybeSingle();
     if (error||!updated) { showToast("Something went wrong.","error"); setActionLoading(null); return; }
     const bothDone = updated.teacher_completed && updated.learner_completed;
     if (bothDone) {
       const { data: freshSession } = await supabase.from("sessions").select("status").eq("id",session.id).single();
       if (freshSession?.status==="completed") { showToast("Session already completed!"); await loadData(); setActionLoading(null); return; }
-      const { error: statusErr } = await supabase.from("sessions").update({ status:"completed" }).eq("id",session.id);
-      if (statusErr) { showToast("Error completing session.","error"); setActionLoading(null); return; }
-      await safeIncrementCredits(session.teacher_id, session.credit_amount);
-      await supabase.from("escrow").update({ status:"released" }).eq("session_id",session.id);
+      const { data: completedClaim, error: statusErr } = await supabase.from("sessions").update({ status:"completed" })
+        .eq("id",session.id).eq("status","confirmed").select("id").maybeSingle();
+      if (statusErr || !completedClaim) { showToast("Session status changed. Refresh and try again.","error"); await loadData(); setActionLoading(null); return; }
+      const { data: releasedEscrow, error: escrowReleaseError } = await supabase.from("escrow").update({ status:"released" })
+        .eq("session_id",session.id).eq("status","locked").select("id,amount").maybeSingle();
+      if (escrowReleaseError || !releasedEscrow || releasedEscrow.amount !== session.credit_amount) {
+        await supabase.from("sessions").update({ status:"confirmed" }).eq("id",session.id).eq("status","completed");
+        showToast("Escrow could not be released. No credits were transferred.","error"); await loadData(); setActionLoading(null); return;
+      }
+      if (!await safeIncrementCredits(session.teacher_id, releasedEscrow.amount)) {
+        await supabase.from("escrow").update({ status:"locked" }).eq("id",releasedEscrow.id).eq("status","released");
+        await supabase.from("sessions").update({ status:"confirmed" }).eq("id",session.id).eq("status","completed");
+        showToast("Could not release credits. Please retry.","error"); await loadData(); setActionLoading(null); return;
+      }
+      const { error: transactionError } = await supabase.from("credit_transactions").insert({ user_id:session.teacher_id, amount:releasedEscrow.amount, type:"session_earn", reference_id:session.id, description:`Session completed — ${releasedEscrow.amount} credits released from escrow` });
+      if (transactionError) {
+        const { error: rollbackError } = await supabase.rpc("increment_credits", { user_id:session.teacher_id, amount:-releasedEscrow.amount });
+        if (!rollbackError) {
+          await supabase.from("escrow").update({ status:"locked" }).eq("id",releasedEscrow.id).eq("status","released");
+          await supabase.from("sessions").update({ status:"confirmed" }).eq("id",session.id).eq("status","completed");
+        }
+        showToast(rollbackError ? "Credits were released, but history could not be recorded. Contact an admin." : "Could not record the credit release. Please retry.","error");
+        await loadData(); setActionLoading(null); return;
+      }
       try {
-        await supabase.rpc("increment_xp", { user_id:session.teacher_id, amount:50 });
-        await supabase.rpc("increment_xp", { user_id:session.learner_id, amount:20 });
-        await supabase.from("credit_transactions").insert({ user_id:session.teacher_id, amount:session.credit_amount, type:"session_earn", reference_id:session.id, description:`Session completed — ${session.credit_amount} credits released from escrow` });
         await supabase.from("notifications").insert([
           { user_id:session.teacher_id, type:"credit", title:`💰 ${session.credit_amount} credits received!`, body:`Credits released for "${session.listing?.title}".`, link:"/wallet" },
           { user_id:session.learner_id, type:"session", title:"Session Complete! Rate your teacher", body:`Leave a review for "${session.listing?.title}"`, link:"/sessions" },
@@ -511,7 +453,7 @@ export default function SessionsPage() {
       if (completedSession) {
         setRatingSession(completedSession as Session);
         setRatingSubmitted(false); setRatingError("");
-        setRatingForm({ overall:0,knowledge:0,communication:0,punctuality:0,preparedness:0,respectfulness:0,review:"" });
+        setRatingForm({ overall:0, review:"" });
       }
     } else {
       const otherId = isTeacher ? session.learner_id : session.teacher_id;
@@ -529,16 +471,11 @@ export default function SessionsPage() {
     const payload = {
       session_id:ratingSession.id, rater_id:profile.id, rated_id:ratedId,
       role_rated:isTeacher?"learner":"teacher",
-      overall:ratingForm.overall, communication:ratingForm.communication||null,
-      preparedness:isTeacher?(ratingForm.preparedness||null):null,
-      respectfulness:isTeacher?(ratingForm.respectfulness||null):null,
-      knowledge:null, punctuality:null,
-      ...(!isTeacher?{knowledge:ratingForm.knowledge||null,punctuality:ratingForm.punctuality||null}:{}),
+      overall:ratingForm.overall,
       review:ratingForm.review||null, is_revealed:true, is_flagged:false,
     };
     const { error } = await supabase.from("ratings").insert(payload);
     if (error) { setRatingError(`Failed to submit: ${error.message}`); setActionLoading(null); return; }
-    try { await supabase.rpc("increment_xp", { user_id:profile.id, amount:5 }); } catch(_){}
     setAlreadyRated(prev => new Set([...prev, ratingSession.id]));
     setRatingSubmitted(true); setActionLoading(null);
     await loadData();
@@ -547,28 +484,30 @@ export default function SessionsPage() {
   async function handleDispute() {
     if (!disputeSession||!profile||disputeReason.length<10) return;
     setActionLoading("dispute");
-    await supabase.from("sessions").update({ status:"disputed" }).eq("id",disputeSession.id);
-    await supabase.from("escrow").update({ status:"disputed" }).eq("session_id",disputeSession.id);
     const otherId = disputeSession.teacher_id===profile.id?disputeSession.learner_id:disputeSession.teacher_id;
+    const { data: dispute, error: disputeError } = await supabase.from("disputes").insert({
+      session_id: disputeSession.id, filed_by: profile.id, against_user: otherId, reason: disputeReason.trim(), status: "open",
+    }).select("id").single();
+    if (disputeError || !dispute) { showToast("Could not save the dispute. Please retry.","error"); setActionLoading(null); return; }
+    const { data: updatedSession, error: sessionError } = await supabase.from("sessions").update({ status:"disputed" })
+      .eq("id",disputeSession.id).eq("status",disputeSession.status).select("id").maybeSingle();
+    if (sessionError || !updatedSession) {
+      await supabase.from("disputes").delete().eq("id",dispute.id);
+      showToast("Session status changed. Refresh and try again.","error"); await loadData(); setActionLoading(null); return;
+    }
+    const { data: heldEscrow, error: escrowError } = await supabase.from("escrow").update({ status:"disputed" })
+      .eq("session_id",disputeSession.id).eq("status","locked").select("id").maybeSingle();
+    if (escrowError || !heldEscrow) {
+      await supabase.from("sessions").update({ status:disputeSession.status }).eq("id",disputeSession.id).eq("status","disputed");
+      await supabase.from("disputes").delete().eq("id",dispute.id);
+      showToast("Could not place escrow on hold. Please retry.","error"); await loadData(); setActionLoading(null); return;
+    }
     try { await supabase.from("notifications").insert([
       { user_id:otherId, type:"dispute", title:"⚠️ Dispute Raised", body:"A dispute has been raised for your session.", link:"/sessions" },
       { user_id:profile.id, type:"dispute", title:"Dispute Submitted", body:"Your dispute is under review.", link:"/sessions" },
     ]); } catch(_){}
     setDisputeSession(null); setDisputeReason("");
-    showToast("Dispute submitted. A moderator will review within 48h.");
-    await loadData(); setActionLoading(null);
-  }
-
-  async function handleReschedule() {
-    if (!rescheduleSession||!newTime) return;
-    setActionLoading("reschedule");
-    await supabase.from("sessions").update({ proposed_time:newTime, status:"pending", confirmed_time:null, teacher_completed:false, learner_completed:false }).eq("id",rescheduleSession.id);
-    try {
-      const otherId = rescheduleSession.teacher_id===profile?.id?rescheduleSession.learner_id:rescheduleSession.teacher_id;
-      await supabase.from("notifications").insert({ user_id:otherId, type:"session", title:"Session Rescheduled 📅", body:`"${rescheduleSession.listing?.title}" rescheduled. Please re-confirm.`, link:"/sessions" });
-    } catch(_){}
-    setRescheduleSession(null); setNewTime("");
-    showToast("Rescheduled! The other party has been notified.");
+    showToast("Dispute submitted. An admin will review soon.");
     await loadData(); setActionLoading(null);
   }
 
@@ -605,15 +544,9 @@ export default function SessionsPage() {
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
-        @keyframes goldPulse   {0%,100%{box-shadow:0 0 0 1px #ffd700,0 0 10px 2px rgba(255,215,0,.6)}50%{box-shadow:0 0 0 1px #ffd700,0 0 16px 3px rgba(255,215,0,1)}}
-        @keyframes silverPulse {0%,100%{box-shadow:0 0 0 1px #c0c0c0,0 0 8px 2px rgba(192,192,192,.5)}50%{box-shadow:0 0 0 1px #ddd,0 0 12px 2px rgba(220,220,220,.9)}}
-        @keyframes bronzePulse {0%,100%{box-shadow:0 0 0 1px #cd7f32,0 0 8px 2px rgba(205,127,50,.5)}50%{box-shadow:0 0 0 1px #cd7f32,0 0 12px 2px rgba(205,127,50,.8)}}
         .fade-up{animation:fadeUp .35s ease both}
         .session-card{transition:box-shadow .2s,transform .2s}
         .session-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.07);transform:translateY(-1px)}
-        .navlink{padding:5px 11px;border-radius:7px;font-size:13px;font-weight:600;color:#666;transition:all .12s;display:inline-block}
-        .navlink:hover{background:#f0ece4;color:#1a1a1a}
-        .navlink.active{background:#e8f4e8;color:#2d6a4f}
         .modal-anim{animation:slideUp .22s ease}
         .overlay-anim{animation:fadeIn .15s ease}
       `}</style>
@@ -625,7 +558,6 @@ export default function SessionsPage() {
         </div>
       )}
 
-      {/* NAVBAR */}
       <Navbar />
 
       <div className="max-w-4xl mx-auto px-5 py-10 pb-20">
@@ -714,7 +646,7 @@ export default function SessionsPage() {
                 style={{ animationDelay:`${idx*.04}s`, borderLeft:`3px solid ${cfg.dot}` }}>
 
                 <div className="px-5 py-4 flex items-start gap-4">
-                  {other && <PremiumAvatar profile={other} size={40} statusDot={cfg.dot} />}
+                  {other && <SessionAvatar profile={other} size={40} statusDot={cfg.dot} />}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-sm font-800 text-stone-900">{other?.full_name||"Unknown"}</span>
@@ -723,11 +655,6 @@ export default function SessionsPage() {
                         {isTeacher?"Learner":"Teacher"}
                       </span>
                     </div>
-                    {other && (
-                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                        <PerkBadges p={other} />
-                      </div>
-                    )}
                     <p className="text-xs font-600 text-stone-500 truncate max-w-xs">{session.listing?.title||"Untitled Session"}</p>
                   </div>
 
@@ -735,7 +662,6 @@ export default function SessionsPage() {
                     <span className="text-xs text-stone-400 font-500">{FORMAT_LABELS[session.listing?.format||"mixed"]}</span>
                     <div className="text-right">
                       <div className="text-lg font-900 text-[#2d6a4f] leading-none" style={{ fontFamily:"'Fraunces',serif" }}>{session.credit_amount} cr</div>
-                      <div className="text-xs text-stone-400">₱{session.credit_amount*10}</div>
                     </div>
                     <span className="text-xs font-700 px-2.5 py-1 rounded-full" style={{ background:cfg.badgeBg, color:cfg.badgeText }}>{cfg.label}</span>
                     <button onClick={() => setExpandedId(isExpanded?null:session.id)}
@@ -770,7 +696,6 @@ export default function SessionsPage() {
                   <div className="flex gap-2 items-center flex-wrap pt-3">
                     <button onClick={() => openMessageWith(otherId)} className="px-3.5 py-1.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-700 hover:bg-stone-200 transition-colors border border-stone-200">Message</button>
 
-                    {/* Teacher: Accept / Decline (with reason modal) */}
                     {session.status==="pending" && isTeacher && (<>
                       <button onClick={() => handleAccept(session)} disabled={!!actionLoading}
                         className="px-4 py-1.5 rounded-xl bg-[#2d6a4f] text-white text-xs font-800 hover:bg-[#1a4a36] transition-colors disabled:opacity-50">
@@ -782,7 +707,6 @@ export default function SessionsPage() {
                       </button>
                     </>)}
 
-                    {/* Learner: Awaiting + Cancel (with reason modal) */}
                     {session.status==="pending" && !isTeacher && (
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-600 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">Awaiting teacher</span>
@@ -804,17 +728,19 @@ export default function SessionsPage() {
                         Waiting for {isTeacher?"learner":"teacher"}
                       </span>
                     )}
-
-                    {session.status==="confirmed" && (<>
-                      <button onClick={() => { setRescheduleSession(session); setNewTime(session.proposed_time.slice(0,16)); }}
-                        className="px-3.5 py-1.5 rounded-xl bg-stone-100 text-stone-500 text-xs font-600 hover:bg-stone-200 transition-colors border border-stone-200">
-                        Reschedule
+                    {session.status==="confirmed" && myDone && otherDone && (
+                      <button onClick={() => handleMarkComplete(session)} disabled={!!actionLoading}
+                        className="px-3.5 py-1.5 rounded-xl bg-amber-50 text-amber-800 text-xs font-700 hover:bg-amber-100 transition-colors border border-amber-200 disabled:opacity-50">
+                        {actionLoading===session.id+"-complete"?"Retrying…":"Retry credit release"}
                       </button>
+                    )}
+
+                    {session.status==="confirmed" && (
                       <button onClick={() => setDisputeSession(session)}
                         className="px-3.5 py-1.5 rounded-xl bg-violet-50 text-violet-600 text-xs font-700 hover:bg-violet-100 transition-colors border border-violet-200">
                         Dispute
                       </button>
-                    </>)}
+                    )}
 
                     {session.status==="completed" && (
                       <button onClick={() => setDisputeSession(session)}
@@ -823,7 +749,7 @@ export default function SessionsPage() {
                       </button>
                     )}
                     {session.status==="completed" && !hasRated && (
-                      <button onClick={() => { setRatingSession(session); setRatingSubmitted(false); setRatingError(""); setRatingForm({overall:0,knowledge:0,communication:0,punctuality:0,preparedness:0,respectfulness:0,review:""}); }}
+                      <button onClick={() => { setRatingSession(session); setRatingSubmitted(false); setRatingError(""); setRatingForm({overall:0,review:""}); }}
                         className="px-4 py-1.5 rounded-xl text-white text-xs font-800 hover:opacity-90 transition-opacity"
                         style={{ background:"linear-gradient(135deg,#f59e0b,#d97706)" }}>
                         ★ Leave Review
@@ -876,7 +802,7 @@ export default function SessionsPage() {
                         <p className="text-xs font-800 text-stone-400 uppercase tracking-wider mb-3">Details</p>
                         {[
                           ["Format",  FORMAT_LABELS[session.listing?.format||"mixed"]],
-                          ["Credits", `${session.credit_amount} cr (₱${session.credit_amount*10})`],
+                          ["Credits", `${session.credit_amount} cr`],
                           ["Booked",  formatDate(session.created_at)],
                           ["Status",  cfg.label],
                         ].map(([k,v]) => (
@@ -902,7 +828,6 @@ export default function SessionsPage() {
         </div>
       </div>
 
-      {/* ── CANCEL / DECLINE MODAL ── */}
       {cancelCtx && profile && (
         <CancelModal
           ctx={cancelCtx}
@@ -913,7 +838,7 @@ export default function SessionsPage() {
         />
       )}
 
-      {/* RATING MODAL */}
+      {/* RATING MODAL — single overall rating + optional review */}
       {ratingSession && (
         <div className="overlay-anim fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5 backdrop-blur-sm">
           <div className="modal-anim bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
@@ -921,7 +846,7 @@ export default function SessionsPage() {
               <div className="text-center py-14 px-8">
                 <p className="text-5xl mb-4">🌟</p>
                 <h2 className="text-2xl font-900 text-stone-900 mb-2" style={{ fontFamily:"'Fraunces',serif" }}>Review Submitted!</h2>
-                <p className="text-sm text-stone-400 mb-1">Your review is now live on the community.</p>
+                <p className="text-sm text-stone-400 mb-1">Thanks for the feedback.</p>
                 <div className="flex justify-center my-5"><Stars value={ratingForm.overall} /></div>
                 <button onClick={() => { setRatingSession(null); setRatingSubmitted(false); }}
                   className="px-8 py-2.5 bg-[#2d6a4f] text-white rounded-xl font-800 text-sm hover:bg-[#1a4a36] transition-colors">Done</button>
@@ -931,7 +856,7 @@ export default function SessionsPage() {
                 <div className="flex justify-between items-start p-6 pb-0">
                   <div>
                     <h2 className="text-xl font-900 text-stone-900 mb-1" style={{ fontFamily:"'Fraunces',serif" }}>Rate this Session</h2>
-                    <p className="text-xs text-stone-400">Honest reviews help the community grow</p>
+                    <p className="text-xs text-stone-400">Honest reviews help others choose well</p>
                   </div>
                   <button onClick={() => setRatingSession(null)} className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-400 hover:bg-stone-200 transition-colors text-sm">✕</button>
                 </div>
@@ -941,18 +866,16 @@ export default function SessionsPage() {
                   <span className="font-800">{profile?.id===ratingSession.teacher_id?ratingSession.learner?.full_name:ratingSession.teacher?.full_name}</span>
                 </div>
                 <div className="p-6 flex flex-col gap-5">
-                  {(profile?.id===ratingSession.teacher_id?TEACHER_RATES_LEARNER:LEARNER_RATES_TEACHER).map(({key,label,hint}) => (
-                    <div key={key}>
-                      <div className="flex justify-between items-baseline mb-2">
-                        <span className="text-sm font-700 text-stone-800">{label}</span>
-                        <span className="text-xs text-stone-400">{hint}</span>
-                      </div>
-                      <StarPicker value={ratingForm[key as keyof RatingForm] as number} onChange={v => setRatingForm(f=>({...f,[key]:v}))} />
-                      {(ratingForm[key as keyof RatingForm] as number)>0 && (
-                        <p className="text-xs text-amber-500 font-700 mt-1">{["","Poor","Fair","Good","Great","Excellent!"][(ratingForm[key as keyof RatingForm] as number)]}</p>
-                      )}
+                  <div>
+                    <div className="flex justify-between items-baseline mb-2">
+                      <span className="text-sm font-700 text-stone-800">Overall Experience</span>
+                      <span className="text-xs text-stone-400">How was the session overall?</span>
                     </div>
-                  ))}
+                    <StarPicker value={ratingForm.overall} onChange={v => setRatingForm(f=>({...f, overall:v}))} />
+                    {ratingForm.overall > 0 && (
+                      <p className="text-xs text-amber-500 font-700 mt-1">{["","Poor","Fair","Good","Great","Excellent!"][ratingForm.overall]}</p>
+                    )}
+                  </div>
                   <div>
                     <p className="text-sm font-700 text-stone-800 mb-2">Written Review <span className="font-400 text-stone-400">(optional)</span></p>
                     <textarea value={ratingForm.review} onChange={e => setRatingForm(f=>({...f,review:e.target.value.slice(0,300)}))}
@@ -977,33 +900,6 @@ export default function SessionsPage() {
         </div>
       )}
 
-      {/* RESCHEDULE MODAL */}
-      {rescheduleSession && (
-        <div className="overlay-anim fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5 backdrop-blur-sm">
-          <div className="modal-anim bg-white rounded-3xl p-7 w-full max-w-sm shadow-2xl">
-            <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-900 text-stone-900" style={{ fontFamily:"'Fraunces',serif" }}>Reschedule</h2>
-              <button onClick={() => setRescheduleSession(null)} className="text-stone-400 hover:text-stone-600 text-xl">✕</button>
-            </div>
-            <p className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-xl p-3 mb-5 font-600 leading-relaxed">
-              Rescheduling resets to <strong>pending</strong> and notifies the other party to re-confirm.
-            </p>
-            <label className="text-xs font-700 text-stone-700 block mb-2">New Date & Time</label>
-            <input type="datetime-local" value={newTime} min={minRescheduleTime} onChange={e => setNewTime(e.target.value)}
-              className="w-full p-3 rounded-xl border border-stone-200 text-sm outline-none focus:border-[#2d6a4f] transition-colors mb-5"
-              style={{ fontFamily:"'DM Sans',sans-serif" }} />
-            <div className="flex gap-2">
-              <button onClick={() => setRescheduleSession(null)} className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 font-700 text-sm hover:bg-stone-200 transition-colors">Cancel</button>
-              <button onClick={handleReschedule} disabled={!newTime||!!actionLoading}
-                className="flex-2 py-2.5 px-5 rounded-xl font-800 text-sm transition-all disabled:opacity-40"
-                style={{ flex:2, background:newTime?"#2d6a4f":"#e5e7eb", color:newTime?"#fff":"#9ca3af" }}>
-                {actionLoading==="reschedule"?"Saving…":"Confirm Reschedule"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* DISPUTE MODAL */}
       {disputeSession && (
         <div className="overlay-anim fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5 backdrop-blur-sm">
@@ -1013,7 +909,7 @@ export default function SessionsPage() {
               <button onClick={() => setDisputeSession(null)} className="text-stone-400 hover:text-stone-600 text-xl">✕</button>
             </div>
             <p className="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-xl p-3 mb-5 font-600 leading-relaxed">
-              Credits will be <strong>frozen in escrow</strong> until a moderator resolves this within 48 hours.
+              Credits will be <strong>frozen in escrow</strong> until an admin resolves this.
             </p>
             <label className="text-xs font-700 text-stone-700 block mb-2">Describe what went wrong</label>
             <textarea value={disputeReason} onChange={e => setDisputeReason(e.target.value)}

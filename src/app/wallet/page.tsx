@@ -12,25 +12,19 @@ type Profile = {
 };
 
 const TX_CONFIG: Record<string, { icon: string; label: string; tw: string }> = {
-  signup_bonus:    { icon: "🎁", label: "Signup Bonus",     tw: "bg-emerald-50" },
-  session_earn:    { icon: "📚", label: "Session Earned",   tw: "bg-emerald-50" },
-  session_spend:   { icon: "📖", label: "Session Booked",   tw: "bg-red-50" },
-  session_refund:  { icon: "↩️", label: "Session Refund",   tw: "bg-violet-50" },
-  bounty_earn:     { icon: "🏆", label: "Bounty Won",       tw: "bg-emerald-50" },
-  bounty_spend:    { icon: "🎯", label: "Bounty Posted",    tw: "bg-red-50" },
-  topup:           { icon: "💳", label: "Top Up",           tw: "bg-sky-50" },
-  forum_earn:      { icon: "💬", label: "Forum Answer",     tw: "bg-emerald-50" },
-  refund:          { icon: "↩️", label: "Refund",           tw: "bg-violet-50" },
-  credit_transfer: { icon: "💸", label: "Credit Transfer",  tw: "bg-amber-50" },
-  default:         { icon: "💰", label: "Transaction",      tw: "bg-stone-50" },
+  signup_bonus:   { icon: "🎁", label: "Signup Bonus",   tw: "bg-emerald-50" },
+  session_earn:   { icon: "📚", label: "Session Earned", tw: "bg-emerald-50" },
+  session_spend:  { icon: "📖", label: "Session Booked", tw: "bg-red-50" },
+  session_refund: { icon: "↩️", label: "Session Refund", tw: "bg-violet-50" },
+  refund:         { icon: "↩️", label: "Refund",         tw: "bg-violet-50" },
+  default:        { icon: "💰", label: "Transaction",    tw: "bg-stone-50" },
 };
 
 export default function WalletPage() {
   const [profile, setProfile]           = useState<Profile | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading]           = useState(true);
-  const [activeTab, setActiveTab]       = useState<"overview" | "topup" | "history">("overview");
-  const [notifyDone, setNotifyDone]     = useState(false);
+  const [activeTab, setActiveTab]       = useState<"overview" | "history">("overview");
 
   useEffect(() => {
     const init = async () => {
@@ -69,7 +63,6 @@ export default function WalletPage() {
         .fade-up { animation: fadeUp .3s ease both; }
       `}</style>
 
-      {/* NAVBAR */}
       <Navbar />
 
       <div className="max-w-4xl mx-auto px-5 py-8">
@@ -85,20 +78,19 @@ export default function WalletPage() {
           <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-white/5" />
           <div className="absolute -bottom-8 -left-8 w-36 h-36 rounded-full bg-white/5" />
           <p className="text-emerald-200 text-sm font-semibold mb-1">Available Balance</p>
-          <div className="flex items-end gap-3 mb-1">
+          <div className="flex items-end gap-3 mb-7">
             <p className="font-fraunces text-6xl font-black text-white leading-none">{profile?.credits}</p>
             <p className="text-emerald-300 text-lg font-bold mb-2">credits</p>
           </div>
-          <p className="text-emerald-300/70 text-sm mb-7">≈ ₱{((profile?.credits || 0) * 10).toLocaleString()} equivalent</p>
           <div className="flex gap-3">
-            <button onClick={() => setActiveTab("topup")}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white text-emerald-800 rounded-xl font-bold text-sm hover:bg-emerald-50 transition-colors border-0 cursor-pointer">
-              + Top Up Credits
-            </button>
             <button onClick={() => setActiveTab("history")}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white/15 text-white rounded-xl font-semibold text-sm hover:bg-white/25 transition-colors border border-white/20 cursor-pointer">
+              className="flex items-center gap-2 px-5 py-2.5 bg-white text-emerald-800 rounded-xl font-bold text-sm hover:bg-emerald-50 transition-colors border-0 cursor-pointer">
               View History
             </button>
+            <a href="/listings/create"
+              className="flex items-center gap-2 px-5 py-2.5 bg-white/15 text-white rounded-xl font-semibold text-sm hover:bg-white/25 transition-colors border border-white/20 no-underline">
+              Start Teaching →
+            </a>
           </div>
         </div>
 
@@ -121,7 +113,6 @@ export default function WalletPage() {
         <div className="flex gap-1 bg-stone-100 rounded-xl p-1 w-fit mb-5">
           {[
             { key: "overview", label: "📊 Overview" },
-            { key: "topup",    label: "💳 Top Up" },
             { key: "history",  label: "📋 History" },
           ].map(t => (
             <button key={t.key} onClick={() => setActiveTab(t.key as typeof activeTab)}
@@ -129,9 +120,6 @@ export default function WalletPage() {
                 activeTab === t.key ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700 bg-transparent"
               }`}>
               {t.label}
-              {t.key === "topup" && (
-                <span className="ml-1.5 text-[9px] font-black bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full align-middle">SOON</span>
-              )}
             </button>
           ))}
         </div>
@@ -143,11 +131,8 @@ export default function WalletPage() {
               <h3 className="font-fraunces text-lg font-black text-stone-900 mb-4">How to earn credits 💡</h3>
               <div className="flex flex-col gap-0">
                 {[
-                  { icon: "🎓", action: "Teach a session",       credits: "+session price" },
-                  { icon: "🏆", action: "Win a bounty (1st)",    credits: "+60% of reward" },
-                  { icon: "💬", action: "Answer forum question",  credits: "+2 credits" },
-                  { icon: "📅", action: "Daily challenges",       credits: "+3–5 credits" },
-                  { icon: "🎁", action: "Signup bonus",           credits: "+20 credits" },
+                  { icon: "🎓", action: "Teach a session",           credits: "+session price" },
+                  { icon: "🎁", action: "Signup bonus",               credits: "+20 credits" },
                 ].map((item, i, arr) => (
                   <div key={item.action} className={`flex justify-between items-center py-3 ${i < arr.length - 1 ? "border-b border-stone-100" : ""}`}>
                     <div className="flex gap-3 items-center">
@@ -188,76 +173,6 @@ export default function WalletPage() {
                   View all {transactions.length} transactions →
                 </button>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* ── TOP UP — COMING SOON ── */}
-        {activeTab === "topup" && (
-          <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden fade-up">
-            {/* decorative top bar */}
-            <div className="h-1.5 w-full bg-gradient-to-r from-emerald-400 via-teal-400 to-sky-400" />
-
-            <div className="flex flex-col items-center text-center px-12 py-16">
-              {/* animated coin */}
-              <div className="relative mb-8">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 flex items-center justify-center text-5xl shadow-xl shadow-amber-200"
-                  style={{ animation: "fadeUp .4s ease" }}>
-                  💳
-                </div>
-                <div className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-amber-100 border-2 border-amber-300 flex items-center justify-center text-xs font-black text-amber-600">
-                  ⏳
-                </div>
-              </div>
-
-              <span className="text-xs font-black tracking-widest text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full mb-4 uppercase">
-                Coming Soon
-              </span>
-
-              <h2 className="font-fraunces text-3xl font-black text-stone-900 mb-3 leading-tight">
-                Credit Top-Up<br />is on its way
-              </h2>
-              <p className="text-stone-400 text-sm leading-relaxed max-w-sm mb-8">
-                We're integrating GCash, Maya, and card payments so you can top up instantly.
-                For now, earn credits by teaching sessions, answering bounties, and helping the community!
-              </p>
-
-              {/* Ways to earn callout */}
-              <div className="w-full max-w-sm bg-emerald-50 border border-emerald-200 rounded-2xl p-5 mb-8 text-left">
-                <p className="text-xs font-black text-emerald-700 uppercase tracking-wider mb-3">Earn credits for free right now</p>
-                {[
-                  ["🎓", "Teach a skill session", "earn the session price"],
-                  ["🏆", "Answer a bounty",        "earn up to 60% of reward"],
-                  ["💬", "Help on the forum",      "+2 credits per answer"],
-                ].map(([icon, action, reward]) => (
-                  <div key={action} className="flex items-center gap-3 py-2 border-b border-emerald-100 last:border-0">
-                    <span className="text-lg">{icon}</span>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-stone-700">{action}</p>
-                      <p className="text-xs text-emerald-600 font-medium">{reward}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Notify me */}
-              {!notifyDone ? (
-                <button
-                  onClick={() => setNotifyDone(true)}
-                  className="px-8 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-colors border-0 cursor-pointer shadow-sm">
-                  🔔 Notify me when it's live
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 px-6 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                  <span className="text-emerald-600 font-black text-sm">✓ We'll let you know!</span>
-                </div>
-              )}
-
-              <div className="flex gap-3 mt-5">
-                <a href="/listings" className="text-sm font-semibold text-emerald-600 hover:underline no-underline">Browse skills →</a>
-                <span className="text-stone-200">·</span>
-                <a href="/bounties" className="text-sm font-semibold text-emerald-600 hover:underline no-underline">View bounties →</a>
-              </div>
             </div>
           </div>
         )}

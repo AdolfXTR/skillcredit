@@ -552,7 +552,7 @@ export default function EditListingPage() {
                 return (
                   <>
                     <label style={{ fontSize:11, fontWeight:800, color:"#aaa", letterSpacing:".07em", textTransform:"uppercase" as const, display:"block", marginBottom:8 }}>
-                      Credit Price <span style={{ fontWeight:500, textTransform:"none" as const, color:"#bbb" }}>= ₱{form.credit_price * 10}</span>
+                      Credit Price <span style={{ fontWeight:500, textTransform:"none" as const, color:"#68756d" }}>in session credits</span>
                     </label>
                     <div style={{ borderRadius:10, padding:"10px 14px", marginBottom:12, fontSize:12, fontWeight:600, background: priceOk?"#f0fdf4":"#fef2f2", color: priceOk?"#15803d":"#dc2626", border:`1.5px solid ${priceOk?"#86efac":"#fca5a5"}` }}>
                       {priceOk

@@ -15,16 +15,10 @@ type Listing = {
   thumbnail_url?: string; avg_rating?: number; total_ratings?: number; total_students?: number;
   is_featured?: boolean; is_hot_teacher?: boolean; difficulty?: string;
   skills: { name: string; category: string };
-  profiles: {
-    full_name: string; username: string; level: string; xp: number;
-    xp_multiplier?: number; champion_title?: string | null; avatar_url?: string | null;
-    teaching_title?: string | null; teaching_title_ends_at?: string | null;
-    rating_title?: string | null;   rating_title_ends_at?: string | null;
-  };
+  profiles: { full_name: string; username: string; avatar_url?: string | null; xp?: number; xp_multiplier?: number; champion_title?: string | null; teaching_title?: string | null; teaching_title_ends_at?: string | null; rating_title?: string | null; rating_title_ends_at?: string | null };
 };
 type Profile = {
-  id: string; full_name: string; username: string; credits: number; level: string; xp: number;
-  xp_multiplier?: number; champion_title?: string | null; avatar_url?: string | null;
+  id: string; full_name: string; username: string; credits: number; avatar_url?: string | null; level?: string; xp?: number; xp_multiplier?: number; champion_title?: string | null;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -60,7 +54,7 @@ const LEVEL_COLORS: Record<string, string> = {
 };
 
 // Profile fields used in Supabase select — includes all 4 perk fields
-const PROFILE_FIELDS = "full_name,username,level,xp,xp_multiplier,champion_title,avatar_url,teaching_title,teaching_title_ends_at,rating_title,rating_title_ends_at";
+const PROFILE_FIELDS = "full_name,username,avatar_url";
 
 // ─────────────────────────────────────────────────────────────
 // UTILS
@@ -144,6 +138,10 @@ function PerkBadges({ p, rank }: { p: Listing["profiles"]; rank: 0|1|2|3 }) {
 // ─────────────────────────────────────────────────────────────
 // LISTING CARD
 // ─────────────────────────────────────────────────────────────
+function SimpleAvatar({ name, avatar_url, size = 32 }: { name: string; avatar_url?: string | null; size?: number }) {
+  return <div style={{ width: size, height: size, flexShrink: 0, borderRadius: "50%", overflow: "hidden", display: "grid", placeItems: "center", background: "#e7f1e9", color: "#214c39", fontWeight: 800, fontSize: size * .32 }}>{avatar_url ? <img src={avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : getInitials(name)}</div>;
+}
+
 function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
   listing: Listing; loggedIn: boolean; idx: number; isOwn: boolean; isCompleted: boolean;
 }) {
@@ -155,7 +153,6 @@ function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
   const isFeatured = !!listing.is_featured;
   const isHot      = !!listing.is_hot_teacher;
   const diff       = listing.difficulty ? DIFFICULTY_CONFIG[listing.difficulty] : null;
-  const rank       = getRank(listing.profiles?.xp_multiplier);
   const hasThumbnail = !!listing.thumbnail_url;
 
   const href = loggedIn ? `/listings/${listing.id}` : "/login";
@@ -243,7 +240,7 @@ function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
         {/* Price + duration */}
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
           <span style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:900, color:"#2d6a4f" }}>{listing.credit_price} cr</span>
-          <span style={{ fontSize:11, color:"#aaa", fontWeight:600 }}>≈ ₱{listing.credit_price * 10}</span>
+          <span style={{ fontSize:11, color:"#68756d", fontWeight:600 }}>per session</span>
           <span style={{ width:1, height:12, background:"#e8e2d9" }} />
           <span style={{ fontSize:11, color:"#aaa", fontWeight:600 }}>⏱ {listing.duration}m</span>
         </div>
@@ -267,16 +264,12 @@ function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
         {/* Teacher row — with perk badges */}
         <div style={{ padding:"9px 11px", background:"#fafaf8", borderRadius:11, marginBottom:13 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <PremiumAvatar name={listing.profiles?.full_name||"?"} xp={listing.profiles?.xp||0} xp_multiplier={listing.profiles?.xp_multiplier} avatar_url={listing.profiles?.avatar_url} size={30} />
+            <SimpleAvatar name={listing.profiles?.full_name||"?"} avatar_url={listing.profiles?.avatar_url} size={30} />
             <div style={{ flex:1, minWidth:0 }}>
               <p style={{ fontSize:12, fontWeight:700, color:"#222", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{listing.profiles?.full_name}</p>
-              <p style={{ fontSize:10, color:"#aaa" }}>{getLevelFromXP(listing.profiles?.xp||0)} · @{listing.profiles?.username}</p>
+              <p style={{ fontSize:10, color:"#68756d" }}>@{listing.profiles?.username}</p>
             </div>
           </div>
-          {/* Perk badges row — below name/level */}
-          {listing.profiles && (
-            <PerkBadges p={listing.profiles} rank={rank} />
-          )}
         </div>
 
         {/* CTA */}
@@ -352,7 +345,7 @@ export default function ListingsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     let userId: string | null = null;
     if (user) {
-      const { data: prof } = await supabase.from("profiles").select("*,xp_multiplier,champion_title,avatar_url").eq("id", user.id).single();
+      const { data: prof } = await supabase.from("profiles").select("id,full_name,username,credits,avatar_url").eq("id", user.id).single();
       if (prof) setProfile(prof);
       userId = user.id;
 
@@ -378,7 +371,7 @@ export default function ListingsPage() {
     let studentMap: Record<string, number> = {};
     if (teacherIds.length > 0) {
       const [{ data: ratingsData }, { data: sessionsData }] = await Promise.all([
-        supabase.from("ratings").select("rated_id,overall").in("rated_id", teacherIds),
+        supabase.from("ratings").select("rated_id,overall").in("rated_id", teacherIds).eq("is_flagged", false),
         supabase.from("sessions").select("teacher_id").in("teacher_id", teacherIds).eq("status", "completed"),
       ]);
       if (ratingsData?.length) {

@@ -3,13 +3,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 const ACTIVITY = [
-  { icon: "🔥", text: "Maria earned 12 credits teaching Python" },
-  { icon: "🏆", text: "Alex became this week's champion" },
-  { icon: "🎸", text: "Guitar lesson just completed" },
-  { icon: "🌍", text: "Spanish session booked for tomorrow" },
-  { icon: "💡", text: "Kevin unlocked the Expert level" },
-  { icon: "📚", text: "Calculus session rated 5 stars ⭐" },
-  { icon: "🎨", text: "UI Design bounty was just answered" },
+  { icon: "📅", text: "A session request waits for teacher confirmation" },
+  { icon: "🔒", text: "Credits are held in escrow for a booked session" },
+  { icon: "🤝", text: "Both members confirm when the session is complete" },
+  { icon: "⭐", text: "Members can review each other after a session" },
 ];
 
 export default function SignupPage() {

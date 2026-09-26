@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { CORE_NOTIFICATION_TYPES } from "@/lib/notification-types";
 import Navbar from "@/components/Navbar";
 
 type Profile = {
@@ -25,14 +26,10 @@ type Notification = {
 
 const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string; border: string; label: string }> = {
   session:      { icon: "📅", color: "#1d4ed8", bg: "#eff6ff",  border: "#bfdbfe", label: "Session" },
-  session_call: { icon: "📹", color: "#1d4ed8", bg: "#eff6ff",  border: "#bfdbfe", label: "Session" },
+  credit_transfer: { icon: "↔", color: "#765115", bg: "#f5ecd8", border: "#ead9b5", label: "Credit transfer" },
   credit:       { icon: "💰", color: "#166534", bg: "#f0fdf4",  border: "#bbf7d0", label: "Credits" },
   message:      { icon: "💬", color: "#7c3aed", bg: "#faf5ff",  border: "#e9d5ff", label: "Message" },
   dispute:      { icon: "⚠️", color: "#b45309", bg: "#fffbeb",  border: "#fde68a", label: "Dispute" },
-  achievement:  { icon: "🏆", color: "#d97706", bg: "#fffbeb",  border: "#fde68a", label: "Badge" },
-  platform:     { icon: "📢", color: "#555",    bg: "#f5f0e8",  border: "#e8e2d9", label: "Platform" },
-  forum_earn:   { icon: "⭐", color: "#166534", bg: "#f0fdf4",  border: "#bbf7d0", label: "Earned" },
-  rating:       { icon: "⭐", color: "#d97706", bg: "#fffbeb",  border: "#fde68a", label: "Review" },
 };
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -93,11 +90,8 @@ function getQuickActions(notif: Notification): { label: string; href: string; st
   if (type === "session" && (notif.title?.toLowerCase().includes("book") || notif.title?.toLowerCase().includes("request"))) return [
     { label: "✓ Manage", href: "/sessions", style: "primary" },
   ];
-  if (type === "credit" || type === "forum_earn") return [
+  if (type === "credit" || type === "credit_transfer") return [
     { label: "View Credits", href: "/profile", style: "secondary" },
-  ];
-  if (type === "achievement") return [
-    { label: "🏆 View Badge", href: "/profile", style: "primary" },
   ];
   if (type === "dispute") return [
     { label: "⚠️ View Dispute", href: notif.link || "/sessions", style: "primary" },
@@ -176,6 +170,7 @@ export default function NotificationsPage() {
     const { data: notifs } = await supabase
       .from("notifications").select("*")
       .eq("user_id", user.id)
+      .in("type", CORE_NOTIFICATION_TYPES as unknown as string[])
       .order("created_at", { ascending: false })
       .limit(100);
     const list = notifs || [];
@@ -246,7 +241,7 @@ export default function NotificationsPage() {
 
   const filtered = filter === "all" ? notifications
     : filter === "unread" ? notifications.filter(n => !n.is_read)
-    : notifications.filter(n => n.type === filter || (filter === "session" && n.type === "session_call"));
+    : notifications.filter(n => n.type === filter);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
   const grouped = groupByDate(filtered);
@@ -254,10 +249,9 @@ export default function NotificationsPage() {
   const filters = [
     { key: "all",         label: "All",      count: notifications.length },
     { key: "unread",      label: "Unread",   count: unreadCount },
-    { key: "session",     label: "Sessions", count: notifications.filter(n => n.type === "session" || n.type === "session_call").length },
-    { key: "credit",      label: "Credits",  count: notifications.filter(n => n.type === "credit" || n.type === "forum_earn").length },
+    { key: "session",     label: "Sessions", count: notifications.filter(n => n.type === "session").length },
+    { key: "credit",      label: "Credits",  count: notifications.filter(n => n.type === "credit" || n.type === "credit_transfer").length },
     { key: "message",     label: "Messages", count: notifications.filter(n => n.type === "message").length },
-    { key: "achievement", label: "Badges",   count: notifications.filter(n => n.type === "achievement").length },
     { key: "dispute",     label: "Disputes", count: notifications.filter(n => n.type === "dispute").length },
   ];
 
@@ -362,7 +356,7 @@ export default function NotificationsPage() {
               { label: "Total",    val: notifications.length,                                             color: "#555",    bg: "#fff" },
               { label: "Unread",   val: unreadCount,                                                      color: "#dc2626", bg: "#fef2f2" },
               { label: "Sessions", val: notifications.filter(n => n.type === "session").length,            color: "#1d4ed8", bg: "#eff6ff" },
-              { label: "Credits",  val: notifications.filter(n => n.type === "credit" || n.type === "forum_earn").length, color: "#166534", bg: "#f0fdf4" },
+              { label: "Credits",  val: notifications.filter(n => n.type === "credit").length, color: "#166534", bg: "#f0fdf4" },
               { label: "Messages", val: notifications.filter(n => n.type === "message").length,            color: "#7c3aed", bg: "#faf5ff" },
             ].map(s => (
               <div key={s.label} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "10px 0", border: "1.5px solid #e8e2d9", textAlign: "center" }}>

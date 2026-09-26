@@ -218,7 +218,7 @@ const OTHER_SKILL_ID = "__other__";
 const CATEGORIES = ["Programming","Design","Language","Academic","Music","Arts","Media","Science","Sports","Lifestyle","Other"];
 
 // ── CREDIT BAND SYSTEM ────────────────────────────────────────────────────────
-// Based on Salary-Anchored Credit Band System (1 Credit = PHP 10)
+// Session price is set in SkillCredit credits.
 const CATEGORY_CREDIT_BANDS: Record<string, { min: number; max: number }> = {
   // Tier 1 — Practical / Lifestyle (1.0x)
   "Sports":    { min: 9,  max: 19 },
@@ -387,7 +387,6 @@ export default function CreateListingPage() {
       { onConflict: "user_id,skill_id" }
     );
 
-    try { await supabase.rpc("increment_xp", { user_id: userId, amount: 10 }); } catch {}
 
     setDoneListingId(listing.id); setDone(true); setSubmitting(false);
   };
@@ -609,13 +608,13 @@ export default function CreateListingPage() {
                   return (
                     <>
                       <label className="text-xs font-black text-stone-500 uppercase tracking-wide block mb-3">
-                        Credit Price per Session * <span className="font-normal text-stone-300 normal-case">= ₱{form.credit_price * 10}</span>
+                        Credit Price per Session *
                       </label>
 
                       {/* Band info banner */}
                       <div className={`rounded-xl px-4 py-2.5 mb-4 border text-xs font-semibold ${priceOk ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-600"}`}>
                         {priceOk
-                          ? `✅ Fair range for ${skillName || "this skill"} (${EXPERIENCE_LEVELS.find(e=>e.id===form.experience)?.label}): ${band.min}–${band.max} cr (₱${band.min*10}–₱${band.max*10})`
+                          ? `Fair range for ${skillName || "this skill"} (${EXPERIENCE_LEVELS.find(e=>e.id===form.experience)?.label}): ${band.min}–${band.max} credits`
                           : `⚠️ Price must be between ${band.min} cr and ${band.max} cr for this skill & experience level`}
                       </div>
 
@@ -624,7 +623,7 @@ export default function CreateListingPage() {
                           className="w-10 h-10 rounded-xl border border-stone-200 bg-white text-xl cursor-pointer hover:bg-stone-50 transition-colors flex items-center justify-center font-bold border-0">−</button>
                         <div className="flex-1 text-center">
                           <p className={`font-fraunces text-4xl font-black ${priceOk ? "text-emerald-700" : "text-red-500"}`}>{form.credit_price}</p>
-                          <p className="text-xs text-stone-400">credits · ₱{form.credit_price * 10}</p>
+                          <p className="text-xs text-stone-400">credits</p>
                         </div>
                         <button onClick={() => setForm(p => ({ ...p, credit_price: Math.min(band.max, p.credit_price + 1) }))}
                           className="w-10 h-10 rounded-xl border border-stone-200 bg-white text-xl cursor-pointer hover:bg-stone-50 transition-colors flex items-center justify-center font-bold border-0">+</button>
@@ -633,9 +632,9 @@ export default function CreateListingPage() {
                         onChange={e => setForm(p => ({ ...p, credit_price: parseInt(e.target.value) }))}
                         className="w-full accent-emerald-600" />
                       <div className="flex justify-between text-[10px] text-stone-300 mt-1">
-                        <span>{band.min} cr (₱{band.min*10})</span>
-                        <span>{Math.round((band.min+band.max)/2)} cr (₱{Math.round((band.min+band.max)/2)*10})</span>
-                        <span>{band.max} cr (₱{band.max*10})</span>
+                        <span>{band.min} credits</span>
+                        <span>{Math.round((band.min+band.max)/2)} credits</span>
+                        <span>{band.max} credits</span>
                       </div>
                     </>
                   );
@@ -744,7 +743,6 @@ export default function CreateListingPage() {
                     <div className="flex items-center justify-between pt-3 border-t border-stone-100">
                       <div>
                         <span className="font-fraunces text-xl font-black text-emerald-700">{form.credit_price} cr</span>
-                        <span className="text-xs text-stone-400 ml-2">· ₱{form.credit_price * 10}</span>
                       </div>
                       <div className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold">Book session →</div>
                     </div>
@@ -758,7 +756,7 @@ export default function CreateListingPage() {
                   { label: "Category",     value: isCustomSkill ? (customSkillCat || "Other") : selectedSkill?.category },
                   { label: "Format",       value: selectedFormat?.label },
                   { label: "Duration",     value: selectedDuration?.label },
-                  { label: "Price",        value: `${form.credit_price} credits (₱${form.credit_price * 10})` },
+                  { label: "Price",        value: `${form.credit_price} credits` },
                   { label: "Meeting link", value: form.meeting_link ? `✅ ${form.meeting_link.slice(0, 40)}…` : "None — can add later" },
                   { label: "Cover photo",  value: thumbnailUrl ? "✅ Uploaded" : "No photo (will use gradient)" },
                   { label: "Portfolio",    value: portfolioItems.length > 0 ? `${portfolioItems.length} sample${portfolioItems.length > 1 ? "s" : ""} uploaded` : "None" },

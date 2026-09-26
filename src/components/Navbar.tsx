@@ -2,10 +2,11 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { CORE_NOTIFICATION_TYPES } from "@/lib/notification-types";
 
 type Profile = {
   id: string; full_name: string; username: string;
-  credits: number; xp: number; level: string; avatar_url?: string | null;
+  credits: number; avatar_url?: string | null;
 };
 
 export default function Navbar() {
@@ -19,11 +20,11 @@ export default function Navbar() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      const { data: p } = await supabase.from("profiles").select("id,full_name,username,credits,avatar_url").eq("id", user.id).single();
       if (p) setProfile(p);
       const { count } = await supabase.from("notifications")
         .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id).eq("is_read", false);
+        .eq("user_id", user.id).eq("is_read", false).in("type", CORE_NOTIFICATION_TYPES as unknown as string[]);
       setUnread(count || 0);
     };
     load();
@@ -44,11 +45,8 @@ export default function Navbar() {
 
   const navLinks = [
     { label: "Browse",    href: "/listings"  },
-    { label: "Bounties",  href: "/bounties"  },
-    { label: "Community", href: "/community" },
     { label: "Sessions",  href: "/sessions"  },
     { label: "Messages",  href: "/messages"  },
-    { label: "People",    href: "/people"    },
   ];
 
   return (
@@ -143,14 +141,14 @@ export default function Navbar() {
         </a>
 
         {/* NAV LINKS */}
-        <div style={{ display: "flex", gap: 2 }}>
+        <div className="sc-nav-links" style={{ display: "flex", gap: 2 }}>
           {navLinks.map(({ label, href }) => (
             <a key={label} href={href} className={`navlink${pathname === href ? " active" : ""}`}>{label}</a>
           ))}
         </div>
 
         {/* RIGHT SIDE */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="sc-nav-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Create button */}
           <a href="/listings/create" className="sc-create-btn" style={{
             fontSize: 13, fontWeight: 700, color: "#fff", background: "#2d6a4f",
@@ -160,8 +158,8 @@ export default function Navbar() {
 
           {/* Credits */}
           <a href="/wallet" className="sc-credits" style={{
-            fontSize: 13, fontWeight: 800, color: "#2d6a4f", background: "#e8f4e8",
-            padding: "6px 14px", borderRadius: 999, border: "1px solid #b7e4c7",
+            fontSize: 13, fontWeight: 800, color: "#765115", background: "#f5ecd8",
+            padding: "6px 14px", borderRadius: 999, border: "1px solid #ead9b5",
             textDecoration: "none", display: "inline-block",
           }}>💰 {profile?.credits ?? "—"} cr</a>
 
@@ -213,9 +211,7 @@ export default function Navbar() {
                 {[
                   { icon: "👤", label: "My Profile",     href: "/profile" },
                   { icon: "📋", label: "Create Listing", href: "/listings/create" },
-                  { icon: "✅", label: "Get Verified",   href: "/verify" },
                   { icon: "💰", label: "Wallet",         href: "/wallet" },
-                  { icon: "🏆", label: "Leaderboard",    href: "/leaderboard" },
                   { icon: "🔔", label: "Notifications",  href: "/notifications" },
                 ].map(item => (
                   <a key={item.label} href={item.href} className="nav-menu-item">

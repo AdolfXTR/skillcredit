@@ -10,12 +10,11 @@ type Profile = {
   credits: number;
   level: string;
   avatar_url?: string | null;
-  xp_multiplier?: number;
-  champion_title?: string;
   teaching_title?: string | null;
   teaching_title_ends_at?: string | null;
   rating_title?: string | null;
   rating_title_ends_at?: string | null;
+  is_teacher?: boolean;
 };
 
 type Message = {
@@ -53,17 +52,6 @@ type CallPayload = {
   duration_minutes: number;
   status: "active" | "ended";
   ended_by?: string;
-};
-
-const LEVEL_COLORS: Record<string, string> = {
-  Seedling: "#2d6a4f", Learner: "#1d4ed8", Contributor: "#7c3aed",
-  Skilled: "#b45309", Expert: "#dc2626", Master: "#0891b2", Legend: "#d97706",
-};
-
-const CHAMPION_RING: Record<number, { border: string; glow: string; badge: string; label: string }> = {
-  1: { border: "linear-gradient(135deg,#FFD700,#FFA500,#FFD700)", glow: "0 0 12px rgba(255,215,0,.55)", badge: "👑", label: "Champion" },
-  2: { border: "linear-gradient(135deg,#C0C0C0,#A8A8A8,#C0C0C0)", glow: "0 0 10px rgba(192,192,192,.45)", badge: "🥈", label: "Runner-up" },
-  3: { border: "linear-gradient(135deg,#CD7F32,#A0522D,#CD7F32)", glow: "0 0 10px rgba(205,127,50,.45)", badge: "🥉", label: "3rd Place" },
 };
 
 const QUICK_REACTIONS = ["❤️","😂","🔥","👍","🎉","🤯"];
@@ -108,42 +96,18 @@ function groupByDate(messages: Message[]) {
   });
   return groups;
 }
-function getChampionRank(xp_multiplier?: number): number {
-  if (!xp_multiplier) return 0;
-  if (xp_multiplier >= 1.25) return 1;
-  if (xp_multiplier >= 1.15) return 2;
-  if (xp_multiplier >= 1.1) return 3;
-  return 0;
-}
-function getPerkLine(user: Profile): string {
-  const rank = getChampionRank(user.xp_multiplier);
-  const parts: string[] = [];
-  if (rank > 0) parts.push(`${CHAMPION_RING[rank].badge} ${user.champion_title || CHAMPION_RING[rank].label}`);
-  if (user.teaching_title && new Date(user.teaching_title_ends_at || 0) > new Date()) parts.push("🎓 Teacher");
-  if (user.rating_title && new Date(user.rating_title_ends_at || 0) > new Date()) parts.push("⭐ Top Rated");
-  return parts.join(" · ");
-}
-
 // ─── AVATAR ───────────────────────────────────────────────────────────────────
 function Avatar({ profile, size = 36, online = false }: { profile: Profile; size?: number; online?: boolean }) {
-  const color = LEVEL_COLORS[profile.level] || "#2d6a4f";
-  const rank = getChampionRank(profile.xp_multiplier);
-  const champ = rank > 0 ? CHAMPION_RING[rank] : null;
+  const color = "#214c39";
   return (
     <div style={{ position: "relative", flexShrink: 0, width: size, height: size }}>
-      {champ && (
-        <div style={{ position: "absolute", inset: -2, borderRadius: "50%", background: champ.border, padding: 2, zIndex: 0, boxShadow: champ.glow }}>
-          <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: "#fff" }} />
-        </div>
-      )}
-      <div style={{ position: "absolute", inset: champ ? 2 : 0, borderRadius: "50%", overflow: "hidden", background: profile.avatar_url ? "transparent" : color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.34, fontWeight: 700, color: "#fff", zIndex: 1 }}>
+      <div style={{ position: "absolute", inset: 0, borderRadius: "50%", overflow: "hidden", background: profile.avatar_url ? "transparent" : color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.34, fontWeight: 700, color: "#fff", zIndex: 1 }}>
         {profile.avatar_url
           ? <img src={profile.avatar_url} alt={profile.full_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
           : getInitials(profile.full_name)
         }
       </div>
-      {champ && <div style={{ position: "absolute", top: -5, right: -5, fontSize: size * 0.36, lineHeight: 1, zIndex: 2, filter: "drop-shadow(0 1px 2px rgba(0,0,0,.25))" }}>{champ.badge}</div>}
-      {online && !champ && <div style={{ position: "absolute", bottom: 0, right: 0, width: 9, height: 9, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff", zIndex: 2 }} />}
+      {online && <div style={{ position: "absolute", bottom: 0, right: 0, width: 9, height: 9, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff", zIndex: 2 }} />}
     </div>
   );
 }
@@ -310,12 +274,12 @@ export default function MessagesPage() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${profile.id}` }, (payload) => {
         const msg = payload.new as Message;
         const cur = activeConvoRef.current;
-        if (cur && msg.sender_id === cur.id) { setMessages(prev => [...prev, msg]); markRead(cur.id); }
+        if (cur && msg.sender_id === cur.id) { setMessages(prev => [...prev, { ...msg, is_deleted: msg.content === "[deleted]" }]); markRead(cur.id); }
         const p = profileRef.current;
         if (p) loadConversations(p.id);
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
-        setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
+        setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new, is_deleted: payload.new.content === "[deleted]" } : m));
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (payload) => {
         setMessages(prev => prev.map(m => m.id === payload.old.id ? { ...m, is_deleted: true, content: "[deleted]" } : m));
@@ -361,7 +325,7 @@ export default function MessagesPage() {
           const { data: msgs } = await supabase.from("messages").select("*")
             .or(`and(sender_id.eq.${user.id},receiver_id.eq.${targetUser.id}),and(sender_id.eq.${targetUser.id},receiver_id.eq.${user.id})`)
             .order("created_at", { ascending: true });
-          setMessages(msgs || []);
+          setMessages((msgs || []).map((message: Message) => ({ ...message, is_deleted: message.content === "[deleted]" })));
           await supabase.from("messages").update({ is_read: true }).eq("sender_id", targetUser.id).eq("receiver_id", user.id).eq("is_read", false);
           await loadConversations(user.id);
           setTimeout(() => textareaRef.current?.focus(), 150);
@@ -382,12 +346,17 @@ export default function MessagesPage() {
     });
     const otherIds = Array.from(convoMap.keys());
     if (otherIds.length === 0) { setConversations([]); return; }
-    const { data: profiles } = await supabase.from("profiles").select("*").in("id", otherIds);
+    const [{ data: profiles }, { data: teacherListings }] = await Promise.all([
+      supabase.from("profiles").select("*").in("id", otherIds),
+      supabase.from("listings").select("teacher_id").in("teacher_id", otherIds).eq("is_active", true),
+    ]);
+    const teacherIds = new Set((teacherListings || []).map(listing => listing.teacher_id));
     const profileMap = new Map((profiles || []).map(p => [p.id, p]));
     const convos: Conversation[] = [];
     for (const [otherId, ms] of convoMap) {
       const op = profileMap.get(otherId);
       if (!op) continue;
+      op.is_teacher = teacherIds.has(otherId);
       const last = ms[0];
       const unread = ms.filter(m => m.receiver_id === userId && !m.is_read && !m.is_deleted).length;
       const isCancelMsg = parseCancellation(last.content);
@@ -409,7 +378,7 @@ export default function MessagesPage() {
     const { data } = await supabase.from("messages").select("*")
       .or(`and(sender_id.eq.${profile.id},receiver_id.eq.${other.id}),and(sender_id.eq.${other.id},receiver_id.eq.${profile.id})`)
       .order("created_at", { ascending: true });
-    setMessages(data || []);
+    setMessages((data || []).map((message: Message) => ({ ...message, is_deleted: message.content === "[deleted]" })));
     await markRead(other.id);
     await loadConversations(profile.id);
     setTimeout(() => textareaRef.current?.focus(), 100);
@@ -431,30 +400,64 @@ export default function MessagesPage() {
       if (reactions[emoji].length === 0) delete reactions[emoji];
     } else { reactions[emoji] = [...users, profile.id]; }
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, reactions } : m));
-    await supabase.from("messages").update({ reactions }).eq("id", msgId);
     setShowReactionPicker(null);
   }
 
   async function deleteMessage(msgId: string) {
     if (!profile) return;
+    const { data, error } = await supabase.from("messages").update({ content: "[deleted]", image_url: null })
+      .eq("id", msgId).eq("sender_id", profile.id).select("id").maybeSingle();
+    if (error || !data) { alert("Could not delete this message."); return; }
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, is_deleted: true, content: "[deleted]" } : m));
-    await supabase.from("messages").update({ is_deleted: true, content: "[deleted]", image_url: null }).eq("id", msgId).eq("sender_id", profile.id);
     setContextMenu(null);
   }
 
   async function handleSendCredits() {
     if (!profile || !activeConvo || !creditAmount) return;
     const amount = parseInt(creditAmount);
-    if (isNaN(amount) || amount <= 0 || amount > profile.credits) return;
+    if (!Number.isSafeInteger(amount) || amount <= 0) return;
     setSendingCredits(true);
-    await supabase.from("profiles").update({ credits: profile.credits - amount }).eq("id", profile.id);
-    await supabase.rpc("increment_credits", { user_id: activeConvo.id, amount });
+    let debited = false;
+    let currentBalance = profile.credits;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { data: balance, error: readError } = await supabase.from("profiles").select("credits").eq("id", profile.id).single();
+      if (readError || !balance) break;
+      currentBalance = balance.credits;
+      if (currentBalance < amount) break;
+      const { data: updated } = await supabase.from("profiles").update({ credits: currentBalance - amount })
+        .eq("id", profile.id).eq("credits", currentBalance).select("credits").maybeSingle();
+      if (updated) { debited = true; currentBalance = updated.credits; break; }
+    }
+    if (!debited) { setProfile(prev => prev ? { ...prev, credits: currentBalance } : prev); setSendingCredits(false); alert("Your balance changed or is too low. Please try again."); return; }
+    const { error: recipientCreditError } = await supabase.rpc("increment_credits", { user_id: activeConvo.id, amount });
+    if (recipientCreditError) {
+      await supabase.rpc("increment_credits", { user_id: profile.id, amount });
+      setSendingCredits(false); alert("The transfer did not complete. Your credits were returned."); return;
+    }
     const payload: CreditTransferPayload = { amount, note: creditNote, from_id: profile.id, to_id: activeConvo.id };
-    const { data: msg } = await supabase.from("messages").insert({ sender_id: profile.id, receiver_id: activeConvo.id, content: JSON.stringify(payload), message_type: "credit_transfer", is_read: false }).select().single();
-    if (msg) setMessages(prev => [...prev, msg]);
-    setProfile(prev => prev ? { ...prev, credits: prev.credits - amount } : prev);
+    const { data: msg, error: messageError } = await supabase.from("messages").insert({ sender_id: profile.id, receiver_id: activeConvo.id, content: JSON.stringify(payload), message_type: "credit_transfer", is_read: false }).select().single();
+    if (messageError || !msg) {
+      const { error: rollbackError } = await supabase.rpc("increment_credits", { user_id: activeConvo.id, amount: -amount });
+      if (!rollbackError) await supabase.rpc("increment_credits", { user_id: profile.id, amount });
+      setSendingCredits(false); alert(rollbackError ? "The message failed and recipient credits need admin review." : "The transfer could not be recorded; credits were returned."); return;
+    }
+    const { error: transactionError } = await supabase.from("credit_transactions").insert([
+      { user_id: profile.id, amount: -amount, type: "transfer_out", reference_id: msg.id, description: `Sent credits to @${activeConvo.username}` },
+      { user_id: activeConvo.id, amount, type: "transfer_in", reference_id: msg.id, description: `Credits received from @${profile.username}` },
+    ]);
+    if (transactionError) {
+      const { error: recipientRollbackError } = await supabase.rpc("increment_credits", { user_id: activeConvo.id, amount: -amount });
+      if (!recipientRollbackError) {
+        await supabase.rpc("increment_credits", { user_id: profile.id, amount });
+        await supabase.from("messages").delete().eq("id", msg.id).eq("sender_id", profile.id);
+      }
+      setSendingCredits(false);
+      alert(recipientRollbackError ? "Transfer completed but its ledger record failed; ask an admin to review it." : "Transfer could not be recorded; credits were returned.");
+      return;
+    }
+    setMessages(prev => [...prev, msg]);
+    setProfile(prev => prev ? { ...prev, credits: currentBalance } : prev);
     try { await supabase.from("notifications").insert({ user_id: activeConvo.id, type: "credit_transfer", title: `${profile.full_name} sent you ${amount} credits!`, body: creditNote || "Credits received!", link: "/messages" }); } catch (_) {}
-    try { await supabase.from("moderation_logs").insert({ mod_id: profile.id, target_id: activeConvo.id, target_type: "credit_transfer", action: "sent", reason: `${amount} credits`, author_id: profile.id }); } catch (_) {}
     setCreditAmount(""); setCreditNote(""); setShowCreditModal(false); setSendingCredits(false);
     await loadConversations(profile.id);
   }
@@ -524,7 +527,7 @@ export default function MessagesPage() {
       content: fileUrl ? JSON.stringify({ url: fileUrl, name: capturedAttach!.name, size: capturedAttach!.size }) : (newMsg.trim() || ""),
       image_url: imageUrl, message_type: msgType, is_read: false,
     };
-    if (replyingTo) msgData.reply_to_id = replyingTo.id;
+    if (replyingTo) msgData.content = `↪ ${replyingTo.content.slice(0, 120)}\n${msgData.content}`;
     const { data: msg } = await supabase.from("messages").insert(msgData).select().single();
     if (msg) {
       const withReply = replyingTo ? { ...msg, reply_to: { content: replyingTo.content, sender_id: replyingTo.sender_id } } : msg;
@@ -553,9 +556,8 @@ export default function MessagesPage() {
 
   const filteredConvos = conversations.filter(c => {
     if (convoFilter === "all") return true;
-    const hasTitles = getPerkLine(c.other_user);
-    if (convoFilter === "teachers") return hasTitles.includes("🎓") || hasTitles.includes("👑");
-    if (convoFilter === "students") return !hasTitles.includes("🎓");
+    if (convoFilter === "teachers") return !!c.other_user.is_teacher;
+    if (convoFilter === "students") return !c.other_user.is_teacher;
     return true;
   });
 
@@ -652,14 +654,11 @@ export default function MessagesPage() {
                 <div style={{ fontSize: 12, marginTop: 4, color: "#ccc" }}>Click + to start chatting</div>
               </div>
             ) : filteredConvos.map(c => {
-              const rank = getChampionRank(c.other_user.xp_multiplier);
-              const perk = getPerkLine(c.other_user);
               return (
                 <div key={c.other_user.id}
                   className={`convo-item ${activeConvo?.id === c.other_user.id ? "active" : ""}`}
                   onClick={() => openConversation(c.other_user)}
-                  style={{ padding: "12px 10px", display: "flex", gap: 10, alignItems: "center", marginBottom: 2,
-                    borderLeft: rank === 1 ? "2px solid #FFD700" : rank === 2 ? "2px solid #C0C0C0" : rank === 3 ? "2px solid #CD7F32" : "2px solid transparent" }}>
+                  style={{ padding: "12px 10px", display: "flex", gap: 10, alignItems: "center", marginBottom: 2 }}>
                   <div style={{ position: "relative", flexShrink: 0 }}>
                     <Avatar profile={c.other_user} size={36} online />
                     {c.unread_count > 0 && (
@@ -673,7 +672,6 @@ export default function MessagesPage() {
                       <span style={{ fontSize: 13.5, fontWeight: c.unread_count > 0 ? 800 : 600, color: "#1a1a1a" }}>{c.other_user.full_name}</span>
                       <span style={{ fontSize: 10, color: "#bbb", flexShrink: 0, marginLeft: 6 }}>{timeAgo(c.last_time)}</span>
                     </div>
-                    {perk && <div style={{ fontSize: 10, fontWeight: 600, color: rank === 1 ? "#92400e" : "#6b7280", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{perk}</div>}
                     <div style={{ fontSize: 12, color: c.unread_count > 0 ? "#444" : "#aaa", fontWeight: c.unread_count > 0 ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
                       {c.unread_count > 0 && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2d6a4f", flexShrink: 0, display: "inline-block" }} />}
                       {c.last_message}
@@ -704,7 +702,7 @@ export default function MessagesPage() {
                     <Avatar profile={user} size={40} />
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{user.full_name}</div>
-                      <div style={{ fontSize: 12, color: "#aaa" }}>@{user.username} · {user.level}</div>
+                      <div style={{ fontSize: 12, color: "#68756d" }}>@{user.username}</div>
                     </div>
                   </div>
                 ))}
@@ -746,22 +744,11 @@ export default function MessagesPage() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 15, fontWeight: 800, color: "#1a1a1a", marginBottom: 3, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       {activeConvo.full_name}
-                      {(() => {
-                        const rank = getChampionRank(activeConvo.xp_multiplier);
-                        return rank > 0 ? (
-                          <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 999,
-                            background: rank === 1 ? "#fef9ec" : rank === 2 ? "#f3f4f6" : "#fef3ec",
-                            color: rank === 1 ? "#92400e" : rank === 2 ? "#374151" : "#78350f",
-                            border: `1px solid ${rank === 1 ? "#fbbf24" : rank === 2 ? "#d1d5db" : "#d97706"}` }}>
-                            {CHAMPION_RING[rank].badge} {activeConvo.champion_title || CHAMPION_RING[rank].label}
-                          </span>
-                        ) : null;
-                      })()}
                     </div>
                     <div style={{ fontSize: 11, color: "#999", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-                        @{activeConvo.username} · {activeConvo.level}
+                        @{activeConvo.username}
                       </span>
                       {activeConvo.teaching_title && new Date(activeConvo.teaching_title_ends_at || 0) > new Date() && (
                         <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "#eef6f2", color: "#2d6a4f", border: "1px solid #c6e8d4" }}>
