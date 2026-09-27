@@ -81,7 +81,7 @@ function parseBody(type: string, body: string): string {
 function getQuickActions(notif: Notification): { label: string; href: string; style: "primary" | "secondary" }[] {
   const type = notif.type;
   if (type === "message") {
-    const isCommunityAnswer = notif.title?.toLowerCase().includes("answer on your question");
+    const isCommunityAnswer = notif.link === "/community";
     return [
       { label: isCommunityAnswer ? "View Answer" : "💬 Reply", href: isCommunityAnswer ? notif.link || "/community" : "/messages", style: "primary" },
     ];
