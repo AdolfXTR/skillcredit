@@ -80,9 +80,12 @@ function parseBody(type: string, body: string): string {
 // Quick actions per notification type
 function getQuickActions(notif: Notification): { label: string; href: string; style: "primary" | "secondary" }[] {
   const type = notif.type;
-  if (type === "message") return [
-    { label: "💬 Reply", href: "/messages", style: "primary" },
-  ];
+  if (type === "message") {
+    const isCommunityAnswer = notif.title?.toLowerCase().includes("answer on your question");
+    return [
+      { label: isCommunityAnswer ? "View Answer" : "💬 Reply", href: isCommunityAnswer ? notif.link || "/community" : "/messages", style: "primary" },
+    ];
+  }
   if (type === "session" && notif.title?.toLowerCase().includes("complet")) return [
     { label: "⭐ Rate Now", href: notif.link || "/sessions", style: "primary" },
     { label: "View Session", href: "/sessions", style: "secondary" },

@@ -116,7 +116,7 @@ function QuestionDetail({ post, profile, onBack, onChanged }: {
     await supabase.from("forum_answers").insert({ post_id: post.id, author_id: profile.id, content: draft.trim() });
     if (post.author_id !== profile.id) {
       await supabase.from("notifications").insert({
-        user_id: post.author_id, type: "platform",
+        user_id: post.author_id, type: "message",
         title: "New answer on your question", body: `${profile.full_name} answered: "${post.title}"`,
         link: "/community",
       });
@@ -133,7 +133,7 @@ function QuestionDetail({ post, profile, onBack, onChanged }: {
     const { data: ap } = await supabase.from("profiles").select("credits").eq("id", answer.author_id).single();
     await supabase.from("profiles").update({ credits: (ap?.credits || 0) + ACCEPT_REWARD }).eq("id", answer.author_id);
     await supabase.from("notifications").insert({
-      user_id: answer.author_id, type: "achievement",
+      user_id: answer.author_id, type: "credit",
       title: "Your answer was accepted 🎉", body: `+${ACCEPT_REWARD} credits for helping with "${post.title}"`,
       link: "/community",
     });

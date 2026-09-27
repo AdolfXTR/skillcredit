@@ -13,12 +13,12 @@ type Listing = {
   prerequisites: string; outcomes: string;
   is_active: boolean; created_at: string; teacher_id: string;
   thumbnail_url?: string; avg_rating?: number; total_ratings?: number; total_students?: number;
-  is_featured?: boolean; is_hot_teacher?: boolean; difficulty?: string;
+  difficulty?: string;
   skills: { name: string; category: string };
-  profiles: { full_name: string; username: string; avatar_url?: string | null; xp?: number; xp_multiplier?: number; champion_title?: string | null; teaching_title?: string | null; teaching_title_ends_at?: string | null; rating_title?: string | null; rating_title_ends_at?: string | null };
+  profiles: { full_name: string; username: string; avatar_url?: string | null };
 };
 type Profile = {
-  id: string; full_name: string; username: string; credits: number; avatar_url?: string | null; level?: string; xp?: number; xp_multiplier?: number; champion_title?: string | null;
+  id: string; full_name: string; username: string; credits: number; avatar_url?: string | null;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -48,31 +48,13 @@ const DIFFICULTY_CONFIG: Record<string, { label: string; color: string; bg: stri
   intermediate: { label: "Intermediate",      color: "#b45309", bg: "#fef3c7", border: "#fcd34d" },
   advanced:     { label: "Advanced",          color: "#dc2626", bg: "#fee2e2", border: "#fca5a5" },
 };
-const LEVEL_COLORS: Record<string, string> = {
-  Seedling:"#2d6a4f", Learner:"#1d4ed8", Contributor:"#7c3aed",
-  Skilled:"#b45309", Expert:"#dc2626", Master:"#0891b2", Legend:"#d97706",
-};
-
-// Profile fields used in Supabase select — includes all 4 perk fields
+// Minimal teacher profile fields used by listing cards.
 const PROFILE_FIELDS = "full_name,username,avatar_url";
 
 // ─────────────────────────────────────────────────────────────
 // UTILS
 // ─────────────────────────────────────────────────────────────
 function getInitials(name: string) { return (name||"??").split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2); }
-function getLevelFromXP(xp: number): string {
-  if (xp>=4000) return "Legend"; if (xp>=2000) return "Master"; if (xp>=1000) return "Expert";
-  if (xp>=600)  return "Skilled"; if (xp>=300) return "Contributor"; if (xp>=100) return "Learner";
-  return "Seedling";
-}
-function getRank(xp_multiplier?: number): 0|1|2|3 {
-  if (!xp_multiplier||xp_multiplier<1.1) return 0;
-  if (xp_multiplier>=1.25) return 1; if (xp_multiplier>=1.15) return 2; return 3;
-}
-function isActiveTitle(endsAt?: string | null) {
-  if (!endsAt) return false;
-  return new Date(endsAt) > new Date();
-}
 function renderStars(rating: number, max = 5) {
   return Array.from({ length: max }, (_, i) => (
     <span key={i} style={{ fontSize: 11, color: i < Math.round(rating) ? "#f59e0b" : "#e2d9cc" }}>★</span>
@@ -82,59 +64,8 @@ function renderStars(rating: number, max = 5) {
 // ─────────────────────────────────────────────────────────────
 // PREMIUM AVATAR
 // ─────────────────────────────────────────────────────────────
-function PremiumAvatar({ name, xp, xp_multiplier, avatar_url, size = 32 }:
-  { name: string; xp: number; xp_multiplier?: number; avatar_url?: string | null; size?: number }) {
-  const level = getLevelFromXP(xp);
-  const bg    = LEVEL_COLORS[level] || "#2d6a4f";
-  const rank  = getRank(xp_multiplier);
-  const ringStyle: React.CSSProperties = rank===1
-    ? { outline:"2.5px solid #ffd700", boxShadow:"0 0 0 1px #ffd700,0 0 10px 2px rgba(255,215,0,.6)", animation:"goldPulse 2s ease infinite" }
-    : rank===2 ? { outline:"2.5px solid #c0c0c0", boxShadow:"0 0 0 1px #c0c0c0,0 0 8px 2px rgba(192,192,192,.5)", animation:"silverPulse 2s ease infinite" }
-    : rank===3 ? { outline:"2.5px solid #cd7f32", boxShadow:"0 0 0 1px #cd7f32,0 0 8px 2px rgba(205,127,50,.5)", animation:"bronzePulse 2s ease infinite" } : {};
-  const badge = rank===1?"👑":rank===2?"🥈":rank===3?"🥉":null;
-  return (
-    <div style={{ position:"relative", flexShrink:0, width:size, height:size, borderRadius:"50%", ...ringStyle }}>
-      <div style={{ width:size, height:size, borderRadius:"50%", background:bg, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:size*.34, fontWeight:800, overflow:"hidden" }}>
-        {avatar_url ? <img src={avatar_url} alt={name} style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : getInitials(name)}
-      </div>
-      {badge && <span style={{ position:"absolute", bottom:-3, right:-5, fontSize:size*.36, lineHeight:1, filter:"drop-shadow(0 1px 3px rgba(0,0,0,.5))", zIndex:2 }}>{badge}</span>}
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────
-// PERK BADGES — champion + teaching + rating (compact for cards)
 // ─────────────────────────────────────────────────────────────
-function PerkBadges({ p, rank }: { p: Listing["profiles"]; rank: 0|1|2|3 }) {
-  const hasTeaching = p.teaching_title && isActiveTitle(p.teaching_title_ends_at);
-  const hasRating   = p.rating_title   && isActiveTitle(p.rating_title_ends_at);
-  if (rank === 0 && !hasTeaching && !hasRating) return null;
-  return (
-    <div style={{ display:"flex", flexWrap:"wrap", gap:3, marginTop:3 }}>
-      {rank > 0 && p.champion_title && (
-        <span style={{ fontSize:9, fontWeight:800, padding:"1px 7px", borderRadius:999,
-          background: rank===1?"rgba(255,215,0,.15)":rank===2?"rgba(192,192,192,.15)":"rgba(205,127,50,.15)",
-          color: rank===1?"#b8860b":rank===2?"#888":"#a0522d",
-          border: `1px solid ${rank===1?"rgba(255,215,0,.3)":rank===2?"rgba(192,192,192,.3)":"rgba(205,127,50,.3)"}` }}>
-          {rank===1?"👑":rank===2?"🥈":"🥉"} {p.champion_title}
-        </span>
-      )}
-      {hasTeaching && (
-        <span style={{ fontSize:9, fontWeight:800, padding:"1px 7px", borderRadius:999,
-          background:"#eef6f2", color:"#2d6a4f", border:"1px solid #c6e8d4" }}>
-          🎓 {p.teaching_title}
-        </span>
-      )}
-      {hasRating && (
-        <span style={{ fontSize:9, fontWeight:800, padding:"1px 7px", borderRadius:999,
-          background:"#fefce8", color:"#92400e", border:"1px solid #fde68a" }}>
-          ⭐ {p.rating_title}
-        </span>
-      )}
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────
 // LISTING CARD
 // ─────────────────────────────────────────────────────────────
@@ -150,8 +81,6 @@ function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
   const rating     = listing.avg_rating || 0;
   const ratingCount = listing.total_ratings || 0;
   const students   = listing.total_students || 0;
-  const isFeatured = !!listing.is_featured;
-  const isHot      = !!listing.is_hot_teacher;
   const diff       = listing.difficulty ? DIFFICULTY_CONFIG[listing.difficulty] : null;
   const hasThumbnail = !!listing.thumbnail_url;
 
@@ -160,9 +89,9 @@ function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
   return (
     <div style={{
       background: "#fff", borderRadius: 20,
-      border: `1.5px solid ${isOwn ? "rgba(45,106,79,.35)" : isFeatured ? "rgba(255,215,0,.5)" : "#e8e2d9"}`,
+      border: `1.5px solid ${isOwn ? "rgba(45,106,79,.35)" : "#e8e2d9"}`,
       overflow: "hidden",
-      boxShadow: isOwn ? "0 4px 20px rgba(45,106,79,.08)" : isFeatured ? "0 4px 24px rgba(255,215,0,.15)" : "0 2px 12px rgba(0,0,0,.04)",
+      boxShadow: isOwn ? "0 4px 20px rgba(45,106,79,.08)" : "0 2px 12px rgba(0,0,0,.04)",
       position: "relative",
       transition: "transform .2s ease, box-shadow .2s ease",
       animationName: "fadeUp",
@@ -173,8 +102,6 @@ function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
     }}
     className="listing-card">
 
-      {/* Featured gold stripe */}
-      {isFeatured && !isOwn && <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:"linear-gradient(90deg,#e8a800,#ffd700,#e8a800)", zIndex:2 }} />}
       {/* Own listing green stripe */}
       {isOwn && <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:"linear-gradient(90deg,#1a4a36,#2d6a4f,#1a4a36)", zIndex:2 }} />}
 
@@ -208,12 +135,6 @@ function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
             ✓ Completed
           </div>
         )}
-        {/* Featured badge */}
-        {isFeatured && !isOwn && (
-          <div style={{ position:"absolute", bottom:10, right:10, background:"rgba(255,215,0,.92)", borderRadius:20, padding:"3px 9px", fontSize:9, fontWeight:800, color:"#78350f" }}>
-            ⭐ Featured
-          </div>
-        )}
       </div>
 
       <div style={{ padding:"16px 18px 18px" }}>
@@ -226,9 +147,6 @@ function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
             <span style={{ fontSize:10, fontWeight:700, padding:"2px 9px", borderRadius:20, background:diff.bg, color:diff.color, border:`1px solid ${diff.border}` }}>
               {diff.label}
             </span>
-          )}
-          {!diff && isHot && (
-            <span style={{ background:"#fff7ed", color:"#c2410c", fontSize:10, fontWeight:800, padding:"2px 9px", borderRadius:20, border:"1px solid #fed7aa" }}>🔥 Hot</span>
           )}
         </div>
 
@@ -297,10 +215,10 @@ function ListingCard({ listing, loggedIn, idx, isOwn, isCompleted }: {
               View Details
             </a>
             <a href={loggedIn ? `/listings/${listing.id}?book=1` : "/login"}
-              style={{ flex:1.4, padding:"9px 0", borderRadius:10, background: isCompleted ? "#f0fdf4" : isFeatured ? "#1a4a36" : "#2d6a4f", color: isCompleted ? "#15803d" : "#fff", border: isCompleted ? "1.5px solid #86efac" : "none", fontSize:12, fontWeight:800, textAlign:"center", textDecoration:"none", display:"block", transition:"background .15s", cursor:"pointer" }}
+              style={{ flex:1.4, padding:"9px 0", borderRadius:10, background: isCompleted ? "#f0fdf4" : "#2d6a4f", color: isCompleted ? "#15803d" : "#fff", border: isCompleted ? "1.5px solid #86efac" : "none", fontSize:12, fontWeight:800, textAlign:"center", textDecoration:"none", display:"block", transition:"background .15s", cursor:"pointer" }}
               className="book-btn"
               onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = isCompleted ? "#dcfce7" : "#1a4a36"; }}
-              onMouseOut={e  => { (e.currentTarget as HTMLElement).style.background = isCompleted ? "#f0fdf4" : isFeatured ? "#1a4a36" : "#2d6a4f"; }}>
+              onMouseOut={e  => { (e.currentTarget as HTMLElement).style.background = isCompleted ? "#f0fdf4" : "#2d6a4f"; }}>
               {isCompleted ? "✓ Book Again" : "Book Now →"}
             </a>
           </div>
@@ -359,13 +277,13 @@ export default function ListingsPage() {
       }
     }
 
-    // Fetch listings with all perk profile fields
+    // Fetch active listings with the teacher fields used on the cards.
     const { data, error } = await supabase.from("listings")
-      .select(`*, skills(name,category), profiles(${PROFILE_FIELDS})`)
+      .select(`id,title,description,credit_price,format,duration,prerequisites,outcomes,is_active,created_at,teacher_id,thumbnail_url,difficulty,skills(name,category),profiles(${PROFILE_FIELDS})`)
       .eq("is_active", true).order("created_at", { ascending: false });
     if (error) { setLoading(false); return; }
 
-    const rows = (data || []) as Listing[];
+    const rows = (data || []) as unknown as Listing[];
     const teacherIds = [...new Set(rows.map(l => l.teacher_id))];
     let avgMap: Record<string, { avg: number; count: number }> = {};
     let studentMap: Record<string, number> = {};
@@ -383,15 +301,12 @@ export default function ListingsPage() {
         sessionsData.forEach((s: any) => { studentMap[s.teacher_id] = (studentMap[s.teacher_id] || 0) + 1; });
       }
     }
-    const hotIds = new Set(rows.filter(l => l.is_hot_teacher).map(l => l.teacher_id));
     const enriched = rows.map(l => ({
       ...l,
       avg_rating: avgMap[l.teacher_id]?.avg || 0,
       total_ratings: avgMap[l.teacher_id]?.count || 0,
       total_students: studentMap[l.teacher_id] || 0,
-      is_hot_teacher: hotIds.has(l.teacher_id),
     }));
-    enriched.sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0));
     setListings(enriched);
     setLoading(false);
   }
@@ -417,8 +332,6 @@ export default function ListingsPage() {
     const matchDiff  = difficulty === "all" || l.difficulty === difficulty;
     return matchSearch && matchCat && matchFmt && matchPrice && matchDur && matchDiff;
   }).sort((a, b) => {
-    if (a.is_featured && !b.is_featured) return -1;
-    if (!a.is_featured && b.is_featured) return 1;
     if (sortBy === "price_low")    return a.credit_price - b.credit_price;
     if (sortBy === "price_high")   return b.credit_price - a.credit_price;
     if (sortBy === "top_rated")    return (b.avg_rating||0) - (a.avg_rating||0);
@@ -530,9 +443,6 @@ export default function ListingsPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0} a{text-decoration:none;color:inherit}
-        @keyframes goldPulse  {0%,100%{box-shadow:0 0 0 2.5px #e8a800,0 0 10px rgba(232,168,0,.7)}50%{box-shadow:0 0 0 2.5px #ffd700,0 0 18px rgba(255,215,0,1)}}
-        @keyframes silverPulse{0%,100%{box-shadow:0 0 0 2.5px #aaa,0 0 8px rgba(180,180,180,.6)}50%{box-shadow:0 0 0 2.5px #ddd,0 0 14px rgba(220,220,220,.9)}}
-        @keyframes bronzePulse{0%,100%{box-shadow:0 0 0 2.5px #a0522d,0 0 8px rgba(160,82,45,.6)}50%{box-shadow:0 0 0 2.5px #cd7f32,0 0 14px rgba(205,127,50,.8)}}
         @keyframes fadeUp     {from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
         @keyframes spin       {to{transform:rotate(360deg)}}
         .listing-card{transition:transform .2s ease,box-shadow .2s ease;animation:fadeUp .35s ease both}

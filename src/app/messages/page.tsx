@@ -10,10 +10,6 @@ type Profile = {
   credits: number;
   level: string;
   avatar_url?: string | null;
-  teaching_title?: string | null;
-  teaching_title_ends_at?: string | null;
-  rating_title?: string | null;
-  rating_title_ends_at?: string | null;
   is_teacher?: boolean;
 };
 
@@ -750,16 +746,6 @@ export default function MessagesPage() {
                         <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
                         @{activeConvo.username}
                       </span>
-                      {activeConvo.teaching_title && new Date(activeConvo.teaching_title_ends_at || 0) > new Date() && (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "#eef6f2", color: "#2d6a4f", border: "1px solid #c6e8d4" }}>
-                          🎓 {activeConvo.teaching_title}
-                        </span>
-                      )}
-                      {activeConvo.rating_title && new Date(activeConvo.rating_title_ends_at || 0) > new Date() && (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "#fefce8", color: "#92400e", border: "1px solid #fde68a" }}>
-                          ⭐ {activeConvo.rating_title}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

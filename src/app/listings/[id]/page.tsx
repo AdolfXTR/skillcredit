@@ -15,15 +15,11 @@ type Listing = {
   credit_price: number; format: string; duration: number;
   prerequisites: string; outcomes: string; materials: string;
   is_active: boolean; created_at: string; teacher_id: string;
-  thumbnail_url?: string; is_featured?: boolean; is_hot_teacher?: boolean; difficulty?: string;
+  thumbnail_url?: string; difficulty?: string;
   skills: { name: string; category: string };
   profiles: {
-    id: string; full_name: string; username: string; level: string; bio: string;
-    xp: number; xp_multiplier?: number;
-    champion_title?: string | null; champion_streak?: number;
+    id: string; full_name: string; username: string; bio: string;
     avatar_url?: string | null;
-    teaching_title?: string | null; teaching_title_ends_at?: string | null;
-    rating_title?: string | null;   rating_title_ends_at?: string | null;
   };
 };
 type UserProfile = { id: string; full_name: string; credits: number };
@@ -53,27 +49,11 @@ const DIFFICULTY_CONFIG: Record<string, { label: string; color: string; bg: stri
   intermediate: { label: "🟡 Intermediate",      color: "#b45309", bg: "#fef3c7" },
   advanced:     { label: "🔴 Advanced",          color: "#dc2626", bg: "#fee2e2" },
 };
-const LEVEL_COLORS: Record<string, string> = {
-  Seedling:"#2d6a4f", Learner:"#1d4ed8", Contributor:"#7c3aed",
-  Skilled:"#b45309", Expert:"#dc2626", Master:"#0891b2", Legend:"#d97706",
-};
 
 // ─────────────────────────────────────────────────────────────
 // UTILS
 // ─────────────────────────────────────────────────────────────
 function getInitials(n: string) { return (n||"??").split(" ").map(c=>c[0]).join("").slice(0,2).toUpperCase(); }
-function getLevelFromXP(xp: number): string {
-  if (xp>=4000) return "Legend"; if (xp>=2000) return "Master"; if (xp>=1000) return "Expert";
-  if (xp>=600)  return "Skilled"; if (xp>=300) return "Contributor"; if (xp>=100) return "Learner";
-  return "Seedling";
-}
-function getRank(m?: number): 0|1|2|3 {
-  if (!m||m<1.1) return 0; if (m>=1.25) return 1; if (m>=1.15) return 2; return 3;
-}
-function isActiveTitle(endsAt?: string | null) {
-  if (!endsAt) return false;
-  return new Date(endsAt) > new Date();
-}
 function Stars({ rating, count, size = 14 }: { rating: number; count?: number; size?: number }) {
   return (
     <div style={{ display:"inline-flex", alignItems:"center", gap:3 }}>
@@ -87,63 +67,10 @@ function Stars({ rating, count, size = 14 }: { rating: number; count?: number; s
 }
 
 // ─────────────────────────────────────────────────────────────
-// PERK BADGES — champion + teaching + rating titles
 // ─────────────────────────────────────────────────────────────
-function PerkBadges({ profiles, rank }: {
-  profiles: Listing["profiles"]; rank: 0|1|2|3;
-}) {
-  const hasTeaching = profiles.teaching_title && isActiveTitle(profiles.teaching_title_ends_at);
-  const hasRating   = profiles.rating_title   && isActiveTitle(profiles.rating_title_ends_at);
-  return (
-    <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:5 }}>
-      {rank > 0 && profiles.champion_title && (
-        <span style={{ fontSize:11, fontWeight:800, padding:"2px 9px", borderRadius:999,
-          background: rank===1?"rgba(255,215,0,.15)":rank===2?"rgba(192,192,192,.15)":"rgba(205,127,50,.15)",
-          color: rank===1?"#b8860b":rank===2?"#888":"#a0522d",
-          border: `1px solid ${rank===1?"rgba(255,215,0,.3)":rank===2?"rgba(192,192,192,.3)":"rgba(205,127,50,.3)"}` }}>
-          {rank===1?"👑":rank===2?"🥈":"🥉"} {profiles.champion_title}
-          {(profiles.champion_streak||0)>1 ? ` ×${profiles.champion_streak} 🔥` : ""}
-        </span>
-      )}
-      {hasTeaching && (
-        <span style={{ fontSize:11, fontWeight:800, padding:"2px 9px", borderRadius:999,
-          background:"#eef6f2", color:"#2d6a4f", border:"1px solid #c6e8d4" }}>
-          🎓 {profiles.teaching_title}
-        </span>
-      )}
-      {hasRating && (
-        <span style={{ fontSize:11, fontWeight:800, padding:"2px 9px", borderRadius:999,
-          background:"#fefce8", color:"#92400e", border:"1px solid #fde68a" }}>
-          ⭐ {profiles.rating_title}
-        </span>
-      )}
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────
 // TEACHER AVATAR (large, for detail page)
 // ─────────────────────────────────────────────────────────────
-function TeacherAvatar({ name, xp, xp_multiplier, avatar_url, size = 56 }:
-  { name: string; xp: number; xp_multiplier?: number; avatar_url?: string | null; size?: number }) {
-  const level = getLevelFromXP(xp);
-  const bg    = LEVEL_COLORS[level] || "#2d6a4f";
-  const rank  = getRank(xp_multiplier);
-  const ringStyle: React.CSSProperties = rank===1
-    ? { outline:"3px solid #ffd700", boxShadow:"0 0 0 1px #ffd700,0 0 14px 3px rgba(255,215,0,.7)", animation:"goldPulse 2s ease infinite" }
-    : rank===2 ? { outline:"3px solid #c0c0c0", boxShadow:"0 0 0 1px #c0c0c0,0 0 10px 2px rgba(192,192,192,.5)", animation:"silverPulse 2s ease infinite" }
-    : rank===3 ? { outline:"3px solid #cd7f32", boxShadow:"0 0 0 1px #cd7f32,0 0 10px 2px rgba(205,127,50,.5)", animation:"bronzePulse 2s ease infinite" } : {};
-  const badge = rank===1?"👑":rank===2?"🥈":rank===3?"🥉":null;
-  return (
-    <div style={{ position:"relative", flexShrink:0, width:size, height:size, borderRadius:14, ...ringStyle }}>
-      <div style={{ width:size, height:size, borderRadius:14, background:bg, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:size*.3, fontWeight:800, overflow:"hidden" }}>
-        {avatar_url ? <img src={avatar_url} alt={name} style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : getInitials(name)}
-      </div>
-      {badge && <span style={{ position:"absolute", bottom:-5, right:-7, fontSize:size*.32, lineHeight:1, filter:"drop-shadow(0 1px 3px rgba(0,0,0,.5))", zIndex:2 }}>{badge}</span>}
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────
 // PORTFOLIO GALLERY
 // ─────────────────────────────────────────────────────────────
@@ -301,10 +228,10 @@ export default function ListingDetailPage() {
         if (prof) setCurrentUser(prof);
       }
       const { data, error } = await supabase.from("listings")
-        .select(`*, skills(name,category), profiles(${PROFILE_FIELDS})`)
+        .select(`id,title,description,credit_price,format,duration,prerequisites,outcomes,materials,is_active,created_at,teacher_id,thumbnail_url,difficulty,skills(name,category),profiles(${PROFILE_FIELDS})`)
         .eq("id", id).single();
       if (error || !data) { setLoading(false); return; }
-      setListing(data as Listing);
+      setListing(data as unknown as Listing);
       const { data: pData } = await supabase.from("portfolio_items").select("*").eq("listing_id", id);
       if (pData) setPortfolio(pData as PortfolioItem[]);
       const tid = data.teacher_id;
@@ -446,9 +373,6 @@ export default function ListingDetailPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0} a{text-decoration:none;color:inherit}
-        @keyframes goldPulse  {0%,100%{box-shadow:0 0 0 3px #e8a800,0 0 14px rgba(232,168,0,.7)}50%{box-shadow:0 0 0 3px #ffd700,0 0 24px rgba(255,215,0,1)}}
-        @keyframes silverPulse{0%,100%{box-shadow:0 0 0 3px #aaa,0 0 10px rgba(180,180,180,.6)}50%{box-shadow:0 0 0 3px #ddd,0 0 18px rgba(220,220,220,.9)}}
-        @keyframes bronzePulse{0%,100%{box-shadow:0 0 0 3px #a0522d,0 0 10px rgba(160,82,45,.6)}50%{box-shadow:0 0 0 3px #cd7f32,0 0 18px rgba(205,127,50,.8)}}
         @keyframes spin       {to{transform:rotate(360deg)}}
         @keyframes fadeUp     {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
         @media(max-width:768px){
@@ -570,7 +494,6 @@ export default function ListingDetailPage() {
                   ⏱ {listing.duration} min
                 </div>
               </div>
-              {listing.is_featured && <div style={{ position:"absolute", top:14, right:14, background:"rgba(255,215,0,.9)", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:800, color:"#78350f" }}>⭐ Featured</div>}
             </div>
 
             {/* TITLE + TAGS */}
@@ -593,7 +516,6 @@ export default function ListingDetailPage() {
                 <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:14, flexWrap:"wrap" }}>
                   {teacherAvgRating > 0 && <Stars rating={teacherAvgRating} count={teacherTotalRatings} size={13} />}
                   {teacherSessions > 0 && <span style={{ fontSize:12, color:"#888", fontWeight:600 }}>🎓 {teacherSessions} sessions taught</span>}
-                  {listing.is_hot_teacher && <span style={{ fontSize:11, fontWeight:800, background:"#fff7ed", color:"#c2410c", padding:"2px 9px", borderRadius:99, border:"1px solid #fed7aa" }}>🔥 Hot Teacher</span>}
                 </div>
               )}
               <div>
