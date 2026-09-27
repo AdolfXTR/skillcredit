@@ -73,7 +73,7 @@ function ListingCard({ listing, index }: { listing: Listing; index: number }) {
         </div>
         <div className="home-price-row">
           <span>Per session</span>
-          <strong>{listing.credit_price} <small>credits</small></strong>
+          <strong className="sc-credit home-credit">{listing.credit_price} <small>credits</small></strong>
         </div>
       </div>
     </Link>
@@ -93,7 +93,7 @@ export default function HomePage() {
           .select("id,title,credit_price,duration,thumbnail_url,teacher_id,skills(name,category),profiles(full_name,username,avatar_url)")
           .eq("is_active", true)
           .order("created_at", { ascending: false })
-          .limit(1);
+          .limit(2);
 
         if (error) throw error;
         if (!data?.length) {
@@ -144,7 +144,7 @@ export default function HomePage() {
   return (
     <main className="home-page">
       <style>{`
-        .home-page{--ink:#18241d;--muted:#68756d;--line:#e5e0d5;--green:#2d6a4f;--gold:#b47b22;min-height:100vh;background:#f7f4ef;color:var(--ink);font-family:"DM Sans",sans-serif;overflow:hidden}
+        .home-page{--ink:#18241d;--muted:#68756d;--line:#e5e0d5;--green:#2d6a4f;min-height:100vh;background:#f7f4ef;color:var(--ink);font-family:"DM Sans",sans-serif;overflow:hidden}
         .home-page *{box-sizing:border-box}
         .home-page a{text-decoration:none;color:inherit}
         .home-topbar{height:68px;padding:0 max(28px,calc((100vw - 1240px)/2));display:flex;align-items:center;justify-content:space-between;background:#fffefa;border-bottom:1px solid var(--line)}
@@ -182,7 +182,6 @@ export default function HomePage() {
         .home-market-empty a{margin-top:4px;color:var(--green);font-size:11px;font-weight:800}
         .home-listing{display:block;overflow:hidden;border:1px solid #e5e0d5;border-radius:12px;background:#fffefa;box-shadow:0 8px 18px #293b3010;transition:transform .2s,box-shadow .2s}
         .home-listing:hover{transform:translateY(-4px);box-shadow:0 14px 28px #293b301c}
-        .home-listing-0{max-width:370px;margin:24px auto 0}
         .home-listing-art{height:116px;position:relative;display:grid;place-items:center;overflow:hidden}
         .home-listing-art>span:first-child{font-family:"Fraunces",serif;font-weight:800;font-size:68px;line-height:1;color:#21313b18}
         .home-listing-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -198,7 +197,8 @@ export default function HomePage() {
         .home-rating>span{color:#d69a34}
         .home-rating small{margin-left:2px;color:#899399;font-weight:600}
         .home-price-row{display:flex;justify-content:space-between;align-items:center;padding-top:10px;color:#849096;font-size:9px}
-        .home-price-row strong{color:#835b19;font-size:14px}
+        .home-price-row strong{font-size:14px}
+        .home-price-row strong.home-credit{display:inline-flex;align-items:center;gap:3px;padding:4px 8px;font-size:12px}
         .home-price-row small{font-size:9px;font-weight:700}
         .home-exchange-note{position:absolute;left:50%;bottom:17px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;width:max-content;max-width:calc(100% - 24px);padding:8px 12px;border:1px solid #d8dfd6;border-radius:7px;background:#f8faf6;color:#526158;font-size:9px;font-weight:700;box-shadow:0 4px 11px #293b300b}
         .home-exchange-note b{color:var(--green);font-size:12px}
@@ -237,7 +237,7 @@ export default function HomePage() {
         .home-copy{animation:home-rise .45s ease both}.home-market{animation:home-rise .55s .08s ease both}
         @media(max-width:1100px){.home-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.home-step:nth-child(4){border-left:0}.home-step:nth-child(n+4){border-top:1px solid #e5e0d5}}
         @media(max-width:900px){.home-hero{grid-template-columns:1fr;gap:32px;padding-top:44px}.home-copy{max-width:720px}.home-market{width:min(560px,100%);justify-self:center}.home-flow-top{align-items:start;flex-direction:column;gap:10px}}
-        @media(max-width:600px){.home-topbar{height:60px;padding:0 16px}.home-nav{gap:13px;font-size:11px}.home-nav-join{padding:9px 11px}.home-hero,.home-section-inner{width:calc(100% - 32px)}.home-hero{padding:37px 0 40px;gap:27px}.home-headline{font-size:clamp(43px,12vw,62px);margin:18px 0 15px}.home-lede{font-size:14px}.home-market{min-height:390px;padding:22px 14px 25px}.home-card-stack{gap:9px}.home-listing-art{height:96px}.home-listing-body{padding:10px}.home-listing h3{font-size:14px}.home-listing-meta{font-size:8px}.home-teacher-row{gap:5px}.home-teacher-name,.home-rating{font-size:8px}.home-price-row strong{font-size:12px}.home-featured{padding:33px 0}.home-section-heading{align-items:start;flex-direction:column;gap:9px}.home-path-grid{grid-template-columns:1fr}.home-flow{padding:37px 0}.home-steps{grid-template-columns:1fr}.home-step{min-height:0;padding:17px 18px}.home-step+.home-step{border-left:0;border-top:1px solid #e5e0d5}.home-step h3{margin-top:10px}.home-flow-arrow{top:18px}.home-categories{padding:23px 0}.home-categories-label{flex-basis:100%;margin-bottom:2px}.home-footer{padding:20px 16px;align-items:flex-start;flex-direction:column}.home-footer-links{gap:14px}}
+        @media(max-width:600px){.home-topbar{height:60px;padding:0 16px}.home-nav{gap:13px;font-size:11px}.home-nav-join{padding:9px 11px}.home-hero,.home-section-inner{width:calc(100% - 32px)}.home-hero{padding:37px 0 40px;gap:27px}.home-headline{font-size:clamp(43px,12vw,62px);margin:18px 0 15px}.home-lede{font-size:14px}.home-market{min-height:390px;padding:22px 14px 25px}.home-card-stack{grid-template-columns:1fr;gap:9px}.home-listing-art{height:96px}.home-listing-body{padding:10px}.home-listing h3{font-size:14px}.home-listing-meta{font-size:8px}.home-teacher-row{gap:5px}.home-teacher-name,.home-rating{font-size:8px}.home-price-row strong{font-size:12px}.home-featured{padding:33px 0}.home-section-heading{align-items:start;flex-direction:column;gap:9px}.home-path-grid{grid-template-columns:1fr}.home-flow{padding:37px 0}.home-steps{grid-template-columns:1fr}.home-step{min-height:0;padding:17px 18px}.home-step+.home-step{border-left:0;border-top:1px solid #e5e0d5}.home-step h3{margin-top:10px}.home-flow-arrow{top:18px}.home-categories{padding:23px 0}.home-categories-label{flex-basis:100%;margin-bottom:2px}.home-footer{padding:20px 16px;align-items:flex-start;flex-direction:column}.home-footer-links{gap:14px}}
         @media(prefers-reduced-motion:reduce){.home-page *{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
       `}</style>
 
@@ -264,7 +264,7 @@ export default function HomePage() {
 
         <div className="home-market" aria-label="A current skill listing">
           <div className="home-market-head"><span className="home-market-title">A lesson from the community</span><span className="home-live">Peer-to-peer learning</span></div>
-          {listingState === "ready" && listings[0] ? <ListingCard listing={listings[0]} index={0} /> : (
+          {listingState === "ready" && listings.length ? <div className="home-card-stack">{listings.map((listing, index) => <ListingCard key={listing.id} listing={listing} index={index} />)}</div> : (
             <div className="home-market-empty" aria-live="polite">
               <span className="home-market-empty-icon" aria-hidden="true">↔</span>
               {listingState === "loading" && <><strong>Finding lessons to learn from</strong><span>Loading active skill listings…</span></>}
